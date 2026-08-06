@@ -27,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchScope, setSearchScope] = useState<SearchScope>('all');
   const searchContainerRef = useRef<HTMLElement>(null);
+  const searchRequestIdRef = useRef(0);
 
   const searchScopes: Array<{ value: SearchScope; label: string }> = [
     { value: 'all', label: 'All' },
@@ -62,6 +63,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
   }, [darkMode, themeReady]);
 
   useEffect(() => {
+    const requestId = ++searchRequestIdRef.current;
     if (!isSearchOpen || pathname === '/') return;
 
     const controller = new AbortController();
@@ -87,11 +89,12 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
           return data;
         })
         .then((data) => {
+          if (requestId !== searchRequestIdRef.current) return;
           setSearchResults(data.results || []);
           setIsSearching(false);
         })
         .catch((error: Error) => {
-          if (error.name === 'AbortError') return;
+          if (error.name === 'AbortError' || requestId !== searchRequestIdRef.current) return;
           setSearchResults([]);
           setIsSearching(false);
           setSearchError('Search is unavailable right now. Try again.');
@@ -153,6 +156,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
   };
 
   const handleHeaderQueryChange = (value: string) => {
+    searchRequestIdRef.current += 1;
     setSearchQuery(value);
     setSearchResults([]);
     setSearchError(null);
@@ -160,6 +164,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
   };
 
   const handleHeaderScopeChange = (scope: SearchScope) => {
+    searchRequestIdRef.current += 1;
     setSearchScope(scope);
     setSearchResults([]);
     setSearchError(null);

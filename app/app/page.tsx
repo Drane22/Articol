@@ -23,6 +23,7 @@ export default function HomePage() {
   const [searchRetry, setSearchRetry] = useState(0);
   const [searchScope, setSearchScope] = useState<SearchScope>('all');
   const latestQueryRef = useRef('');
+  const latestSearchKeyRef = useRef('');
 
   const searchScopes: Array<{ value: SearchScope; label: string }> = [
     { value: 'all', label: 'All' },
@@ -58,9 +59,12 @@ export default function HomePage() {
 
     const controller = new AbortController();
     let isCurrentRequest = true;
+    const requestQuery = debouncedQuery.trim();
+    const requestKey = `${requestQuery}|${country}|${searchScope}`;
+    latestSearchKeyRef.current = requestKey;
     setIsLoading(true);
     setSearchError(null);
-    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&country=${country}&limit=50&scope=${searchScope}`, {
+    fetch(`/api/search?q=${encodeURIComponent(requestQuery)}&country=${country}&limit=50&scope=${searchScope}`, {
       signal: controller.signal,
       cache: 'no-store',
     })
@@ -70,12 +74,17 @@ export default function HomePage() {
         return data;
       })
       .then((data) => {
-        if (!isCurrentRequest || latestQueryRef.current !== debouncedQuery) return;
+        if (!isCurrentRequest || latestQueryRef.current !== requestQuery || latestSearchKeyRef.current !== requestKey) return;
         setResults(data.results || []);
         setIsLoading(false);
       })
       .catch((err) => {
-        if (err.name === 'AbortError' || !isCurrentRequest || latestQueryRef.current !== debouncedQuery) return;
+        if (
+          err.name === 'AbortError' ||
+          !isCurrentRequest ||
+          latestQueryRef.current !== requestQuery ||
+          latestSearchKeyRef.current !== requestKey
+        ) return;
         console.error('Search error:', err);
         setResults([]);
         setSearchError('Search is unavailable right now. Please try again.');
@@ -89,7 +98,8 @@ export default function HomePage() {
   }, [debouncedQuery, country, ready, searchRetry, searchScope]);
 
   const handleQueryChange = (value: string) => {
-    latestQueryRef.current = value;
+    latestQueryRef.current = value.trim();
+    latestSearchKeyRef.current = `${value.trim()}|${country}|${searchScope}`;
     setQuery(value);
     setResults([]);
     setSearchError(null);
@@ -97,6 +107,7 @@ export default function HomePage() {
   };
 
   const handleScopeChange = (scope: SearchScope) => {
+    latestSearchKeyRef.current = `${query.trim()}|${country}|${scope}`;
     setSearchScope(scope);
     setResults([]);
     setSearchError(null);
