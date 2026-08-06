@@ -63,7 +63,7 @@ export async function normalizeItunesAlbum(rawItem: any, country: string = 'PH')
   const seed = buildAlbumSeed(rawItem);
   const { palette, features, embedding } = await extractVisualFeaturesFromImage(null, seed);
 
-  const normalizedPrice = rawItem.collectionPrice == null ? undefined : Number(rawItem.collectionPrice);
+  const normalizedPrice = rawItem.collectionPrice == null ? Number.NaN : Number(rawItem.collectionPrice);
 
   return {
     id: `itunes-${collectionId}`,
