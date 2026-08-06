@@ -57,7 +57,8 @@ function createSeedAlbum(
     embedding: [],
     embeddingModel: 'seed-fallback',
     embeddingVersion: 'fallback-v1',
-    visualAnalysisStatus: 'analyzed',
+    // This is metadata-generated fallback data until the artwork is fetched.
+    visualAnalysisStatus: 'fallback',
     _seed: seed, // internal, used by init
   } as any;
 }
@@ -152,7 +153,7 @@ export function initSeedAlbums(): Promise<void> {
         album.dominantPalette = palette;
         album.visualFeatures = features;
         album.embedding = embedding;
-        album.visualAnalysisStatus = 'analyzed';
+        album.visualAnalysisStatus = 'fallback';
         delete (album as any)._seed;
       }
     })();

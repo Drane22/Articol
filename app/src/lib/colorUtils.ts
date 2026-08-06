@@ -245,9 +245,17 @@ export function matchesColorFilter(targetHex: string, palette: DominantColor[]):
   const targetFamily = EXPLORE_FILTER_FAMILIES[normalizedTarget] || exploreColorFamily(normalizedTarget);
   const targetLab = rgbToLab(...hexToRgb(normalizedTarget));
 
-  return palette.some((color) => {
+  const rankedPalette = palette
+    .filter((color) => /^#[0-9a-f]{6}$/i.test(color.hex))
+    .sort((left, right) => (right.weight || 0) - (left.weight || 0));
+
+  return rankedPalette.some((color, index) => {
+    // A tiny accent should not make a predominantly blue cover appear in the
+    // red collection. Only the dominant two swatches or meaningful weights
+    // can satisfy an Explore color filter.
+    if (index > 1 && (color.weight || 0) < 0.18) return false;
     const family = exploreColorFamily(color.hex);
     if (family !== targetFamily) return false;
-    return ciede2000(targetLab, color.lab) <= 32;
+    return ciede2000(targetLab, rgbToLab(...hexToRgb(color.hex))) <= 24;
   });
 }

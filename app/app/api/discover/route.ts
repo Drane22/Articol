@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllCatalogAlbums, saveAlbumsToDb } from '@/lib/db';
 import { getColorCategory, matchesColorFilter } from '@/lib/colorUtils';
+import { enrichAlbumWithArtwork } from '@/lib/itunes';
 import { Album } from '@/lib/types';
+
+function hasReliableVisualAnalysis(album: Album): boolean {
+  return (
+    (album.visualAnalysisStatus === 'indexed' || album.visualAnalysisStatus === 'analyzed') &&
+    Boolean(album.perceptualHash) &&
+    album.embeddingVersion === 'visual-grid-v2'
+  );
+}
 
 async function getFeaturedSpotlightAlbums(): Promise<Album[]> {
   const catalogAlbums = await getAllCatalogAlbums();
@@ -81,6 +90,23 @@ export async function GET(request: NextRequest) {
 
   // 2. Color spectrum filter
   if (colorHex) {
+    const candidatesToAnalyze = albums
+      .filter((album) => !hasReliableVisualAnalysis(album))
+      .slice(0, 48);
+    if (candidatesToAnalyze.length > 0) {
+      const analyzedCandidates = await Promise.all(
+        candidatesToAnalyze.map((album) => enrichAlbumWithArtwork(album))
+      );
+      const analyzedById = new Map(
+        analyzedCandidates.map((album) => [album.itunesCollectionId, album])
+      );
+      albums = albums.map((album) => analyzedById.get(album.itunesCollectionId) || album);
+      await saveAlbumsToDb(analyzedCandidates);
+    }
+
+    // Do not make color claims from deterministic fallback palettes. They are
+    // metadata-generated and do not describe the actual cover image.
+    albums = albums.filter(hasReliableVisualAnalysis);
     albums = albums.filter(a => matchesColorFilter(colorHex, a.dominantPalette || []));
   }
 

@@ -131,8 +131,8 @@ export async function enrichAlbumWithArtwork(album: Album): Promise<Album> {
       dominantPalette: palette,
       visualFeatures: features,
       embedding,
-      embeddingModel: 'spatial-palette-descriptor',
-      embeddingVersion: 'visual-grid-v2',
+      embeddingModel: analyzed ? 'spatial-palette-descriptor' : 'seed-fallback',
+      embeddingVersion: analyzed ? 'visual-grid-v2' : 'fallback-v1',
       perceptualHash,
       visualAnalysisStatus: analyzed ? 'analyzed' : 'fallback',
     };
