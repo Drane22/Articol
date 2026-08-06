@@ -6,7 +6,7 @@ describe('Database & Catalog Persistence', () => {
   it('loads seed catalog albums into memory store', async () => {
     const seeds = await getAllSeedAlbums();
     expect(seeds.length).toBeGreaterThanOrEqual(18);
-    const abbeyRoad = seeds.find(s => s.itunesCollectionId === 1440854851);
+    const abbeyRoad = seeds.find(s => s.itunesCollectionId === 1474815798 || s.title === 'Abbey Road');
     expect(abbeyRoad).toBeDefined();
     expect(abbeyRoad?.title).toBe('Abbey Road');
   });

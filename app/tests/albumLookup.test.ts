@@ -19,7 +19,7 @@ describe('Album Detail Lookup & Storefront Fallback', () => {
   });
 
   it('verifies seed catalog albums are visually analyzed', async () => {
-    const album = await getAlbumFromDb(1440854851); // Abbey Road
+    const album = await getAlbumFromDb(1474815798); // Abbey Road
     expect(album).not.toBeNull();
     expect(album?.visualAnalysisStatus).toBe('analyzed');
   });

@@ -283,10 +283,12 @@ export async function getItunesAlbumById(
   };
 
   try {
-    let results = await fetchLookup(country);
+    let results: any[] | null = null;
+    const storefronts = Array.from(new Set([country.toUpperCase(), 'US', 'GB', 'JP']));
 
-    if ((!results || results.length === 0) && country !== 'US') {
-      results = await fetchLookup('US');
+    for (const sf of storefronts) {
+      results = await fetchLookup(sf);
+      if (results && results.length > 0) break;
     }
 
     if (!results || results.length === 0) {

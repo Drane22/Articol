@@ -13,19 +13,18 @@ interface CoverArtworkProps {
 }
 
 export function CoverArtwork({ src, alt, priority = false, sizes, className = '' }: CoverArtworkProps) {
-  const [mode, setMode] = useState<'optimized' | 'direct' | 'proxy' | 'failed'>('optimized');
+  const [mode, setMode] = useState<'direct' | 'proxy' | 'failed'>('direct');
   const [attempt, setAttempt] = useState(0);
 
   const handleError = () => {
     setMode((current) => {
-      if (current === 'optimized') return 'direct';
       if (current === 'direct') return 'proxy';
       return 'failed';
     });
   };
 
   const handleRetry = () => {
-    setMode('optimized');
+    setMode('direct');
     setAttempt((v) => v + 1);
   };
 
@@ -54,7 +53,7 @@ export function CoverArtwork({ src, alt, priority = false, sizes, className = ''
       fill
       priority={priority}
       sizes={sizes}
-      unoptimized={mode === 'direct' || mode === 'proxy'}
+      unoptimized={true}
       onError={handleError}
       className={`object-cover ${className}`}
     />

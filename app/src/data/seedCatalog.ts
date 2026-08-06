@@ -64,76 +64,76 @@ function createSeedAlbum(
 
 // Raw seed definitions — palette + features will be auto-generated
 const RAW_SEEDS = [
-  createSeedAlbum(1440854851, 'Abbey Road', 'The Beatles', 'Rock', 1969,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a1/59/a4/a159a4be-e28e-5d18-971c-3b3fb31e67e3/00602577914294.rgb.jpg/600x600bb.jpg',
+  createSeedAlbum(1474815798, 'Abbey Road', 'The Beatles', 'Rock', 1969,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/48/53/43/485343e3-dd6a-0034-faec-f4b6403f8108/13UMGIM63890.rgb.jpg/600x600bb.jpg',
     'Apple Records'),
 
-  createSeedAlbum(1440882340, 'Kind of Blue', 'Miles Davis', 'Jazz', 1959,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/80/96/6b/80966b59-19c9-d2b1-6a2d-20907d0f9a2e/074646493526.jpg/600x600bb.jpg',
+  createSeedAlbum(268443092, 'Kind of Blue', 'Miles Davis', 'Jazz', 1959,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music/7f/9f/d6/mzi.vtnaewef.jpg/600x600bb.jpg',
     'Columbia Records'),
 
-  createSeedAlbum(1440878589, 'Blue', 'Joni Mitchell', 'Singer/Songwriter', 1971,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/4b/32/38/4b32386e-9844-3fb6-5e5d-4f15a31a9805/603497849208.jpg/600x600bb.jpg',
+  createSeedAlbum(1492263092, 'Blue', 'Joni Mitchell', 'Singer/Songwriter', 1971,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/00/a2/43/00a24363-cf69-bfd2-a26a-a042d57ab141/075992719926.jpg/600x600bb.jpg',
     'Reprise Records'),
 
-  createSeedAlbum(1440841363, 'Amnesiac', 'Radiohead', 'Alternative', 2001,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/4d/9b/38/4d9b3899-73e4-d50d-d419-74d71597fbb2/634904078320.jpg/600x600bb.jpg',
+  createSeedAlbum(1097864180, 'Amnesiac', 'Radiohead', 'Alternative', 2001,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/43/d8/ec/43d8ec17-0e96-dba9-21d9-4cdf9d98f2bf/634904078362.png/600x600bb.jpg',
     'XL Recordings'),
 
-  createSeedAlbum(1440844781, 'Kid A', 'Radiohead', 'Alternative', 2000,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/21/9f/c7/219fc79b-2b47-d5d1-419b-648b788a8d11/634904078023.jpg/600x600bb.jpg',
+  createSeedAlbum(1097862870, 'Kid A', 'Radiohead', 'Alternative', 2000,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bd/8e/13/bd8e1358-b367-a689-cb84-cebd0b067dc4/634904078263.png/600x600bb.jpg',
     'XL Recordings'),
 
-  createSeedAlbum(1440889240, 'Elephant', 'The White Stripes', 'Alternative', 2003,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/71/3b/b7/713bb7f5-937b-402a-c752-df21f7535b71/886443834160.jpg/600x600bb.jpg',
+  createSeedAlbum(1675379752, 'Elephant', 'The White Stripes', 'Alternative', 2003,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/48/b5/b9/48b5b90e-ba1e-08ff-1217-9e479afdad5d/196589901750.jpg/600x600bb.jpg',
     'Third Man Records'),
 
-  createSeedAlbum(1440845340, 'The Dark Side of the Moon', 'Pink Floyd', 'Rock', 1973,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/da/67/6f/da676f6b-7fa9-0fef-0708-9df2c2199eb6/0094636820120.jpg/600x600bb.jpg',
+  createSeedAlbum(1065975633, 'The Dark Side of the Moon', 'Pink Floyd', 'Rock', 1973,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/3e/17/ec/3e17ec6d-f980-c64f-19e0-a6fd8bbf0c10/886445635850.jpg/600x600bb.jpg',
     'Harvest Records'),
 
-  createSeedAlbum(1440879999, 'Disintegration', 'The Cure', 'Alternative', 1989,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/0d/18/38/0d1838e5-3f3c-8438-e6b8-61cf1c11e61b/603497848881.jpg/600x600bb.jpg',
+  createSeedAlbum(372100016, 'Disintegration', 'The Cure', 'Alternative', 1989,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music/93/3c/2c/mzi.ujtdsknz.jpg/600x600bb.jpg',
     'Fiction Records'),
 
-  createSeedAlbum(1440872200, 'Blonde', 'Frank Ocean', 'R&B/Soul', 2016,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/d3/67/78/d36778f8-b34e-4f01-bd31-9257d0793617/886446198641.jpg/600x600bb.jpg',
+  createSeedAlbum(1445278500, 'Blonde', 'Frank Ocean', 'R&B/Soul', 2016,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/8d/76/23/8d76234b-5101-fa9b-58b3-5e17645d5b05/00602527744209.rgb.jpg/600x600bb.jpg',
     'Boys Don\'t Cry'),
 
-  createSeedAlbum(1440822111, 'Channel Orange', 'Frank Ocean', 'R&B/Soul', 2012,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/20/4a/01/204a0149-a297-c81b-8f3e-5a02e6d63428/12UMGIM22384.rgb.jpg/600x600bb.jpg',
+  createSeedAlbum(1506122308, 'Channel Orange', 'Frank Ocean', 'R&B/Soul', 2012,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/d8/9a/fa/d89afa00-abe3-c5c2-0cd3-935eebd32129/843357195384_01_img001.jpg/600x600bb.jpg',
     'Def Jam'),
 
-  createSeedAlbum(1440866500, 'In the Aeroplane Over the Sea', 'Neutral Milk Hotel', 'Alternative', 1998,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/6c/aa/89/6caa8901-d851-d418-c511-b0db0d0eb3e1/036172954728.jpg/600x600bb.jpg',
+  createSeedAlbum(1839077554, 'In the Aeroplane Over the Sea', 'Neutral Milk Hotel', 'Alternative', 1998,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/12/e3/5c/12e35c39-de5c-b501-3ef0-00f19fb3d513/56627.jpg/600x600bb.jpg',
     'Merge Records'),
 
-  createSeedAlbum(1440833100, 'Demon Days', 'Gorillaz', 'Alternative', 2005,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a7/67/6f/a7676f6b-7fa9-0fef-0708-9df2c2199eb6/0094636820120.jpg/600x600bb.jpg',
+  createSeedAlbum(850571319, 'Demon Days', 'Gorillaz', 'Alternative', 2005,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/1c/0f/81/1c0f818a-e458-dd84-6f1b-ccbdf5fe14d6/825646291045.jpg/600x600bb.jpg',
     'Parlophone'),
 
-  createSeedAlbum(1440851200, 'Igor', 'Tyler, The Creator', 'Hip-Hop/Rap', 2019,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/44/14/ef/4414ef90-8b0a-42eb-bb84-5a213e843c16/886447738228.jpg/600x600bb.jpg',
+  createSeedAlbum(1444322705, 'Igor', 'Tyler, The Creator', 'Hip-Hop/Rap', 2019,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/22/fd/10/22fd10a3-881d-2560-64e7-a9df650b9e47/17UM1IM42651.rgb.jpg/600x600bb.jpg',
     'Columbia Records'),
 
-  createSeedAlbum(1440811900, 'Currents', 'Tame Impala', 'Alternative', 2015,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/45/7b/09/457b0934-8c87-8d07-ee24-9b2f56730bb5/15UMGIM27150.jpg/600x600bb.jpg',
+  createSeedAlbum(1440875696, 'Currents', 'Tame Impala', 'Alternative', 2015,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/64/48/5c/64485cc9-968c-68cc-764e-9a7c71733def/00602567155454.rgb.jpg/600x600bb.jpg',
     'Modular Recordings'),
 
-  createSeedAlbum(1440825400, 'Unknown Pleasures', 'Joy Division', 'Alternative', 1979,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/91/9f/8e/919f8e43-d95a-c567-c2cf-3d7503901b0f/825646231264.jpg/600x600bb.jpg',
+  createSeedAlbum(1476702180, 'Unknown Pleasures', 'Joy Division', 'Alternative', 1979,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/13/90/c0/1390c072-4249-3739-7b3d-fd73ee4a5698/825646562831.jpg/600x600bb.jpg',
     'Factory Records'),
 
-  createSeedAlbum(1440899000, 'Yeezus', 'Kanye West', 'Hip-Hop/Rap', 2013,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6a/d0/0d/6ad00df8-8090-482a-464a-385a864d4b14/13UMGIM22384.rgb.jpg/600x600bb.jpg',
+  createSeedAlbum(1587795158, 'Yeezus', 'Kanye West', 'Hip-Hop/Rap', 2013,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/62/13/7b/62137b3f-7722-59f5-2ee1-b5aff9426869/21UMGIM64738.rgb.jpg/600x600bb.jpg',
     'Def Jam'),
 
-  createSeedAlbum(1440845111, 'Sgt. Pepper\'s Lonely Hearts Club Band', 'The Beatles', 'Rock', 1967,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/0d/18/38/0d1838e5-3f3c-8438-e6b8-61cf1c11e61b/00602557455328.rgb.jpg/600x600bb.jpg',
+  createSeedAlbum(1441164604, 'Sgt. Pepper\'s Lonely Hearts Club Band', 'The Beatles', 'Rock', 1967,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/6f/79/8d/6f798d84-7475-8525-fc91-f7b51b2b5a9b/00602567725428.rgb.jpg/600x600bb.jpg',
     'Apple Records'),
 
-  createSeedAlbum(1440877222, 'Melodrama', 'Lorde', 'Pop', 2017,
-    'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/37/10/7a/37107a67-5a1e-874c-bd73-0498dbf5b111/17UMGIM08248.rgb.jpg/600x600bb.jpg',
+  createSeedAlbum(1428764777, 'Melodrama', 'Lorde', 'Pop', 2017,
+    'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/58/11/b1/5811b172-e180-25a6-69e6-4385fbbfb5dc/17UM1IM02207.rgb.jpg/600x600bb.jpg',
     'Lava / Republic'),
 ];
 

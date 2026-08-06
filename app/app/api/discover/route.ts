@@ -5,47 +5,25 @@ import { Album } from '@/lib/types';
 import { findItunesAlbumExact } from '@/lib/itunes';
 import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
 
-const HOMEPAGE_FEATURES = [
-  { title: 'Abbey Road', artist: 'The Beatles' },
-  { title: 'Kind of Blue', artist: 'Miles Davis' },
-  { title: 'The Dark Side of the Moon', artist: 'Pink Floyd' },
-  { title: 'Blonde', artist: 'Frank Ocean' },
-  { title: 'IGOR', artist: 'Tyler, The Creator' },
-  { title: 'Currents', artist: 'Tame Impala' },
-  { title: 'Thriller', artist: 'Michael Jackson' },
-  { title: 'Rumours', artist: 'Fleetwood Mac' },
-  { title: 'Nevermind', artist: 'Nirvana' },
-  { title: 'Back to Black', artist: 'Amy Winehouse' },
-  { title: 'In Rainbows', artist: 'Radiohead' },
-  { title: 'Melodrama', artist: 'Lorde' },
+const DISCOVER_ARTISTS = [
+  'Taylor Swift', 'Billie Eilish', 'Frank Ocean', 'Radiohead', 'The Beatles',
+  'Pink Floyd', 'Miles Davis', 'Tyler, The Creator', 'Tame Impala', 'Lorde',
+  'Kanye West', 'The Cure', 'Joni Mitchell', 'Gorillaz', 'Neutral Milk Hotel',
+  'The White Stripes', 'Joy Division', 'Kendrick Lamar', 'Fleetwood Mac', 'Nirvana'
 ];
 
-const featuredCache = new BoundedTtlCache<Album[]>({
-  maxEntries: 10,
-  ttlMs: 1000 * 60 * 60 * 12, // 12 hours
-});
-const featuredInflight = new InflightRequests<Album[]>();
-
 async function getFeaturedSpotlightAlbums(country: string): Promise<Album[]> {
-  const cacheKey = `featured-${country}`;
-  const cached = featuredCache.get(cacheKey);
-  if (cached) return cached;
+  const seedAlbums = await getAllSeedAlbums();
+  const validSeeds = seedAlbums.filter(a => Boolean(a.artworkUrl));
 
-  return featuredInflight.run(cacheKey, async () => {
-    const seedAlbums = await getAllSeedAlbums();
-    const resolved = await Promise.all(HOMEPAGE_FEATURES.map(async feature => {
-      const match = seedAlbums.find(s =>
-        s.normalizedTitle.includes(feature.title.toLowerCase()) ||
-        s.normalizedArtistName.includes(feature.artist.toLowerCase())
-      );
-      if (match) return match;
-      return findItunesAlbumExact(feature.title, feature.artist, country);
-    }));
+  // Fisher-Yates shuffle for dynamic rotation
+  const shuffled = [...validSeeds].sort(() => Math.random() - 0.5);
 
-    const albums = resolved.filter((album): album is Album => Boolean(album?.artworkUrl)).slice(0, 6);
-    featuredCache.set(cacheKey, albums);
-    return albums;
-  });
+  if (shuffled.length >= 6) {
+    return shuffled.slice(0, 6);
+  }
+
+  return validSeeds.slice(0, 6);
 }
 
 export async function GET(request: NextRequest) {

@@ -42,6 +42,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const [selectedWhyMatch, setSelectedWhyMatch] = useState<SimilarityResult | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [copiedPalette, setCopiedPalette] = useState(false);
 
   // Fetch selected album detail
   useEffect(() => {
@@ -226,16 +227,35 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             {/* Extracted Five-Color Palette Bar */}
             {album.dominantPalette && album.dominantPalette.length > 0 && (
               <div className="space-y-1.5">
-                <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">
-                  Extracted Palette
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">
+                    Extracted Palette
+                  </span>
+                  <button
+                    onClick={() => {
+                      const hexes = album.dominantPalette?.map((p) => p.hex).join(', ') || '';
+                      navigator.clipboard.writeText(hexes);
+                      setCopiedPalette(true);
+                      setTimeout(() => setCopiedPalette(false), 2000);
+                    }}
+                    className="inline-flex items-center space-x-1 text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    {copiedPalette ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedPalette ? 'Copied HEX codes!' : 'Copy palette'}</span>
+                  </button>
+                </div>
                 <div className="flex space-x-2 items-center">
                   {album.dominantPalette.map((p, idx) => (
                     <div key={idx} className="flex items-center space-x-1">
                       <span
-                        className="w-6 h-6 rounded-md border border-black/10 shadow-sm"
+                        className="w-6 h-6 rounded-md border border-black/10 shadow-sm cursor-pointer hover:scale-105 transition-transform"
                         style={{ backgroundColor: p.hex }}
-                        title={p.hex}
+                        title={`Copy ${p.hex}`}
+                        onClick={() => {
+                          navigator.clipboard.writeText(p.hex);
+                          setCopiedPalette(true);
+                          setTimeout(() => setCopiedPalette(false), 2000);
+                        }}
                       />
                       <span className="text-[10px] font-mono text-[var(--text-muted)] hidden sm:inline">
                         {p.hex}
