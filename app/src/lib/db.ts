@@ -1,4 +1,4 @@
-import { Album, SearchMode, SimilarityResult } from './types';
+import { Album, RecommendationTiers, SearchMode, SimilarityResult } from './types';
 import { SEED_ALBUMS, initSeedAlbums } from '../data/seedCatalog';
 import { rankDistinctRecommendationTiers } from './visualEngine';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
@@ -43,10 +43,8 @@ function normalizePalette(value: unknown): Album['dominantPalette'] {
   const palette = parseJson<unknown[]>(value, []);
   if (!Array.isArray(palette)) return [];
   return palette.flatMap((entry: any) => {
-    if (!entry?.hex || typeof entry.hex !== 'string') return [];
-    const lab = Array.isArray(entry.lab) && entry.lab.length === 3
-      ? entry.lab
-      : rgbToLab(...hexToRgb(entry.hex));
+    if (!entry?.hex || typeof entry.hex !== 'string' || !/^#[0-9a-f]{6}$/i.test(entry.hex)) return [];
+    const lab = rgbToLab(...hexToRgb(entry.hex));
     return [{ hex: entry.hex, lab, weight: Number(entry.weight) || 0 }];
   });
 }
@@ -57,6 +55,11 @@ export function mapSupabaseAlbumRow(data: any): Album {
 
   const title = data.title || 'Untitled Album';
   const artistName = data.artist_name || 'Unknown Artist';
+
+  const embeddingModel = data.embedding_model || undefined;
+  const embeddingVersion = data.embedding_version || undefined;
+  const storedStatus = data.visual_analysis_status || 'fallback';
+  const isSyntheticVisualData = embeddingModel === 'seed-fallback' || embeddingVersion === 'fallback-v1';
 
   return {
     id: String(data.id ?? `supabase-${collectionId}`),
@@ -83,12 +86,12 @@ export function mapSupabaseAlbumRow(data: any): Album {
     visualFeatures: parseJson<Album['visualFeatures']>(data.visual_features, {} as Album['visualFeatures']),
     perceptualHash: data.perceptual_hash || undefined,
     embedding: parseEmbedding(data.embedding),
-    embeddingModel: data.embedding_model || undefined,
-    embeddingVersion: data.embedding_version || undefined,
+    embeddingModel,
+    embeddingVersion,
     featureExtractionVersion: data.feature_extraction_version || undefined,
     scoringVersion: data.scoring_version || undefined,
     artworkChecksum: data.artwork_checksum || undefined,
-    visualAnalysisStatus: data.visual_analysis_status || 'fallback',
+    visualAnalysisStatus: isSyntheticVisualData ? 'fallback' : storedStatus,
     visualAnalysisError: data.visual_analysis_error || undefined,
     createdAt: data.created_at || undefined,
     updatedAt: data.updated_at || undefined,
@@ -296,6 +299,39 @@ export async function saveAlbumsToDb(albums: Album[]): Promise<void> {
   } catch (error) {
     console.error('Supabase save albums failed:', error);
   }
+}
+
+export async function saveSimilarityResultsToCache(
+  queryAlbum: Album,
+  tiers: RecommendationTiers,
+  scoringVersion: string,
+): Promise<void> {
+  const rows = Object.entries(tiers).flatMap(([mode, results]) =>
+    results.map((result) => ({
+      // iTunes collection IDs are stable across seed and Supabase records.
+      source_album_id: queryAlbum.itunesCollectionId,
+      candidate_album_id: result.album.itunesCollectionId,
+      mode,
+      visual_score: result.visualScore,
+      visual_confidence: result.visualConfidence,
+      music_score: result.musicScore,
+      final_score: result.finalScore,
+      scoring_version: scoringVersion,
+      calculated_at: new Date().toISOString(),
+    }))
+  );
+  if (rows.length === 0) return;
+
+  const supabase = await getSupabaseClient(true);
+  if (!supabase) {
+    console.warn('Supabase similarity cache disabled: configure a server write key.');
+    return;
+  }
+
+  const { error } = await supabase
+    .from('album_similarity_cache')
+    .upsert(rows, { onConflict: 'source_album_id,candidate_album_id,mode,scoring_version' });
+  if (error) console.error('Supabase similarity cache save failed:', error);
 }
 
 export async function getSimilarAlbumsFromDb(

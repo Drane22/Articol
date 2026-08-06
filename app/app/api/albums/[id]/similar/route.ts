@@ -4,7 +4,7 @@ import { generateCandidatePool } from '@/lib/enrichment';
 import { rankDistinctRecommendationTiers } from '@/lib/visualEngine';
 import { Album, RecommendationTiers, SimilarityResult } from '@/lib/types';
 import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
-import { getAlbumFromDb, saveAlbumToDb } from '@/lib/db';
+import { getAlbumFromDb, saveAlbumToDb, saveSimilarityResultsToCache } from '@/lib/db';
 
 const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v2-supabase-catalog';
 const responseCache = new BoundedTtlCache<RecommendationPayload>({
@@ -20,6 +20,14 @@ interface RecommendationPayload {
   tiers?: RecommendationTiers;
   results?: SimilarityResult[];
   algorithmVersion: string;
+}
+
+function hasReliableVisualAnalysis(album: Album): boolean {
+  return (
+    (album.visualAnalysisStatus === 'indexed' || album.visualAnalysisStatus === 'analyzed') &&
+    Boolean(album.perceptualHash) &&
+    album.embeddingVersion === 'visual-grid-v2'
+  );
 }
 
 function withoutInternalVector(album: Album): Album {
@@ -46,18 +54,13 @@ async function calculateRecommendations(
   }
 
   // Enrich query album if it has not been visually analyzed yet
-  if (
-    queryAlbum.visualAnalysisStatus !== 'indexed' &&
-    queryAlbum.visualAnalysisStatus !== 'analyzed'
-  ) {
+  if (!hasReliableVisualAnalysis(queryAlbum)) {
     queryAlbum = await enrichAlbumWithArtwork(queryAlbum);
     await saveAlbumToDb(queryAlbum);
   }
 
   // Verify visual indexing status (Section 4 & 24: Unindexed albums return not_indexed)
-  const isIndexed =
-    queryAlbum.visualAnalysisStatus === 'indexed' ||
-    queryAlbum.visualAnalysisStatus === 'analyzed';
+  const isIndexed = hasReliableVisualAnalysis(queryAlbum);
 
   if (!isIndexed) {
     return {
@@ -77,6 +80,8 @@ async function calculateRecommendations(
   const tiers = Object.fromEntries(
     Object.entries(ranked).map(([mode, results]) => [mode, results.map(publicResult)])
   ) as unknown as RecommendationTiers;
+
+  await saveSimilarityResultsToCache(queryAlbum, ranked, RECOMMENDATION_ALGORITHM_VERSION);
 
   return {
     status: 'indexed',
