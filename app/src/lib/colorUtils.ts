@@ -1,0 +1,193 @@
+import { DominantColor } from './types';
+
+// Convert HEX string to RGB [r, g, b]
+export function hexToRgb(hex: string): [number, number, number] {
+  let cleanHex = hex.replace('#', '');
+  if (cleanHex.length === 3) {
+    cleanHex = cleanHex.split('').map(c => c + c).join('');
+  }
+  const num = parseInt(cleanHex, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+// Convert RGB to CIELAB [L*, a*, b*]
+export function rgbToLab(r: number, g: number, b: number): [number, number, number] {
+  let rNorm = r / 255;
+  let gNorm = g / 255;
+  let bNorm = b / 255;
+
+  rNorm = rNorm > 0.04045 ? Math.pow((rNorm + 0.055) / 1.055, 2.4) : rNorm / 12.92;
+  gNorm = gNorm > 0.04045 ? Math.pow((gNorm + 0.055) / 1.055, 2.4) : gNorm / 12.92;
+  bNorm = bNorm > 0.04045 ? Math.pow((bNorm + 0.055) / 1.055, 2.4) : bNorm / 12.92;
+
+  // D65 Standard Illuminant
+  let x = (rNorm * 0.4124 + gNorm * 0.3576 + bNorm * 0.1805) / 0.95047;
+  let y = (rNorm * 0.2126 + gNorm * 0.7152 + bNorm * 0.0722) / 1.00000;
+  let z = (rNorm * 0.0193 + gNorm * 0.1192 + bNorm * 0.9505) / 1.08883;
+
+  x = x > 0.008856 ? Math.pow(x, 1 / 3) : 7.787 * x + 16 / 116;
+  y = y > 0.008856 ? Math.pow(y, 1 / 3) : 7.787 * y + 16 / 116;
+  z = z > 0.008856 ? Math.pow(z, 1 / 3) : 7.787 * z + 16 / 116;
+
+  const L = 116 * y - 16;
+  const a = 500 * (x - y);
+  const bVal = 200 * (y - z);
+
+  return [L, a, bVal];
+}
+
+// Convert RGB to HEX
+export function rgbToHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map(x => {
+    const hex = Math.round(Math.max(0, Math.min(255, x))).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+// CIEDE2000 Perceptual Color Difference calculation
+export function ciede2000(lab1: [number, number, number], lab2: [number, number, number]): number {
+  const [L1, a1, b1] = lab1;
+  const [L2, a2, b2] = lab2;
+
+  const C1 = Math.sqrt(a1 * a1 + b1 * b1);
+  const C2 = Math.sqrt(a2 * a2 + b2 * b2);
+  const Cbar = (C1 + C2) / 2;
+
+  const G = 0.5 * (1 - Math.sqrt(Math.pow(Cbar, 7) / (Math.pow(Cbar, 7) + Math.pow(25, 7))));
+  const a1p = (1 + G) * a1;
+  const a2p = (1 + G) * a2;
+
+  const C1p = Math.sqrt(a1p * a1p + b1 * b1);
+  const C2p = Math.sqrt(a2p * a2p + b2 * b2);
+
+  const h1p = Math.atan2(b1, a1p) >= 0 ? Math.atan2(b1, a1p) * (180 / Math.PI) : Math.atan2(b1, a1p) * (180 / Math.PI) + 360;
+  const h2p = Math.atan2(b2, a2p) >= 0 ? Math.atan2(b2, a2p) * (180 / Math.PI) : Math.atan2(b2, a2p) * (180 / Math.PI) + 360;
+
+  const dLp = L2 - L1;
+  const dCp = C2p - C1p;
+
+  let dhp = 0;
+  if (C1p * C2p !== 0) {
+    if (Math.abs(h2p - h1p) <= 180) {
+      dhp = h2p - h1p;
+    } else if (h2p - h1p > 180) {
+      dhp = h2p - h1p - 360;
+    } else {
+      dhp = h2p - h1p + 360;
+    }
+  }
+
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin((dhp / 2) * (Math.PI / 180));
+
+  const Lbarp = (L1 + L2) / 2;
+  const Cbarp = (C1p + C2p) / 2;
+
+  let hbarp = 0;
+  if (C1p * C2p !== 0) {
+    if (Math.abs(h1p - h2p) <= 180) {
+      hbarp = (h1p + h2p) / 2;
+    } else if (h1p + h2p < 360) {
+      hbarp = (h1p + h2p + 360) / 2;
+    } else {
+      hbarp = (h1p + h2p - 360) / 2;
+    }
+  }
+
+  const T = 1 - 0.17 * Math.cos((hbarp - 30) * (Math.PI / 180)) +
+    0.24 * Math.cos((2 * hbarp) * (Math.PI / 180)) +
+    0.32 * Math.cos((3 * hbarp + 6) * (Math.PI / 180)) -
+    0.20 * Math.cos((4 * hbarp - 63) * (Math.PI / 180));
+
+  const dTheta = 30 * Math.exp(-Math.pow((hbarp - 275) / 25, 2));
+  const RC = 2 * Math.sqrt(Math.pow(Cbarp, 7) / (Math.pow(Cbarp, 7) + Math.pow(25, 7)));
+  const SL = 1 + (0.015 * Math.pow(Lbarp - 50, 2)) / Math.sqrt(20 + Math.pow(Lbarp - 50, 2));
+  const SC = 1 + 0.045 * Cbarp;
+  const SH = 1 + 0.015 * Cbarp * T;
+  const RT = -Math.sin((2 * dTheta) * (Math.PI / 180)) * RC;
+
+  const dE = Math.sqrt(
+    Math.pow(dLp / SL, 2) +
+    Math.pow(dCp / SC, 2) +
+    Math.pow(dHp / SH, 2) +
+    RT * (dCp / SC) * (dHp / SH)
+  );
+
+  return dE;
+}
+
+// Calculate CIELAB distance using CIEDE2000
+export function cielabDistance(lab1: [number, number, number], lab2: [number, number, number]): number {
+  return ciede2000(lab1, lab2);
+}
+
+// Earth Mover's Distance calculation between two dominant palettes
+export function calculatePaletteDistance(palette1: DominantColor[], palette2: DominantColor[]): number {
+  if (!palette1.length || !palette2.length) return 50.0;
+
+  const directionalDistance = (source: DominantColor[], target: DominantColor[]) => {
+    let totalDistance = 0;
+    let totalWeight = 0;
+    for (const sourceColor of source) {
+      const closest = Math.min(...target.map(targetColor => cielabDistance(sourceColor.lab, targetColor.lab)));
+      const weight = sourceColor.weight || 0.2;
+      totalDistance += closest * weight;
+      totalWeight += weight;
+    }
+    return totalWeight > 0 ? totalDistance / totalWeight : 50;
+  };
+
+  return (directionalDistance(palette1, palette2) + directionalDistance(palette2, palette1)) / 2;
+}
+
+// Calculate color similarity score normalized from 0 to 1
+export function calculateColorSimilarity(palette1: DominantColor[], palette2: DominantColor[], sigma: number = 22.0): number {
+  const distance = calculatePaletteDistance(palette1, palette2);
+  const distributionSimilarity = Math.exp(-distance / sigma);
+  const dominant1 = [...palette1].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0];
+  const dominant2 = [...palette2].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0];
+  const dominantSimilarity = dominant1 && dominant2
+    ? Math.exp(-cielabDistance(dominant1.lab, dominant2.lab) / 25)
+    : 0;
+  const similarity = distributionSimilarity * 0.65 + dominantSimilarity * 0.35;
+  return Math.min(1.0, Math.max(0.0, similarity));
+}
+
+// Helper to categorize dominant color family for filter exploration
+export function getColorCategory(hex: string): string {
+  const [r, g, b] = hexToRgb(hex);
+  const [L, a, bVal] = rgbToLab(r, g, b);
+
+  if (L < 18) return 'black';
+  if (L > 88 && Math.abs(a) < 8 && Math.abs(bVal) < 8) return 'white';
+  if (Math.abs(a) < 10 && Math.abs(bVal) < 10) return 'monochrome';
+
+  // Calculate HSL Hue (0..360)
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+  const max = Math.max(rNorm, gNorm, bNorm);
+  const min = Math.min(rNorm, gNorm, bNorm);
+  const delta = max - min;
+
+  let hue = 0;
+  if (delta > 0) {
+    if (max === rNorm) {
+      hue = ((gNorm - bNorm) / delta) % 6;
+    } else if (max === gNorm) {
+      hue = (bNorm - rNorm) / delta + 2;
+    } else {
+      hue = (rNorm - gNorm) / delta + 4;
+    }
+    hue = Math.round(hue * 60);
+    if (hue < 0) hue += 360;
+  }
+
+  if (hue >= 345 || hue < 15) return 'red';
+  if (hue >= 15 && hue < 45) return 'orange';
+  if (hue >= 45 && hue < 75) return 'yellow';
+  if (hue >= 75 && hue < 165) return 'green';
+  if (hue >= 165 && hue < 255) return 'blue';
+  if (hue >= 255 && hue < 325) return 'purple';
+
+  return 'red';
+}
