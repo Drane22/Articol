@@ -2,6 +2,7 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --bg-canvas: #f8f7f4;
     --bg-card: #ffffff;
     --text-primary: #121212;
@@ -10,9 +11,18 @@
     --accent-editorial: #1a1a1a;
     --accent-soft: #eae8e1;
     --tag-bg: #efeee8;
+    --accent-info: #1d4ed8;
+    --accent-success: #047857;
+    --accent-danger: #b42318;
+    --accent-warm: #a16207;
+    --accent-purple: #7c3aed;
+    --text-on-accent: #ffffff;
+    --overlay: rgba(17, 17, 18, 0.48);
+    --swatch-border: rgba(0, 0, 0, 0.18);
   }
 
   .dark {
+    color-scheme: dark;
     --bg-canvas: #0d0d0e;
     --bg-card: #151518;
     --text-primary: #f0f0f3;
@@ -21,6 +31,14 @@
     --accent-editorial: #ffffff;
     --accent-soft: #1f1f24;
     --tag-bg: #222228;
+    --accent-info: #60a5fa;
+    --accent-success: #34d399;
+    --accent-danger: #fb7185;
+    --accent-warm: #fbbf24;
+    --accent-purple: #c084fc;
+    --text-on-accent: #0d0d0e;
+    --overlay: rgba(0, 0, 0, 0.72);
+    --swatch-border: rgba(255, 255, 255, 0.18);
   }
 
   body {
@@ -34,6 +52,53 @@
     font-family: 'Newsreader', 'Playfair Display', Georgia, serif;
   }
 }
+
+.theme-info { color: var(--accent-info); }
+.theme-success { color: var(--accent-success); }
+.theme-danger { color: var(--accent-danger); }
+.theme-warning { color: var(--accent-warm); }
+.theme-purple { color: var(--accent-purple); }
+.theme-info-fill { background-color: var(--accent-info); color: var(--text-on-accent); }
+.theme-success-fill { background-color: var(--accent-success); }
+.theme-purple-fill { background-color: var(--accent-purple); }
+.theme-info-soft {
+  color: var(--accent-info);
+  background-color: color-mix(in srgb, var(--accent-info) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent-info) 28%, transparent);
+}
+.theme-info-surface {
+  background-color: color-mix(in srgb, var(--accent-info) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent-info) 28%, transparent);
+}
+.theme-success-soft {
+  color: var(--accent-success);
+  background-color: color-mix(in srgb, var(--accent-success) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent-success) 34%, transparent);
+}
+.theme-success-surface {
+  background-color: color-mix(in srgb, var(--accent-success) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent-success) 34%, transparent);
+}
+.theme-danger-soft {
+  color: var(--accent-danger);
+  background-color: color-mix(in srgb, var(--accent-danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent-danger) 28%, transparent);
+}
+.theme-danger-surface {
+  background-color: color-mix(in srgb, var(--accent-danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent-danger) 28%, transparent);
+}
+.theme-warning-soft {
+  color: var(--accent-warm);
+  background-color: color-mix(in srgb, var(--accent-warm) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent-warm) 34%, transparent);
+}
+.theme-warning-surface {
+  background-color: color-mix(in srgb, var(--accent-warm) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent-warm) 34%, transparent);
+}
+.theme-overlay { background-color: var(--overlay); }
+.theme-swatch-border { border-color: var(--swatch-border); }
 
 /* Lowercase Wordmark Styling */
 .wordmark-articol {

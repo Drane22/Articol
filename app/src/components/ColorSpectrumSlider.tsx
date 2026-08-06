@@ -54,7 +54,7 @@ export const ColorSpectrumSlider: React.FC<ColorSpectrumSliderProps> = ({
             >
               {c.hex !== null ? (
                 <span
-                  className="w-3 h-3 rounded-full border border-black/20"
+                  className="w-3 h-3 rounded-full border theme-swatch-border"
                   style={{ backgroundColor: c.hex }}
                 />
               ) : (

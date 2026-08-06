@@ -169,7 +169,7 @@ export default function HomePage() {
             </div>
           ) : searchError ? (
             <div className="text-center py-12 text-[var(--text-muted)] space-y-3">
-              <p className="text-sm text-red-400" role="alert">{searchError}</p>
+              <p className="text-sm theme-danger" role="alert">{searchError}</p>
               <button
                 type="button"
                 onClick={() => {
@@ -201,7 +201,7 @@ export default function HomePage() {
         <section className="space-y-8 pt-6">
           <div className="flex justify-between items-end border-b border-[var(--border-color)] pb-4">
             <div>
-              <div className="flex items-center space-x-1.5 text-xs font-mono uppercase text-amber-500 mb-1">
+              <div className="flex items-center space-x-1.5 text-xs font-mono uppercase theme-warning mb-1">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Featured Visual Languages</span>
               </div>

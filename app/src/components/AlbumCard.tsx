@@ -84,7 +84,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
               title={`Why ${album.title} is a match`}
               aria-label={`Why ${album.title} is a match`}
             >
-              <Info className="w-3.5 h-3.5 text-blue-400" />
+              <Info className="w-3.5 h-3.5 theme-info" />
             </button>
           )}
           {matchPercentage !== null && (
@@ -101,7 +101,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
           aria-label={isSaved ? `Remove ${album.title} from saved` : `Save ${album.title}`}
         >
           {isSaved ? (
-            <Check className="w-3.5 h-3.5 text-emerald-400" />
+            <Check className="w-3.5 h-3.5 theme-success" />
           ) : (
             <Bookmark className="w-3.5 h-3.5" />
           )}
@@ -112,7 +112,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
         <div>
           <Link
             href={`/album/${album.itunesCollectionId}`}
-            className="block hover:text-blue-500 transition-colors"
+            className="block hover:text-[var(--accent-info)] transition-colors"
           >
             <h4 className="text-sm font-serif font-semibold truncate leading-tight text-[var(--text-primary)]">
               {album.title}
@@ -158,7 +158,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
                 aria-label="Copy palette HEX codes"
               >
                 {copiedPalette ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
+                  <Check className="w-3 h-3 theme-success" />
                 ) : (
                   <Copy className="w-3 h-3" />
                 )}

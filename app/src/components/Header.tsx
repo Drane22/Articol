@@ -16,6 +16,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
   const pathname = usePathname();
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
+  const [themeReady, setThemeReady] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Album[]>([]);
@@ -31,12 +32,31 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
   ];
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+    try {
+      const storedTheme = window.localStorage.getItem('articol_theme');
+      const nextDarkMode = storedTheme === 'dark'
+        ? true
+        : storedTheme === 'light'
+          ? false
+          : document.documentElement.classList.contains('dark');
+      setDarkMode(nextDarkMode);
+    } catch {
+      setDarkMode(document.documentElement.classList.contains('dark'));
     }
-  }, [darkMode]);
+    setThemeReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!themeReady) return;
+
+    document.documentElement.classList.toggle('dark', darkMode);
+    document.documentElement.style.colorScheme = darkMode ? 'dark' : 'light';
+    try {
+      window.localStorage.setItem('articol_theme', darkMode ? 'dark' : 'light');
+    } catch {
+      // Theme still applies for this session when storage is unavailable.
+    }
+  }, [darkMode, themeReady]);
 
   useEffect(() => {
     if (!isSearchOpen || pathname === '/') return;
@@ -231,7 +251,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
                 <div className="max-h-[min(24rem,60vh)] overflow-y-auto">
                   {isSearching && <p className="px-4 py-4 text-xs text-[var(--text-muted)]">Finding records...</p>}
                   {!isSearching && searchError && (
-                    <p className="px-4 py-4 text-xs text-red-400" role="alert">{searchError}</p>
+                    <p className="px-4 py-4 text-xs theme-danger" role="alert">{searchError}</p>
                   )}
                   {!isSearching && !searchError && searchQuery.trim() && searchResults.length === 0 && (
                     <p className="px-4 py-4 text-xs text-[var(--text-muted)]">No albums or artists found.</p>
@@ -296,10 +316,11 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
 
           {/* Dark / Light Mode Toggle */}
           <button
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={() => setDarkMode((current) => !current)}
             className="min-h-8 min-w-8 p-1.5 rounded-md border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--accent-soft)] transition-colors"
-            title="Toggle theme"
-            aria-label="Toggle theme"
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-pressed={darkMode}
           >
             {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>

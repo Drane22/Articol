@@ -75,7 +75,7 @@ export default function ExplorePage() {
       
       {/* Header */}
       <div className="space-y-3">
-        <div className="flex items-center space-x-2 text-xs font-mono uppercase text-amber-500">
+        <div className="flex items-center space-x-2 text-xs font-mono uppercase theme-warning">
           <Compass className="w-4 h-4" />
           <span>Digital Cover Archive</span>
         </div>
@@ -135,7 +135,7 @@ export default function ExplorePage() {
                 onClick={() => setActiveFilter(isSelected ? null : tag)}
                 className={`min-h-9 px-3 py-1 rounded-full text-xs font-mono transition-colors ${
                   isSelected
-                    ? 'bg-blue-500 text-white font-medium'
+                    ? 'theme-info-fill font-medium'
                     : 'bg-[var(--tag-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -177,7 +177,7 @@ export default function ExplorePage() {
       <section className="space-y-4">
         <div className="flex justify-between items-center text-xs font-mono text-[var(--text-muted)]">
           <span>Displaying {albums.length} catalog covers</span>
-          {activeCollection && <span className="font-semibold text-amber-500">Collection: {activeCollection}</span>}
+          {activeCollection && <span className="font-semibold theme-warning">Collection: {activeCollection}</span>}
         </div>
 
         {isLoading ? (
@@ -191,7 +191,7 @@ export default function ExplorePage() {
             <p className="text-sm text-[var(--text-muted)]">No covers match your specific filter criteria.</p>
             <button
               onClick={handleResetFilters}
-              className="text-xs font-mono text-blue-500 hover:underline"
+              className="text-xs font-mono theme-info hover:underline"
             >
               Clear filters to view all covers
             </button>

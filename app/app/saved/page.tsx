@@ -32,7 +32,7 @@ export default function SavedPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[var(--border-color)] pb-6">
         <div className="space-y-2">
-          <div className="flex items-center space-x-2 text-xs font-mono uppercase text-emerald-500">
+          <div className="flex items-center space-x-2 text-xs font-mono uppercase theme-success">
             <Bookmark className="w-4 h-4" />
             <span>Local Collections</span>
           </div>
@@ -47,7 +47,7 @@ export default function SavedPage() {
         {savedAlbums.length > 0 && (
           <button
             onClick={handleClearAll}
-            className="inline-flex items-center space-x-1 text-xs font-mono text-red-400 hover:text-red-500 border border-red-500/20 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+            className="inline-flex items-center space-x-1 text-xs font-mono theme-danger-soft border px-3 py-1.5 rounded-lg transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>Clear saved list</span>

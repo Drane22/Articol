@@ -30,7 +30,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
       : 'Ranked using visual structure, color, typography, texture, and music context.';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 theme-overlay backdrop-blur-sm animate-fade-in">
       <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto">
         
         {/* Close Button */}
@@ -44,7 +44,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
 
         {/* Modal Header */}
         <div className="flex items-center space-x-2 text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">
-          <Sparkles className="w-4 h-4 text-amber-500" />
+          <Sparkles className="w-4 h-4 theme-warning" />
           <span>Visual Match Explanation</span>
         </div>
 
@@ -78,7 +78,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         </div>
 
         {/* Natural Language Explanation Box */}
-        <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/5 text-sm text-[var(--text-primary)] leading-relaxed mb-6">
+        <div className="p-4 rounded-lg border theme-warning-surface text-sm text-[var(--text-primary)] leading-relaxed mb-6">
           <p className="font-serif italic text-base mb-1">“{result.explanation}”</p>
           <span className="text-xs text-[var(--text-muted)] block font-sans">
             {rankingSummary}
@@ -90,13 +90,13 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           <div>
             <div className="flex justify-between text-xs font-medium mb-1">
               <span className="flex items-center space-x-1.5">
-                <Sliders className="w-3.5 h-3.5 text-blue-500" />
+                <Sliders className="w-3.5 h-3.5 theme-info" />
                 <span>{isPaletteOnly ? 'Palette Similarity' : 'Total Combined Similarity'}</span>
               </span>
-              <span className="font-mono text-blue-500 font-bold">{matchPct}% Match</span>
+              <span className="font-mono theme-info font-bold">{matchPct}% Match</span>
             </div>
             <div className="w-full h-2 rounded-full bg-[var(--accent-soft)] overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${matchPct}%` }} />
+              <div className="h-full theme-info-fill rounded-full" style={{ width: `${matchPct}%` }} />
             </div>
           </div>
 
@@ -107,7 +107,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
                 <span className="font-mono font-medium">{visualPct}%</span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-[var(--accent-soft)] overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${visualPct}%` }} />
+                <div className="h-full theme-success-fill rounded-full" style={{ width: `${visualPct}%` }} />
               </div>
             </div>
 
@@ -117,7 +117,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
                 <span className="font-mono font-medium">{musicPct}%</span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-[var(--accent-soft)] overflow-hidden">
-                <div className="h-full bg-purple-500 rounded-full" style={{ width: `${musicPct}%` }} />
+                <div className="h-full theme-purple-fill rounded-full" style={{ width: `${musicPct}%` }} />
               </div>
             </div>
           </div>}
@@ -137,7 +137,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
                 {queryAlbum.dominantPalette.map((p, idx) => (
                   <span
                     key={idx}
-                    className="w-5 h-5 rounded-full border border-black/10 inline-block"
+                    className="w-5 h-5 rounded-full border theme-swatch-border inline-block"
                     style={{ backgroundColor: p.hex }}
                     title={p.hex}
                   />
@@ -151,7 +151,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
                 {candidate.dominantPalette.map((p, idx) => (
                   <span
                     key={idx}
-                    className="w-5 h-5 rounded-full border border-black/10 inline-block"
+                    className="w-5 h-5 rounded-full border theme-swatch-border inline-block"
                     style={{ backgroundColor: p.hex }}
                     title={p.hex}
                   />

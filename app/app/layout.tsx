@@ -21,13 +21,34 @@ export const metadata: Metadata = {
   description: 'Search an album, study its artwork, and discover records with a similar visual language.',
 };
 
+const themeScript = `
+(function () {
+  try {
+    var storedTheme = localStorage.getItem('articol_theme');
+    var shouldUseDark = storedTheme === 'dark'
+      ? true
+      : storedTheme === 'light'
+        ? false
+        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', shouldUseDark);
+    document.documentElement.style.colorScheme = shouldUseDark ? 'dark' : 'light';
+  } catch (error) {
+    document.documentElement.classList.add('dark');
+    document.documentElement.style.colorScheme = 'dark';
+  }
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`dark ${inter.variable} ${newsreader.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${newsreader.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-screen flex flex-col bg-[var(--bg-canvas)] text-[var(--text-primary)] antialiased">
         <Header />
         <main className="flex-1 relative z-10">{children}</main>

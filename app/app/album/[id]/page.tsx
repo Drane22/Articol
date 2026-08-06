@@ -253,7 +253,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                     <div key={idx} className="flex items-center space-x-1">
                       <button
                         type="button"
-                        className="h-6 w-6 rounded-md border border-black/10 shadow-sm cursor-pointer transition-transform hover:scale-105"
+                        className="h-6 w-6 rounded-md border theme-swatch-border shadow-sm cursor-pointer transition-transform hover:scale-105"
                         style={{ backgroundColor: p.hex }}
                         title={`Copy ${p.hex}`}
                         aria-label={`Copy ${p.hex}`}
@@ -270,7 +270,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                     onClick={() => void handleCopyPalette(album.dominantPalette.map((p) => p.hex).join(', '))}
                     className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md border border-[var(--border-color)] px-2.5 text-[11px] font-mono text-[var(--text-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
                   >
-                    {copiedPalette ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                    {copiedPalette ? <Check className="h-3 w-3 theme-success" /> : <Copy className="h-3 w-3" />}
                     <span>{copiedPalette ? 'Copied' : paletteCopyError ? 'Copy failed' : 'Copy palette'}</span>
                   </button>
                 </div>
@@ -291,7 +291,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                 <span className="text-[var(--text-muted)] block">Explicitness</span>
                 <span className="font-semibold text-[var(--text-primary)] flex items-center space-x-1">
                   {album.explicitness === 'explicit' ? (
-                    <span className="text-red-400 flex items-center"><ShieldAlert className="w-3 h-3 mr-1" /> Explicit</span>
+                    <span className="theme-danger flex items-center"><ShieldAlert className="w-3 h-3 mr-1" /> Explicit</span>
                   ) : (
                     'Clean'
                   )}
@@ -328,11 +328,11 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                 onClick={toggleSave}
                 className={`inline-flex w-full sm:w-auto justify-center items-center space-x-2 px-4 py-3 rounded-lg border text-xs font-medium transition-colors ${
                   isSaved
-                    ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
+                     ? 'theme-success-soft border'
                     : 'border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--accent-soft)]'
                 }`}
               >
-                {isSaved ? <Check className="w-4 h-4 text-emerald-400" /> : <Bookmark className="w-4 h-4" />}
+                {isSaved ? <Check className="w-4 h-4 theme-success" /> : <Bookmark className="w-4 h-4" />}
                 <span>{isSaved ? 'Saved to collection' : 'Save artwork'}</span>
               </button>
 
@@ -340,7 +340,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                 onClick={handleShare}
                 className="inline-flex w-full sm:w-auto justify-center items-center space-x-2 px-4 py-3 rounded-lg border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--accent-soft)] transition-colors text-xs font-medium"
               >
-                {copiedShare ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+                {copiedShare ? <Check className="w-4 h-4 theme-success" /> : <Share2 className="w-4 h-4" />}
                 <span>{copiedShare ? 'Link copied!' : 'Share cover'}</span>
               </button>
             </div>
@@ -351,8 +351,8 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
         {/* Section 4: Honest Unindexed State or Similar Covers */}
         {isUnindexed ? (
           <section className="space-y-8 pt-6 border-t border-[var(--border-color)]">
-            <div className="p-6 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
-              <div className="flex items-center space-x-2 text-amber-500 font-medium text-sm">
+            <div className="p-6 rounded-xl border theme-warning-surface space-y-3">
+              <div className="flex items-center space-x-2 theme-warning font-medium text-sm">
                 <Info className="w-4 h-4" />
                 <span>This album has not been visually indexed yet.</span>
               </div>
