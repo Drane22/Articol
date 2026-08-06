@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Keep production verification/build output isolated from an active dev
-  // server so both processes never rewrite the same chunk directory.
-  distDir: process.env.NODE_ENV === 'production' ? '.next-prod' : '.next',
   images: {
     remotePatterns: [
       {
