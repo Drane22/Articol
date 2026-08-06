@@ -10,9 +10,9 @@ export async function POST(
   const { id } = await params;
   const collectionId = parseInt(id, 10);
   const authHeader = request.headers.get('authorization');
-  const expectedSecret = process.env.INDEXING_SECRET || 'articol-internal-secret-key';
+  const expectedSecret = process.env.INDEXING_SECRET;
 
-  if (authHeader !== `Bearer ${expectedSecret}`) {
+  if (!expectedSecret || authHeader !== `Bearer ${expectedSecret}`) {
     return NextResponse.json({ error: 'Unauthorized indexing request' }, { status: 401 });
   }
 
