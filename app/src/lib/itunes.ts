@@ -3,7 +3,7 @@ import { extractVisualFeaturesFromImage, extractFeaturesFromUrl } from './featur
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 
 const ITUNES_BASE_URL = 'https://itunes.apple.com';
-const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
+const CACHE_TTL_MS = 1000 * 60 * 5; // Keep metadata fresh while deduplicating bursts.
 const apiCache = new BoundedTtlCache<any>({ maxEntries: 128, ttlMs: CACHE_TTL_MS });
 const artworkCache = new BoundedTtlCache<ArtworkAnalysis>({
   maxEntries: 256,
@@ -229,7 +229,7 @@ export async function searchItunesAlbums(
   try {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Articol/1.0' },
-      next: { revalidate: 3600 },
+      next: { revalidate: 300 },
     });
 
     if (!response.ok) {
@@ -275,7 +275,7 @@ export async function getItunesAlbumById(
     const url = `${ITUNES_BASE_URL}/lookup?id=${collectionId}&entity=song&country=${storefront}`;
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Articol/1.0' },
-      next: { revalidate: 3600 },
+      next: { revalidate: 300 },
     });
     if (!response.ok) return null;
     const data = await response.json();

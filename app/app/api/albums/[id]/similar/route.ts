@@ -6,10 +6,10 @@ import { Album, RecommendationTiers, SimilarityResult } from '@/lib/types';
 import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
 import { getAlbumFromDb, saveAlbumToDb } from '@/lib/db';
 
-const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v1-pgvector';
+const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v2-supabase-catalog';
 const responseCache = new BoundedTtlCache<RecommendationPayload>({
   maxEntries: 48,
-  ttlMs: 1000 * 60 * 60 * 6,
+  ttlMs: 1000 * 30,
 });
 const inflight = new InflightRequests<RecommendationPayload>();
 
@@ -137,7 +137,7 @@ export async function GET(
       },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400',
+           'Cache-Control': 'private, no-store',
           'X-Articol-Cache': cacheStatus,
         },
       }

@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllSeedAlbums } from '@/lib/db';
-import { getColorCategory } from '@/lib/colorUtils';
+import { getAllCatalogAlbums } from '@/lib/db';
+import { getColorCategory, matchesColorFilter } from '@/lib/colorUtils';
 import { Album } from '@/lib/types';
-import { findItunesAlbumExact } from '@/lib/itunes';
-import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
 
-const DISCOVER_ARTISTS = [
-  'Taylor Swift', 'Billie Eilish', 'Frank Ocean', 'Radiohead', 'The Beatles',
-  'Pink Floyd', 'Miles Davis', 'Tyler, The Creator', 'Tame Impala', 'Lorde',
-  'Kanye West', 'The Cure', 'Joni Mitchell', 'Gorillaz', 'Neutral Milk Hotel',
-  'The White Stripes', 'Joy Division', 'Kendrick Lamar', 'Fleetwood Mac', 'Nirvana'
-];
+async function getFeaturedSpotlightAlbums(): Promise<Album[]> {
+  const catalogAlbums = await getAllCatalogAlbums();
+  const validSeeds = catalogAlbums.filter(a => Boolean(a.artworkUrl));
 
-async function getFeaturedSpotlightAlbums(country: string): Promise<Album[]> {
-  const seedAlbums = await getAllSeedAlbums();
-  const validSeeds = seedAlbums.filter(a => Boolean(a.artworkUrl));
-
-  // Fisher-Yates shuffle for dynamic rotation
-  const shuffled = [...validSeeds].sort(() => Math.random() - 0.5);
+  // Fisher-Yates shuffle for unbiased dynamic rotation.
+  const shuffled = [...validSeeds];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
 
   if (shuffled.length >= 6) {
     return shuffled.slice(0, 6);
@@ -36,15 +31,14 @@ export async function GET(request: NextRequest) {
   const featured = searchParams.get('featured') === 'true';
 
   if (featured) {
-    const country = searchParams.get('country') || 'PH';
-    const albums = await getFeaturedSpotlightAlbums(country);
+    const albums = await getFeaturedSpotlightAlbums();
     return NextResponse.json(
       { count: albums.length, albums, partial: albums.length < 6 },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+      { headers: { 'Cache-Control': 'private, no-store' } }
     );
   }
 
-  let albums = await getAllSeedAlbums();
+  let albums = await getAllCatalogAlbums();
 
   // 1. Predefined Collections Filter
   if (collection) {
@@ -86,10 +80,7 @@ export async function GET(request: NextRequest) {
 
   // 2. Color spectrum filter
   if (colorHex) {
-    const targetCategory = getColorCategory(colorHex);
-    albums = albums.filter(a =>
-      a.dominantPalette.some(p => getColorCategory(p.hex) === targetCategory)
-    );
+    albums = albums.filter(a => matchesColorFilter(colorHex, a.dominantPalette || []));
   }
 
   // 3. Visual attribute filter
@@ -136,6 +127,6 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     { count: albums.length, albums },
-    { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+    { headers: { 'Cache-Control': 'private, no-store' } }
   );
 }

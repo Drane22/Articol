@@ -30,28 +30,38 @@ export default function ExplorePage() {
   const [activeDecade, setActiveDecade] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAlbums();
-  }, [activeCollection, activeFilter, activeColor, activeDecade]);
-
-  const fetchAlbums = () => {
+    const controller = new AbortController();
+    let isCurrentRequest = true;
     setIsLoading(true);
+
     const params = new URLSearchParams();
     if (activeCollection) params.set('collection', activeCollection);
     if (activeFilter) params.set('filter', activeFilter);
     if (activeColor) params.set('color', activeColor);
     if (activeDecade) params.set('decade', activeDecade);
 
-    fetch(`/api/discover?${params.toString()}`)
-      .then((res) => res.json())
+    fetch(`/api/discover?${params.toString()}`, { signal: controller.signal, cache: 'no-store' })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Explore request failed: ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
+        if (!isCurrentRequest) return;
         setAlbums(data.albums || []);
         setIsLoading(false);
       })
       .catch((err) => {
+        if (err.name === 'AbortError' || !isCurrentRequest) return;
         console.error('Explore discover error:', err);
+        setAlbums([]);
         setIsLoading(false);
       });
-  };
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [activeCollection, activeFilter, activeColor, activeDecade]);
 
   const handleResetFilters = () => {
     setActiveCollection(null);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { ImageOff, RotateCw } from 'lucide-react';
 
@@ -13,18 +13,23 @@ interface CoverArtworkProps {
 }
 
 export function CoverArtwork({ src, alt, priority = false, sizes, className = '' }: CoverArtworkProps) {
-  const [mode, setMode] = useState<'direct' | 'proxy' | 'failed'>('direct');
+  const [mode, setMode] = useState<'direct' | 'proxy' | 'failed'>('proxy');
   const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setMode('proxy');
+    setAttempt(0);
+  }, [src]);
 
   const handleError = () => {
     setMode((current) => {
-      if (current === 'direct') return 'proxy';
+      if (current === 'proxy') return 'direct';
       return 'failed';
     });
   };
 
   const handleRetry = () => {
-    setMode('direct');
+    setMode('proxy');
     setAttempt((v) => v + 1);
   };
 

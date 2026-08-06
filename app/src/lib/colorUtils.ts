@@ -191,3 +191,63 @@ export function getColorCategory(hex: string): string {
 
   return 'red';
 }
+
+type ExploreColorFamily = 'red' | 'orange' | 'amber' | 'green' | 'teal' | 'blue' | 'purple' | 'pink' | 'monochrome' | 'neutral';
+
+const EXPLORE_FILTER_FAMILIES: Record<string, ExploreColorFamily> = {
+  '#dc2626': 'red',
+  '#ea580c': 'orange',
+  '#d97706': 'amber',
+  '#16a34a': 'green',
+  '#0d9488': 'teal',
+  '#2563eb': 'blue',
+  '#7c3aed': 'purple',
+  '#db2777': 'pink',
+  '#18181b': 'monochrome',
+  '#f8fafc': 'neutral',
+};
+
+function exploreColorFamily(hex: string): ExploreColorFamily {
+  const [r, g, b] = hexToRgb(hex);
+  const [lightness, a, bValue] = rgbToLab(r, g, b);
+  const chroma = Math.sqrt(a * a + bValue * bValue);
+
+  if (chroma < 12) return lightness >= 75 ? 'neutral' : 'monochrome';
+
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+  const max = Math.max(rNorm, gNorm, bNorm);
+  const min = Math.min(rNorm, gNorm, bNorm);
+  const delta = max - min;
+  let hue = 0;
+  if (delta > 0) {
+    if (max === rNorm) hue = ((gNorm - bNorm) / delta) % 6;
+    else if (max === gNorm) hue = (bNorm - rNorm) / delta + 2;
+    else hue = (rNorm - gNorm) / delta + 4;
+    hue = (hue * 60 + 360) % 360;
+  }
+
+  if (hue >= 345 || hue < 15) return 'red';
+  if (hue < 35) return 'orange';
+  if (hue < 70) return 'amber';
+  if (hue < 165) return 'green';
+  if (hue < 195) return 'teal';
+  if (hue < 255) return 'blue';
+  if (hue < 315) return 'purple';
+  return 'pink';
+}
+
+/** Match a selected Explore color against any dominant palette swatch. */
+export function matchesColorFilter(targetHex: string, palette: DominantColor[]): boolean {
+  if (!targetHex || !palette.length) return false;
+  const normalizedTarget = targetHex.toLowerCase();
+  const targetFamily = EXPLORE_FILTER_FAMILIES[normalizedTarget] || exploreColorFamily(normalizedTarget);
+  const targetLab = rgbToLab(...hexToRgb(normalizedTarget));
+
+  return palette.some((color) => {
+    const family = exploreColorFamily(color.hex);
+    if (family !== targetFamily) return false;
+    return ciede2000(targetLab, color.lab) <= 32;
+  });
+}

@@ -1,13 +1,13 @@
 import { Album } from './types';
 import { searchItunesAlbums } from './itunes';
-import { getAllSeedAlbums } from './db';
+import { getCatalogCandidates } from './db';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY || '';
 
 const candidatePoolCache = new BoundedTtlCache<{ candidates: Album[]; lastFmScores: Record<number, number> }>({
   maxEntries: 64,
-  ttlMs: 1000 * 60 * 60 * 2, // 2 hour cache for generated candidate pools
+  ttlMs: 1000 * 30, // Newly indexed albums should enter the next interaction.
 });
 
 const inflightPoolRequests = new InflightRequests<{ candidates: Album[]; lastFmScores: Record<number, number> }>();
@@ -52,23 +52,22 @@ async function buildCandidatePool(
 
   const addCandidate = (alb: Album, score: number = 0) => {
     if (
-      alb.itunesCollectionId !== queryAlbum.itunesCollectionId &&
-      alb.normalizedArtistName !== queryAlbum.normalizedArtistName &&
-      !candidatesMap.has(alb.itunesCollectionId)
-    ) {
-      candidatesMap.set(alb.itunesCollectionId, alb);
-      lastFmScores[alb.itunesCollectionId] = score;
-    }
+      alb.itunesCollectionId === queryAlbum.itunesCollectionId ||
+      alb.normalizedArtistName === queryAlbum.normalizedArtistName
+    ) return;
+
+    if (!candidatesMap.has(alb.itunesCollectionId)) candidatesMap.set(alb.itunesCollectionId, alb);
+    lastFmScores[alb.itunesCollectionId] = Math.max(lastFmScores[alb.itunesCollectionId] || 0, score);
   };
 
-  // 1. Include baseline seed albums from DB
+  // 1. Include the current Supabase-first catalog.
   try {
-    const seedAlbums = await getAllSeedAlbums();
-    for (const alb of seedAlbums) {
+    const catalogAlbums = await getCatalogCandidates(queryAlbum, 200);
+    for (const alb of catalogAlbums) {
       addCandidate(alb, 0);
     }
   } catch (e) {
-    console.warn('Seed albums inclusion failed:', e);
+    console.warn('Catalog inclusion failed:', e);
   }
 
   // 2. Search for albums sharing the same genre (expanded to 30 limit)
