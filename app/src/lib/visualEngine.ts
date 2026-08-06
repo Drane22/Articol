@@ -8,6 +8,7 @@ import {
   ComponentScores,
 } from './types';
 import { calculateColorSimilarity } from './colorUtils';
+import { isReliableVisualAnalysis } from './visualValidation';
 
 // ==========================================
 // 1. EMBEDDING SIMILARITY
@@ -137,6 +138,40 @@ export function calculateComplexitySimilarity(albumA: Album, albumB: Album): num
   return Math.max(0, Math.min(1, 0.4 * entropySim + 0.3 * edgeSim + 0.3 * minSim));
 }
 
+function calculateMediumSimilarity(albumA: Album, albumB: Album): number {
+  const a = albumA.visualFeatures;
+  const b = albumB.visualFeatures;
+  const probabilities = [
+    [a.portraitProb, b.portraitProb],
+    [a.illustrationProb, b.illustrationProb],
+    [a.photographyProb, b.photographyProb],
+    [a.abstractProb, b.abstractProb],
+    [a.collageProb, b.collageProb],
+  ];
+  const typeSimilarity = probabilities.reduce(
+    (sum, [valueA, valueB]) => sum + Math.max(0, 1 - Math.abs((valueA ?? 0.5) - (valueB ?? 0.5))),
+    0,
+  ) / probabilities.length;
+  const monochromeSimilarity = 1 - Math.abs((a.monochromeScore ?? 0.5) - (b.monochromeScore ?? 0.5));
+  const saturationSimilarity = 1 - Math.abs((a.saturation ?? 0.5) - (b.saturation ?? 0.5));
+  const temperatureSimilarity = 1 - Math.abs((a.warmCool ?? 0) - (b.warmCool ?? 0)) / 2;
+
+  return Math.max(0, Math.min(1,
+    0.55 * typeSimilarity +
+    0.20 * monochromeSimilarity +
+    0.15 * saturationSimilarity +
+    0.10 * temperatureSimilarity,
+  ));
+}
+
+function weightedGeometricScore(components: Array<[number, number]>): number {
+  const weightedLog = components.reduce(
+    (sum, [value, weight]) => sum + weight * Math.log(Math.max(0.05, Math.min(1, value))),
+    0,
+  );
+  return Math.max(0, Math.min(1, Math.exp(weightedLog)));
+}
+
 // ==========================================
 // 5. VISUAL & ART STYLE SCORES
 // ==========================================
@@ -154,18 +189,16 @@ export function calculateVisualScore(albumA: Album, albumB: Album): number {
   const layoutSim = calculateLayoutSimilarity(albumA, albumB);
   const typographySim = calculateTypographySimilarity(albumA, albumB);
   const complexitySim = calculateComplexitySimilarity(albumA, albumB);
+  const mediumSim = calculateMediumSimilarity(albumA, albumB);
 
-  return Math.max(
-    0,
-    Math.min(
-      1,
-      0.46 * embeddingSim +
-      0.20 * colorSim +
-      0.14 * layoutSim +
-      0.10 * typographySim +
-      0.10 * complexitySim
-    )
-  );
+  return weightedGeometricScore([
+    [embeddingSim, 0.38],
+    [colorSim, 0.24],
+    [layoutSim, 0.18],
+    [mediumSim, 0.12],
+    [typographySim, 0.04],
+    [complexitySim, 0.04],
+  ]);
 }
 
 export function calculateArtStyleScore(albumA: Album, albumB: Album): number {
@@ -176,14 +209,16 @@ export function calculateArtStyleScore(albumA: Album, albumB: Album): number {
   const layoutSim = calculateLayoutSimilarity(albumA, albumB);
   const typographySim = calculateTypographySimilarity(albumA, albumB);
   const complexitySim = calculateComplexitySimilarity(albumA, albumB);
+  const mediumSim = calculateMediumSimilarity(albumA, albumB);
 
-  let score = (
-    0.28 * embeddingSim +
-    0.27 * colorSim +
-    0.20 * layoutSim +
-    0.13 * typographySim +
-    0.12 * complexitySim
-  );
+  let score = weightedGeometricScore([
+    [embeddingSim, 0.38],
+    [colorSim, 0.25],
+    [layoutSim, 0.18],
+    [mediumSim, 0.12],
+    [typographySim, 0.03],
+    [complexitySim, 0.04],
+  ]);
 
   if (colorSim < 0.18 && layoutSim < 0.45 && complexitySim < 0.45) {
     score *= 0.45;
@@ -395,6 +430,7 @@ export function rankSimilarAlbums(
       return false;
     }
     if (c.visualAnalysisStatus === 'failed') return false;
+    if (mode !== 'music_relation' && !isReliableVisualAnalysis(c)) return false;
     if (c.artworkUrl && c.artworkUrl === queryAlbum.artworkUrl) return false;
     const sameTitle = c.normalizedTitle === queryAlbum.normalizedTitle;
     if (sameTitle && calculateHammingDistance(c.perceptualHash, queryAlbum.perceptualHash) <= 8) return false;
