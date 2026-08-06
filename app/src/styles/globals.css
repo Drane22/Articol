@@ -1,0 +1,193 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-canvas: #f8f7f4;
+    --bg-card: #ffffff;
+    --text-primary: #121212;
+    --text-muted: #666666;
+    --border-color: #e5e3dc;
+    --accent-editorial: #1a1a1a;
+    --accent-soft: #eae8e1;
+    --tag-bg: #efeee8;
+  }
+
+  .dark {
+    --bg-canvas: #0d0d0e;
+    --bg-card: #151518;
+    --text-primary: #f0f0f3;
+    --text-muted: #8e8e96;
+    --border-color: #26262a;
+    --accent-editorial: #ffffff;
+    --accent-soft: #1f1f24;
+    --tag-bg: #222228;
+  }
+
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  h1, h2, h3, .font-serif-editorial {
+    font-family: 'Newsreader', 'Playfair Display', Georgia, serif;
+  }
+}
+
+/* Lowercase Wordmark Styling */
+.wordmark-articol {
+  font-family: 'Newsreader', 'Playfair Display', Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+/* Ambient Palette Background Wash */
+  .ambient-wash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 480px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.14;
+  filter: blur(96px) saturate(0.8);
+  transition: background 0.8s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.cover-artwork-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--accent-soft);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.cover-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0 0.7rem;
+  border-radius: 0.4rem;
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+.recommendation-loading {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.recommendation-loading__status {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--bg-card) 86%, transparent);
+}
+
+.recommendation-loading__record {
+  position: relative;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: conic-gradient(from 45deg, var(--text-primary), var(--text-muted), var(--text-primary));
+  animation: loading-record-spin 1.2s linear infinite;
+}
+
+.recommendation-loading__groove {
+  position: absolute;
+  inset: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--bg-card) 35%, transparent);
+  border-radius: inherit;
+}
+
+.recommendation-loading__label {
+  position: absolute;
+  inset: 0.78rem;
+  border-radius: inherit;
+  background: var(--bg-card);
+}
+
+.loading-card {
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+  animation: loading-card-breathe 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite alternate;
+}
+
+.loading-card__cover {
+  aspect-ratio: 1;
+  background: var(--accent-soft);
+}
+
+.loading-card__copy {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem;
+}
+
+.loading-card__line {
+  display: block;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+}
+
+.loading-card__line--title { width: 74%; }
+.loading-card__line--artist { width: 48%; opacity: 0.7; }
+
+@keyframes loading-record-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loading-card-breathe {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
+/* Grid Layout Customization */
+.recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .recommendation-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .recommendation-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .recommendation-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  .recommendation-loading__record { animation: none; }
+  .loading-card { animation: none; opacity: 0.75; }
+}
