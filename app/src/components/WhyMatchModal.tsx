@@ -30,13 +30,13 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
       : 'Ranked using visual structure, color, typography, texture, and music context.';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-lg hover:bg-[var(--accent-soft)] transition-colors"
+          className="absolute top-3 right-3 min-h-9 min-w-9 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 rounded-lg hover:bg-[var(--accent-soft)] transition-colors"
           aria-label="Close modal"
         >
           <X className="w-5 h-5" />
@@ -53,7 +53,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         </h3>
 
         {/* Album Comparison Header */}
-        <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-[var(--accent-soft)] border border-[var(--border-color)] mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 sm:p-4 rounded-lg bg-[var(--accent-soft)] border border-[var(--border-color)] mb-6">
           <div className="flex items-center space-x-3">
             <div className="relative w-14 h-14 rounded overflow-hidden flex-shrink-0">
               <CoverArtwork src={queryAlbum.artworkUrl} alt={queryAlbum.title} sizes="56px" />
@@ -65,7 +65,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center space-x-3 border-l border-[var(--border-color)] pl-4">
+          <div className="flex items-center space-x-3 border-t sm:border-t-0 sm:border-l border-[var(--border-color)] pt-3 sm:pt-0 sm:pl-4">
             <div className="relative w-14 h-14 rounded overflow-hidden flex-shrink-0">
               <CoverArtwork src={candidate.artworkUrl} alt={candidate.title} sizes="56px" />
             </div>
@@ -100,7 +100,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             </div>
           </div>
 
-          {!isPaletteOnly && <div className="grid grid-cols-2 gap-4 pt-2">
+          {!isPaletteOnly && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <div className="flex justify-between text-xs mb-1 text-[var(--text-muted)]">
                 <span>Visual Score</span>
@@ -131,7 +131,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="text-[var(--text-muted)]">Query Palette</span>
               <div className="flex space-x-1">
                 {queryAlbum.dominantPalette.map((p, idx) => (
@@ -145,7 +145,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="text-[var(--text-muted)]">Candidate Palette</span>
               <div className="flex space-x-1">
                 {candidate.dominantPalette.map((p, idx) => (
@@ -168,7 +168,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
               {isPaletteOnly ? <Palette className="w-3.5 h-3.5" /> : <Layout className="w-3.5 h-3.5" />}
               <span>Shared Visual Qualities</span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {result.sharedAttributes.map((attr, idx) => (
                 <div key={idx} className="p-2 rounded bg-[var(--accent-soft)] text-xs flex justify-between items-center">
                   <span className="text-[var(--text-muted)]">{attr.name}:</span>

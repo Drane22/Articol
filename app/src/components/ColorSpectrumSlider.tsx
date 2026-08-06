@@ -32,7 +32,7 @@ export const ColorSpectrumSlider: React.FC<ColorSpectrumSliderProps> = ({
         {selectedColor && (
           <button
             onClick={() => onColorSelect(null)}
-            className="hover:underline text-[var(--text-primary)]"
+            className="min-h-9 px-2 hover:underline text-[var(--text-primary)]"
           >
             Clear spectrum
           </button>
@@ -46,7 +46,7 @@ export const ColorSpectrumSlider: React.FC<ColorSpectrumSliderProps> = ({
             <button
               key={idx}
               onClick={() => onColorSelect(c.hex)}
-              className={`flex-shrink-0 flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs transition-all border ${
+              className={`min-h-10 flex-shrink-0 flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs transition-all border ${
                 isSelected
                   ? 'border-[var(--text-primary)] font-semibold shadow-sm bg-[var(--accent-soft)]'
                   : 'border-[var(--border-color)] hover:border-[var(--text-muted)] text-[var(--text-muted)]'

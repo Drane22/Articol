@@ -139,32 +139,32 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-canvas)]/80 border-b border-[var(--border-color)] transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex items-center justify-between gap-3">
         
         {/* Wordmark */}
-        <Link href="/" className="flex items-center space-x-2 group">
-          <span className="wordmark-articol text-2xl font-serif text-[var(--text-primary)] group-hover:opacity-80 transition-opacity">
+        <Link href="/" className="flex min-w-0 shrink-0 items-center space-x-2 group">
+          <span className="wordmark-articol text-xl sm:text-2xl font-serif text-[var(--text-primary)] group-hover:opacity-80 transition-opacity">
             articol
           </span>
-          <span className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded border border-[var(--border-color)] text-[var(--text-muted)] font-mono">
+          <span className="hidden sm:inline text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded border border-[var(--border-color)] text-[var(--text-muted)] font-mono">
             archival
           </span>
         </Link>
 
         {/* Navigation Links */}
-        <nav className="flex items-center space-x-6 text-sm font-medium">
+        <nav className="flex min-w-0 items-center gap-3 sm:gap-6 text-sm font-medium">
           <div ref={searchContainerRef} className="relative">
             <button
               type="button"
               onClick={handleSearchClick}
               aria-expanded={pathname !== '/' ? isSearchOpen : undefined}
               aria-controls={pathname !== '/' ? 'global-search-panel' : 'home-search-input'}
-              className={`inline-flex items-center gap-1.5 transition-colors hover:text-[var(--text-primary)] ${
+              className={`inline-flex min-h-10 min-w-8 items-center justify-center gap-1.5 transition-colors hover:text-[var(--text-primary)] ${
                 pathname === '/' || isSearchOpen ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'
               }`}
             >
               <Search className="w-4 h-4" />
-              <span>Search</span>
+              <span className="hidden sm:inline">Search</span>
             </button>
 
             {pathname !== '/' && isSearchOpen && (
@@ -225,33 +225,33 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
           </div>
           <Link
             href="/explore"
-            className={`flex items-center space-x-1 transition-colors hover:text-[var(--text-primary)] ${
+            className={`flex min-h-10 items-center space-x-1 transition-colors hover:text-[var(--text-primary)] ${
               pathname === '/explore' ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'
             }`}
           >
             <Compass className="w-4 h-4" />
-            <span>Explore</span>
+            <span className="hidden sm:inline">Explore</span>
           </Link>
           <Link
             href="/saved"
-            className={`flex items-center space-x-1 transition-colors hover:text-[var(--text-primary)] ${
+            className={`flex min-h-10 items-center space-x-1 transition-colors hover:text-[var(--text-primary)] ${
               pathname === '/saved' ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'
             }`}
           >
             <Bookmark className="w-4 h-4" />
-            <span>Saved</span>
+            <span className="hidden sm:inline">Saved</span>
           </Link>
         </nav>
 
         {/* Utilities: Storefront selector & Theme toggle */}
-        <div className="flex items-center space-x-3">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {/* Storefront selector */}
-          <div className="relative flex items-center space-x-1 text-xs text-[var(--text-muted)] border border-[var(--border-color)] rounded-md px-2 py-1 bg-[var(--bg-card)]">
+          <div className="relative flex items-center space-x-1 text-xs text-[var(--text-muted)] border border-[var(--border-color)] rounded-md px-1.5 sm:px-2 py-1 bg-[var(--bg-card)]">
             <Globe className="w-3.5 h-3.5" />
             <select
               value={country}
               onChange={(e) => onCountryChange?.(e.target.value)}
-              className="bg-transparent border-none focus:outline-none cursor-pointer text-[var(--text-primary)] text-xs"
+              className="w-7 sm:w-auto bg-transparent border-none focus:outline-none cursor-pointer text-[var(--text-primary)] text-xs"
             >
               {countries.map((c) => (
                 <option key={c.code} value={c.code} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
@@ -264,7 +264,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
           {/* Dark / Light Mode Toggle */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className="p-1.5 rounded-md border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--accent-soft)] transition-colors"
+            className="min-h-8 min-w-8 p-1.5 rounded-md border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--accent-soft)] transition-colors"
             title="Toggle theme"
             aria-label="Toggle theme"
           >

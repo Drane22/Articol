@@ -74,7 +74,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
                 event.stopPropagation();
                 onWhyMatchClick(similarity);
               }}
-              className="p-1 rounded bg-black/75 hover:bg-black text-white transition-colors"
+              className="min-h-9 min-w-9 p-2 rounded bg-black/75 hover:bg-black text-white transition-colors"
               title={`Why ${album.title} is a match`}
               aria-label={`Why ${album.title} is a match`}
             >
@@ -90,7 +90,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
 
         <button
           onClick={toggleSave}
-          className="absolute top-2.5 left-2.5 p-2 rounded-full bg-black/60 hover:bg-black/85 text-white transition-colors z-10"
+          className="absolute top-2.5 left-2.5 min-h-9 min-w-9 p-2 rounded-full bg-black/60 hover:bg-black/85 text-white transition-colors z-10"
           title={isSaved ? 'Remove from saved' : 'Save cover'}
           aria-label={isSaved ? `Remove ${album.title} from saved` : `Save ${album.title}`}
         >
@@ -102,7 +102,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
         </button>
       </div>
 
-      <div className="p-3.5 flex flex-col flex-1 justify-between space-y-3">
+      <div className="p-3 sm:p-3.5 flex flex-col flex-1 justify-between space-y-3">
         <div>
           <Link
             href={`/album/${album.itunesCollectionId}`}
@@ -132,9 +132,9 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
         ) : null}
 
         {/* Clean Non-Overlapping Footer */}
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--border-color)]/30">
+        <div className="flex flex-col items-stretch gap-2 pt-2 border-t border-[var(--border-color)]/30 sm:flex-row sm:items-center sm:justify-between sm:pt-1">
           {album.dominantPalette?.length ? (
-            <div className="flex items-center space-x-1.5" aria-label="Extracted cover palette">
+            <div className="flex min-h-8 items-center space-x-1.5" aria-label="Extracted cover palette">
               <div className="flex -space-x-1.5">
                 {album.dominantPalette.slice(0, 5).map((color, index) => (
                   <span
@@ -147,7 +147,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
               </div>
               <button
                 onClick={handleCopyPalette}
-                className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                className="min-h-8 min-w-8 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 title={copiedPalette ? 'Copied HEX codes!' : 'Copy palette HEX codes'}
                 aria-label="Copy palette HEX codes"
               >
@@ -165,7 +165,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
           {showExploreButton && (
             <button
               onClick={handleExplore}
-              className="min-h-7 px-2.5 rounded-md bg-[var(--accent-editorial)] text-[var(--bg-canvas)] text-[11px] font-medium inline-flex items-center gap-1 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-90 active:scale-[0.98]"
+              className="min-h-9 w-full justify-center px-2.5 rounded-md bg-[var(--accent-editorial)] text-[11px] font-medium inline-flex items-center gap-1 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-90 active:scale-[0.98] sm:min-h-7 sm:w-auto"
             >
               <span>View</span>
               <ArrowRight className="w-3 h-3" />

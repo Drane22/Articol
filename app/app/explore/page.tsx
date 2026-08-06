@@ -101,7 +101,7 @@ export default function ExplorePage() {
                 onClick={() => {
                   setActiveCollection(isSelected ? null : coll);
                 }}
-                className={`flex-shrink-0 px-4 py-2 rounded-lg text-xs transition-all border ${
+                className={`flex min-h-10 flex-shrink-0 px-4 py-2 rounded-lg text-xs transition-all border ${
                   isSelected
                     ? 'bg-[var(--accent-editorial)] text-[var(--bg-canvas)] font-semibold shadow-md border-[var(--text-primary)]'
                     : 'border-[var(--border-color)] bg-[var(--bg-card)] hover:border-[var(--text-muted)] text-[var(--text-primary)]'
@@ -133,7 +133,7 @@ export default function ExplorePage() {
               <button
                 key={idx}
                 onClick={() => setActiveFilter(isSelected ? null : tag)}
-                className={`px-3 py-1 rounded-full text-xs font-mono transition-colors ${
+                className={`min-h-9 px-3 py-1 rounded-full text-xs font-mono transition-colors ${
                   isSelected
                     ? 'bg-blue-500 text-white font-medium'
                     : 'bg-[var(--tag-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -150,7 +150,7 @@ export default function ExplorePage() {
           <select
             value={activeDecade || ''}
             onChange={(e) => setActiveDecade(e.target.value || null)}
-            className="bg-[var(--accent-soft)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded px-2 py-1 focus:outline-none"
+            className="min-h-10 bg-[var(--accent-soft)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded px-2 py-1 focus:outline-none"
           >
             <option value="">All Decades</option>
             {DECADES.map((d) => (
@@ -163,7 +163,7 @@ export default function ExplorePage() {
           {(activeCollection || activeFilter || activeColor || activeDecade) && (
             <button
               onClick={handleResetFilters}
-              className="p-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors flex items-center space-x-1"
+              className="min-h-9 px-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors flex items-center space-x-1"
               title="Reset all filters"
             >
               <RefreshCw className="w-3.5 h-3.5" />
