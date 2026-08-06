@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS albums (
   label TEXT,
   release_date DATE,
   release_year INTEGER,
+  country TEXT DEFAULT 'PH',
   track_count INTEGER,
   explicitness TEXT,
   price NUMERIC,
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS albums (
 -- Keep existing installations compatible with the runtime Album shape.
 ALTER TABLE albums ADD COLUMN IF NOT EXISTS artwork_source TEXT;
 ALTER TABLE albums ADD COLUMN IF NOT EXISTS label TEXT;
+ALTER TABLE albums ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'PH';
 
 CREATE OR REPLACE FUNCTION set_album_updated_at()
 RETURNS TRIGGER
@@ -138,3 +140,6 @@ BEGIN
   END IF;
 END
 $$;
+
+-- Ask PostgREST to refresh its column cache after compatibility migrations.
+NOTIFY pgrst, 'reload schema';
