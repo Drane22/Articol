@@ -120,35 +120,134 @@ export function cielabDistance(lab1: [number, number, number], lab2: [number, nu
   return ciede2000(lab1, lab2);
 }
 
-// Earth Mover's Distance calculation between two dominant palettes
-export function calculatePaletteDistance(palette1: DominantColor[], palette2: DominantColor[]): number {
-  if (!palette1.length || !palette2.length) return 50.0;
+type WeightedPaletteColor = {
+  color: DominantColor;
+  weight: number;
+};
 
-  const directionalDistance = (source: DominantColor[], target: DominantColor[]) => {
-    let totalDistance = 0;
-    let totalWeight = 0;
-    for (const sourceColor of source) {
-      const closest = Math.min(...target.map(targetColor => cielabDistance(sourceColor.lab, targetColor.lab)));
-      const weight = sourceColor.weight || 0.2;
-      totalDistance += closest * weight;
-      totalWeight += weight;
-    }
-    return totalWeight > 0 ? totalDistance / totalWeight : 50;
-  };
+function normalizePalette(palette: DominantColor[]): WeightedPaletteColor[] {
+  const validColors = palette.filter((color) => (
+    Array.isArray(color.lab) &&
+    color.lab.length === 3 &&
+    color.lab.every((value) => Number.isFinite(value))
+  ));
 
-  return (directionalDistance(palette1, palette2) + directionalDistance(palette2, palette1)) / 2;
+  if (!validColors.length) return [];
+
+  const rawWeights = validColors.map((color) => (
+    Number.isFinite(color.weight) && color.weight > 0 ? color.weight : 1
+  ));
+  const totalWeight = rawWeights.reduce((sum, weight) => sum + weight, 0);
+
+  return validColors.map((color, index) => ({
+    color,
+    weight: rawWeights[index] / totalWeight,
+  }));
 }
 
-// Calculate color similarity score normalized from 0 to 1
-export function calculateColorSimilarity(palette1: DominantColor[], palette2: DominantColor[], sigma: number = 22.0): number {
-  const distance = calculatePaletteDistance(palette1, palette2);
-  const distributionSimilarity = Math.exp(-distance / sigma);
-  const dominant1 = [...palette1].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0];
-  const dominant2 = [...palette2].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0];
-  const dominantSimilarity = dominant1 && dominant2
-    ? Math.exp(-cielabDistance(dominant1.lab, dominant2.lab) / 25)
-    : 0;
-  const similarity = distributionSimilarity * 0.65 + dominantSimilarity * 0.35;
+/**
+ * Compare the full weighted palettes rather than matching each swatch to its
+ * nearest neighbour. The old directional-nearest metric double-counted easy
+ * matches (especially black) and ignored the cost of transporting the rest
+ * of the palette. This greedy transport keeps every swatch's weight in play.
+ */
+function calculatePaletteTransportDistance(
+  palette1: WeightedPaletteColor[],
+  palette2: WeightedPaletteColor[],
+): number {
+  const source = palette1.map(({ color, weight }) => ({ lab: color.lab, remaining: weight }));
+  const target = palette2.map(({ color, weight }) => ({ lab: color.lab, remaining: weight }));
+  let totalDistance = 0;
+  let transportedWeight = 0;
+
+  while (transportedWeight < 1 - 1e-9) {
+    let bestSource = -1;
+    let bestTarget = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (let sourceIndex = 0; sourceIndex < source.length; sourceIndex += 1) {
+      if (source[sourceIndex].remaining <= 1e-9) continue;
+      for (let targetIndex = 0; targetIndex < target.length; targetIndex += 1) {
+        if (target[targetIndex].remaining <= 1e-9) continue;
+        const distance = cielabDistance(source[sourceIndex].lab, target[targetIndex].lab);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestSource = sourceIndex;
+          bestTarget = targetIndex;
+        }
+      }
+    }
+
+    if (bestSource === -1 || bestTarget === -1) break;
+
+    const flow = Math.min(source[bestSource].remaining, target[bestTarget].remaining);
+    totalDistance += bestDistance * flow;
+    source[bestSource].remaining -= flow;
+    target[bestTarget].remaining -= flow;
+    transportedWeight += flow;
+  }
+
+  return transportedWeight > 0 ? totalDistance / transportedWeight : 50;
+}
+
+// Earth Mover's Distance calculation between two dominant palettes.
+export function calculatePaletteDistance(palette1: DominantColor[], palette2: DominantColor[]): number {
+  const normalizedPalette1 = normalizePalette(palette1);
+  const normalizedPalette2 = normalizePalette(palette2);
+  if (!normalizedPalette1.length || !normalizedPalette2.length) return 50.0;
+
+  return calculatePaletteTransportDistance(normalizedPalette1, normalizedPalette2);
+}
+
+function calculateRankDistance(
+  palette1: WeightedPaletteColor[],
+  palette2: WeightedPaletteColor[],
+  rankCount: number = 3,
+): number {
+  const ranked1 = [...palette1].sort((a, b) => b.weight - a.weight).slice(0, rankCount);
+  const ranked2 = [...palette2].sort((a, b) => b.weight - a.weight).slice(0, rankCount);
+  const count = Math.min(ranked1.length, ranked2.length);
+  if (!count) return 50;
+
+  let weightedDistance = 0;
+  let totalWeight = 0;
+  for (let index = 0; index < count; index += 1) {
+    const rankWeight = (ranked1[index].weight + ranked2[index].weight) / 2;
+    weightedDistance += cielabDistance(ranked1[index].color.lab, ranked2[index].color.lab) * rankWeight;
+    totalWeight += rankWeight;
+  }
+
+  return totalWeight > 0 ? weightedDistance / totalWeight : 50;
+}
+
+// Calculate color similarity score normalized from 0 to 1.
+export function calculateColorSimilarity(palette1: DominantColor[], palette2: DominantColor[], sigma: number = 16.0): number {
+  const normalizedPalette1 = normalizePalette(palette1);
+  const normalizedPalette2 = normalizePalette(palette2);
+  if (!normalizedPalette1.length || !normalizedPalette2.length) return 0;
+
+  const distance = calculatePaletteTransportDistance(normalizedPalette1, normalizedPalette2);
+  const rankDistance = calculateRankDistance(normalizedPalette1, normalizedPalette2);
+  const dominant1 = [...normalizedPalette1].sort((a, b) => b.weight - a.weight)[0];
+  const dominant2 = [...normalizedPalette2].sort((a, b) => b.weight - a.weight)[0];
+  const dominantDistance = cielabDistance(dominant1.color.lab, dominant2.color.lab);
+
+  const distributionSimilarity = Math.exp(-distance / Math.max(10, sigma));
+  const rankSimilarity = Math.exp(-rankDistance / Math.max(12, sigma * 0.9));
+  const dominantSimilarity = Math.exp(-dominantDistance / Math.max(14, sigma));
+
+  // Full-distribution agreement is the primary signal. Rank and dominant
+  // checks stop a shared neutral swatch from hiding a different hue structure.
+  let similarity = (
+    distributionSimilarity * 0.60 +
+    rankSimilarity * 0.22 +
+    dominantSimilarity * 0.18
+  );
+
+  if (dominantDistance > 32) similarity *= 0.72;
+  if (dominantDistance > 50) similarity *= 0.55;
+  if (rankDistance > 38) similarity *= 0.82;
+
   return Math.min(1.0, Math.max(0.0, similarity));
 }
 

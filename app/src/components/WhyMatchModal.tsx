@@ -1,25 +1,33 @@
 'use client';
 
 import React from 'react';
-import { X, Sparkles, Sliders, Palette, Layout, Type, Music } from 'lucide-react';
-import { SimilarityResult, Album } from '../lib/types';
+import { X, Sparkles, Sliders, Palette, Layout } from 'lucide-react';
+import { SimilarityResult, Album, SearchMode } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
 
 interface WhyMatchModalProps {
   queryAlbum: Album;
   result: SimilarityResult;
+  mode: SearchMode;
   onClose: () => void;
 }
 
 export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
   queryAlbum,
   result,
+  mode,
   onClose,
 }) => {
   const candidate = result.album;
+  const isPaletteOnly = mode === 'art_style';
   const matchPct = Math.round(result.finalScore * 100);
   const visualPct = Math.round((result.visualScore ?? 0) * 100);
   const musicPct = Math.round((result.musicScore ?? 0) * 100);
+  const rankingSummary = isPaletteOnly
+    ? 'Ranked only with the full dominant-color distribution. Music, artist, layout, typography, and embeddings are excluded.'
+    : mode === 'music_relation'
+      ? 'Ranked using artist, genre, and release-era relationships. Artwork is shown for context.'
+      : 'Ranked using visual structure, color, typography, texture, and music context.';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -73,7 +81,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/5 text-sm text-[var(--text-primary)] leading-relaxed mb-6">
           <p className="font-serif italic text-base mb-1">“{result.explanation}”</p>
           <span className="text-xs text-[var(--text-muted)] block font-sans">
-            Ranked using normalized multimodal CLIP vectors, CIELAB color distances, and composition metrics.
+            {rankingSummary}
           </span>
         </div>
 
@@ -83,7 +91,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             <div className="flex justify-between text-xs font-medium mb-1">
               <span className="flex items-center space-x-1.5">
                 <Sliders className="w-3.5 h-3.5 text-blue-500" />
-                <span>Total Combined Similarity</span>
+                <span>{isPaletteOnly ? 'Palette Similarity' : 'Total Combined Similarity'}</span>
               </span>
               <span className="font-mono text-blue-500 font-bold">{matchPct}% Match</span>
             </div>
@@ -92,7 +100,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-2">
+          {!isPaletteOnly && <div className="grid grid-cols-2 gap-4 pt-2">
             <div>
               <div className="flex justify-between text-xs mb-1 text-[var(--text-muted)]">
                 <span>Visual Score</span>
@@ -112,7 +120,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
                 <div className="h-full bg-purple-500 rounded-full" style={{ width: `${musicPct}%` }} />
               </div>
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Palette Comparison Swatches */}
@@ -157,7 +165,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         {result.sharedAttributes.length > 0 && (
           <div className="mt-6 pt-4 border-t border-[var(--border-color)]">
             <div className="flex items-center space-x-1.5 text-xs font-mono uppercase text-[var(--text-muted)] mb-3">
-              <Layout className="w-3.5 h-3.5" />
+              {isPaletteOnly ? <Palette className="w-3.5 h-3.5" /> : <Layout className="w-3.5 h-3.5" />}
               <span>Shared Visual Qualities</span>
             </div>
             <div className="grid grid-cols-2 gap-2">

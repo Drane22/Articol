@@ -463,6 +463,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
           <WhyMatchModal
             queryAlbum={album}
             result={selectedWhyMatch}
+            mode={mode}
             onClose={() => setSelectedWhyMatch(null)}
           />
         )}

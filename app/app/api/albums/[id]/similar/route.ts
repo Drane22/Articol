@@ -7,7 +7,7 @@ import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
 import { getAlbumFromDb, saveAlbumToDb, saveSimilarityResultsToCache } from '@/lib/db';
 import { isReliableVisualAnalysis } from '@/lib/visualValidation';
 
-const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v3-palette-art-style';
+const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v4-palette-transport';
 const responseCache = new BoundedTtlCache<RecommendationPayload>({
   maxEntries: 48,
   ttlMs: 1000 * 30,
