@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { ImageOff, RotateCw } from 'lucide-react';
 
 interface CoverArtworkProps {
@@ -12,7 +11,7 @@ interface CoverArtworkProps {
   className?: string;
 }
 
-export function CoverArtwork({ src, alt, priority = false, sizes, className = '' }: CoverArtworkProps) {
+export function CoverArtwork({ src, alt, priority = false, className = '' }: CoverArtworkProps) {
   const [mode, setMode] = useState<'direct' | 'proxy' | 'failed'>('proxy');
   const [attempt, setAttempt] = useState(0);
 
@@ -51,16 +50,15 @@ export function CoverArtwork({ src, alt, priority = false, sizes, className = ''
   const currentSrc = mode === 'proxy' ? `/api/proxy-image?url=${encodeURIComponent(src)}` : src;
 
   return (
-    <Image
+    <img
       key={`${src}-${attempt}-${mode}`}
       src={currentSrc}
       alt={alt}
-      fill
-      priority={priority}
-      sizes={sizes}
-      unoptimized={true}
+      loading={priority ? 'eager' : 'lazy'}
+      decoding="async"
+      referrerPolicy="no-referrer"
       onError={handleError}
-      className={`object-cover ${className}`}
+      className={`absolute inset-0 h-full w-full object-cover ${className}`}
     />
   );
 }
