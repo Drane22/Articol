@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchScope, setSearchScope] = useState<SearchScope>('all');
-  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const searchContainerRef = useRef<HTMLElement>(null);
 
   const searchScopes: Array<{ value: SearchScope; label: string }> = [
     { value: 'all', label: 'All' },
@@ -173,10 +173,10 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-canvas)]/80 border-b border-[var(--border-color)] transition-colors">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex items-center justify-between gap-3">
+      <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6 md:flex md:min-h-16 md:gap-4 md:px-6 md:py-2 lg:px-8">
         
         {/* Wordmark */}
-        <Link href="/" className="flex min-w-0 shrink-0 items-center space-x-2 group">
+        <Link href="/" className="group flex min-w-0 shrink-0 items-center space-x-2">
           <span className="wordmark-articol text-xl sm:text-2xl font-serif text-[var(--text-primary)] group-hover:opacity-80 transition-opacity">
             articol
           </span>
@@ -186,25 +186,25 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
         </Link>
 
         {/* Navigation Links */}
-        <nav className="flex min-w-0 items-center gap-3 sm:gap-6 text-sm font-medium">
-          <div ref={searchContainerRef} className="relative">
+        <nav ref={searchContainerRef} className="relative order-3 col-span-2 flex w-full min-w-0 items-center gap-1.5 text-sm font-medium md:order-none md:ml-auto md:w-auto md:gap-6">
+          <div className="min-w-0 flex-1 md:relative md:flex-none">
             <button
               type="button"
               onClick={handleSearchClick}
               aria-expanded={pathname !== '/' ? isSearchOpen : undefined}
               aria-controls={pathname !== '/' ? 'global-search-panel' : 'home-search-input'}
-              className={`inline-flex min-h-10 min-w-8 items-center justify-center gap-1.5 transition-colors hover:text-[var(--text-primary)] ${
-                pathname === '/' || isSearchOpen ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'
+              className={`inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:w-auto md:rounded-none md:px-0 ${
+                pathname === '/' || isSearchOpen ? 'bg-[var(--accent-soft)] text-[var(--text-primary)] font-semibold md:bg-transparent' : 'text-[var(--text-muted)]'
               }`}
             >
               <Search className="w-4 h-4" />
-              <span className="hidden sm:inline">Search</span>
+              <span className="text-[11px] sm:text-xs md:text-sm">Search</span>
             </button>
 
             {pathname !== '/' && isSearchOpen && (
               <div
                 id="global-search-panel"
-                className="absolute right-0 top-[calc(100%+0.85rem)] z-50 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-left shadow-2xl"
+                className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 w-auto overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-left shadow-2xl md:left-auto md:right-0 md:top-[calc(100%+0.85rem)] md:w-[min(28rem,calc(100vw-2rem))]"
               >
                 <div className="flex items-center gap-2 border-b border-[var(--border-color)] px-3 py-2.5">
                   <Search className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
@@ -278,33 +278,33 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
           </div>
           <Link
             href="/explore"
-            className={`flex min-h-10 items-center space-x-1 transition-colors hover:text-[var(--text-primary)] ${
-              pathname === '/explore' ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'
+            className={`flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:flex-none md:justify-start md:rounded-none md:px-0 ${
+              pathname === '/explore' ? 'bg-[var(--accent-soft)] text-[var(--text-primary)] font-semibold md:bg-transparent' : 'text-[var(--text-muted)]'
             }`}
           >
             <Compass className="w-4 h-4" />
-            <span className="hidden sm:inline">Explore</span>
+            <span className="text-[11px] sm:text-xs md:text-sm">Explore</span>
           </Link>
           <Link
             href="/saved"
-            className={`flex min-h-10 items-center space-x-1 transition-colors hover:text-[var(--text-primary)] ${
-              pathname === '/saved' ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'
+            className={`flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:flex-none md:justify-start md:rounded-none md:px-0 ${
+              pathname === '/saved' ? 'bg-[var(--accent-soft)] text-[var(--text-primary)] font-semibold md:bg-transparent' : 'text-[var(--text-muted)]'
             }`}
           >
             <Bookmark className="w-4 h-4" />
-            <span className="hidden sm:inline">Saved</span>
+            <span className="text-[11px] sm:text-xs md:text-sm">Saved</span>
           </Link>
         </nav>
 
         {/* Utilities: Storefront selector & Theme toggle */}
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+        <div className="flex shrink-0 items-center justify-self-end gap-2 md:gap-3">
           {/* Storefront selector */}
-          <div className="relative flex items-center space-x-1 text-xs text-[var(--text-muted)] border border-[var(--border-color)] rounded-md px-1.5 sm:px-2 py-1 bg-[var(--bg-card)]">
+          <div className="relative flex min-h-10 items-center space-x-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] px-2 text-xs text-[var(--text-muted)]">
             <Globe className="w-3.5 h-3.5" />
             <select
               value={country}
               onChange={(e) => onCountryChange?.(e.target.value)}
-              className="w-7 sm:w-auto bg-transparent border-none focus:outline-none cursor-pointer text-[var(--text-primary)] text-xs"
+              className="w-8 cursor-pointer border-none bg-transparent text-xs text-[var(--text-primary)] focus:outline-none sm:w-auto"
             >
               {countries.map((c) => (
                 <option key={c.code} value={c.code} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
@@ -317,7 +317,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
           {/* Dark / Light Mode Toggle */}
           <button
             onClick={() => setDarkMode((current) => !current)}
-            className="min-h-8 min-w-8 p-1.5 rounded-md border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--accent-soft)] transition-colors"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
             title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             aria-pressed={darkMode}
