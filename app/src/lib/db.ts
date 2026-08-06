@@ -104,8 +104,13 @@ export function mergeCatalogAlbums(seedAlbums: Album[], remoteAlbums: Album[]): 
   return Array.from(merged.values());
 }
 
+function normalizeSupabaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
+}
+
 function getSupabaseConfig(write = false): { url: string; key: string } | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const url = normalizeSupabaseUrl(configuredUrl);
   const key = write
     ? process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
     : process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
