@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Compass, Bookmark, Sun, Moon, Globe, Search, X, Loader2 } from 'lucide-react';
-import { Album } from '../lib/types';
+import { Album, SearchScope } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
 
 interface HeaderProps {
@@ -21,7 +21,14 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
   const [searchResults, setSearchResults] = useState<Album[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchScope, setSearchScope] = useState<SearchScope>('all');
   const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  const searchScopes: Array<{ value: SearchScope; label: string }> = [
+    { value: 'all', label: 'All' },
+    { value: 'title', label: 'Album title' },
+    { value: 'artist', label: 'Artist' },
+  ];
 
   useEffect(() => {
     if (darkMode) {
@@ -46,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
     const timeout = window.setTimeout(() => {
       setIsSearching(true);
       setSearchError(null);
-      fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}&country=${country}&limit=8`, {
+      fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}&country=${country}&limit=8&scope=${searchScope}`, {
         signal: controller.signal,
         cache: 'no-store',
       })
@@ -71,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [country, isSearchOpen, pathname, searchQuery]);
+  }, [country, isSearchOpen, pathname, searchQuery, searchScope]);
 
   useEffect(() => {
     if (!isSearchOpen || pathname === '/') return;
@@ -126,6 +133,13 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
     setSearchResults([]);
     setSearchError(null);
     setIsSearching(Boolean(value.trim()));
+  };
+
+  const handleHeaderScopeChange = (scope: SearchScope) => {
+    setSearchScope(scope);
+    setSearchResults([]);
+    setSearchError(null);
+    setIsSearching(Boolean(searchQuery.trim()));
   };
 
   const countries = [
@@ -193,6 +207,25 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--border-color)] px-3 py-2" aria-label="Search by">
+                  <span className="mr-1 text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">Search by</span>
+                  {searchScopes.map((scope) => (
+                    <button
+                      key={scope.value}
+                      type="button"
+                      onClick={() => handleHeaderScopeChange(scope.value)}
+                      aria-pressed={searchScope === scope.value}
+                      className={`min-h-8 rounded-full border px-2.5 text-[11px] transition-colors ${
+                        searchScope === scope.value
+                          ? 'border-[var(--text-primary)] bg-[var(--accent-soft)] font-semibold text-[var(--text-primary)]'
+                          : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      {scope.label}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="max-h-[min(24rem,60vh)] overflow-y-auto">

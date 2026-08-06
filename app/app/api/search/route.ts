@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchItunesAlbums } from '@/lib/itunes';
+import type { Album } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get('q') || '';
   const country = searchParams.get('country') || 'PH';
+  const requestedScope = searchParams.get('scope') || 'all';
+  const scope = ['all', 'title', 'artist'].includes(requestedScope) ? requestedScope : 'all';
   const requestedLimit = Number.parseInt(searchParams.get('limit') || '50', 10);
   const limit = Math.max(
     1,
@@ -16,17 +19,25 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [artistAlbums, broadAlbums] = await Promise.all([
-      searchItunesAlbums(query, country, limit, false, true),
-      searchItunesAlbums(query, country, limit),
-    ]);
+    let sourceAlbums: Album[];
+    if (scope === 'title') {
+      sourceAlbums = await searchItunesAlbums(query, country, limit, true);
+    } else if (scope === 'artist') {
+      sourceAlbums = await searchItunesAlbums(query, country, limit, false, true);
+    } else {
+      const [artistAlbums, broadAlbums] = await Promise.all([
+        searchItunesAlbums(query, country, limit, false, true),
+        searchItunesAlbums(query, country, limit),
+      ]);
+      sourceAlbums = [...artistAlbums, ...broadAlbums];
+    }
     const albums = Array.from(
       new Map(
-        [...artistAlbums, ...broadAlbums].map((album) => [album.itunesCollectionId, album])
+        sourceAlbums.map((album) => [album.itunesCollectionId, album])
       ).values()
     ).slice(0, limit);
     return NextResponse.json(
-      { results: albums },
+      { results: albums, scope },
       {
         headers: {
           'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',

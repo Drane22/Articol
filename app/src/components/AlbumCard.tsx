@@ -58,12 +58,18 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
   return (
     <article className="group flex flex-col overflow-hidden rounded-xl bg-[var(--bg-card)] ring-1 ring-[var(--border-color)] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 hover:ring-[var(--text-muted)]/45 focus-within:ring-[var(--text-muted)]/60">
       <div className="relative aspect-square w-full overflow-hidden bg-[var(--accent-soft)]">
-        <CoverArtwork
-          src={album.artworkUrl}
-          alt={`Cover artwork for ${album.title} by ${album.artistName}`}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-          className="transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-[1.03] group-focus-within:scale-[1.03]"
-        />
+        <Link
+          href={`/album/${album.itunesCollectionId}`}
+          className="absolute inset-0 z-0"
+          aria-label={`Open ${album.title} by ${album.artistName}`}
+        >
+          <CoverArtwork
+            src={album.artworkUrl}
+            alt={`Cover artwork for ${album.title} by ${album.artistName}`}
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            className="transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-[1.03] group-focus-within:scale-[1.03]"
+          />
+        </Link>
 
         {/* Top Overlay Badges */}
         <div className="absolute top-2.5 right-2.5 flex items-center space-x-1 z-10">

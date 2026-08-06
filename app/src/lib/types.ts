@@ -155,6 +155,7 @@ export interface Album {
 }
 
 export type SearchMode = 'art_style' | 'balanced' | 'music_relation';
+export type SearchScope = 'all' | 'title' | 'artist';
 
 export interface MatchReason {
   label: string;

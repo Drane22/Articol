@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import { AlbumCard } from '@/components/AlbumCard';
-import { Album } from '@/lib/types';
+import { Album, SearchScope } from '@/lib/types';
 import { useDebounce } from 'use-debounce';
 import { CoverArtwork } from '@/components/CoverArtwork';
 
@@ -20,7 +20,14 @@ export default function HomePage() {
   const [spotlightRetry, setSpotlightRetry] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchRetry, setSearchRetry] = useState(0);
+  const [searchScope, setSearchScope] = useState<SearchScope>('all');
   const latestQueryRef = useRef('');
+
+  const searchScopes: Array<{ value: SearchScope; label: string }> = [
+    { value: 'all', label: 'All' },
+    { value: 'title', label: 'Album title' },
+    { value: 'artist', label: 'Artist' },
+  ];
 
   // Fetch seed spotlight on mount
   useEffect(() => {
@@ -50,7 +57,7 @@ export default function HomePage() {
     let isCurrentRequest = true;
     setIsLoading(true);
     setSearchError(null);
-    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&country=${country}&limit=50`, {
+    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&country=${country}&limit=50&scope=${searchScope}`, {
       signal: controller.signal,
       cache: 'no-store',
     })
@@ -76,7 +83,7 @@ export default function HomePage() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [debouncedQuery, country, searchRetry]);
+  }, [debouncedQuery, country, searchRetry, searchScope]);
 
   const handleQueryChange = (value: string) => {
     latestQueryRef.current = value;
@@ -84,6 +91,13 @@ export default function HomePage() {
     setResults([]);
     setSearchError(null);
     setIsLoading(Boolean(value.trim()));
+  };
+
+  const handleScopeChange = (scope: SearchScope) => {
+    setSearchScope(scope);
+    setResults([]);
+    setSearchError(null);
+    setIsLoading(Boolean(query.trim()));
   };
 
   return (
@@ -113,6 +127,25 @@ export default function HomePage() {
             {isLoading && <Loader2 className="w-5 h-5 text-[var(--text-muted)] animate-spin mr-4 flex-shrink-0" />}
           </div>
 
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-3" aria-label="Search by">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">Search by</span>
+            {searchScopes.map((scope) => (
+              <button
+                key={scope.value}
+                type="button"
+                onClick={() => handleScopeChange(scope.value)}
+                aria-pressed={searchScope === scope.value}
+                className={`min-h-9 rounded-full border px-3 text-xs transition-colors ${
+                  searchScope === scope.value
+                    ? 'border-[var(--text-primary)] bg-[var(--accent-soft)] font-semibold text-[var(--text-primary)]'
+                    : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {scope.label}
+              </button>
+            ))}
+          </div>
+
         </div>
       </section>
 
@@ -124,7 +157,7 @@ export default function HomePage() {
               Search Results
             </h2>
             <span className="text-xs font-mono text-[var(--text-muted)]">
-              {results.length} albums found
+              {results.length} albums found · {searchScopes.find((scope) => scope.value === searchScope)?.label}
             </span>
           </div>
 
