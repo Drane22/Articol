@@ -253,7 +253,8 @@ async function extractFromBuffer(
 ): Promise<{ palette: DominantColor[]; features: VisualFeatures; embedding: number[]; perceptualHash: string } | null> {
   let sharp: any;
   try {
-    sharp = (await import('sharp')).default;
+    const sharpModule = await import('sharp');
+    sharp = sharpModule.default || sharpModule;
   } catch {
     return null;
   }
@@ -456,7 +457,10 @@ export async function extractFeaturesFromUrl(
     const timeout = setTimeout(() => controller.abort(), 6500);
     try {
       const res = await fetch(candidateUrl, {
-        headers: { 'User-Agent': 'Articol-FeatureExtractor/1.0' },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Articol-FeatureExtractor/1.0)',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
         signal: controller.signal,
         next: { revalidate: 86400 },
       });

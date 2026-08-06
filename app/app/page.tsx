@@ -42,17 +42,29 @@ export default function HomePage() {
       return;
     }
 
+    const controller = new AbortController();
+    let isCurrentRequest = true;
     setIsLoading(true);
-    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&country=${country}&limit=12`)
+    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&country=${country}&limit=12`, {
+      signal: controller.signal,
+      cache: 'no-store',
+    })
       .then((res) => res.json())
       .then((data) => {
+        if (!isCurrentRequest) return;
         setResults(data.results || []);
         setIsLoading(false);
       })
       .catch((err) => {
+        if (err.name === 'AbortError' || !isCurrentRequest) return;
         console.error('Search error:', err);
         setIsLoading(false);
       });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
   }, [debouncedQuery, country]);
 
   const handleAlbumSelect = (collectionId: number) => {

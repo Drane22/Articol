@@ -3,14 +3,7 @@ import { getAllCatalogAlbums, saveAlbumsToDb } from '@/lib/db';
 import { getColorCategory, matchesColorFilter } from '@/lib/colorUtils';
 import { enrichAlbumWithArtwork } from '@/lib/itunes';
 import { Album } from '@/lib/types';
-
-function hasReliableVisualAnalysis(album: Album): boolean {
-  return (
-    (album.visualAnalysisStatus === 'indexed' || album.visualAnalysisStatus === 'analyzed') &&
-    Boolean(album.perceptualHash) &&
-    album.embeddingVersion === 'visual-grid-v2'
-  );
-}
+import { isReliableVisualAnalysis } from '@/lib/visualValidation';
 
 async function getFeaturedSpotlightAlbums(): Promise<Album[]> {
   const catalogAlbums = await getAllCatalogAlbums();
@@ -91,7 +84,7 @@ export async function GET(request: NextRequest) {
   // 2. Color spectrum filter
   if (colorHex) {
     const candidatesToAnalyze = albums
-      .filter((album) => !hasReliableVisualAnalysis(album))
+      .filter((album) => !isReliableVisualAnalysis(album))
       .slice(0, 48);
     if (candidatesToAnalyze.length > 0) {
       const analyzedCandidates = await Promise.all(
@@ -106,7 +99,7 @@ export async function GET(request: NextRequest) {
 
     // Do not make color claims from deterministic fallback palettes. They are
     // metadata-generated and do not describe the actual cover image.
-    albums = albums.filter(hasReliableVisualAnalysis);
+    albums = albums.filter(isReliableVisualAnalysis);
     albums = albums.filter(a => matchesColorFilter(colorHex, a.dominantPalette || []));
   }
 

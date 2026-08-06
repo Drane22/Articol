@@ -12,7 +12,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const albums = await searchItunesAlbums(query, country, limit);
+    const [artistAlbums, broadAlbums] = await Promise.all([
+      searchItunesAlbums(query, country, limit, false, true),
+      searchItunesAlbums(query, country, limit),
+    ]);
+    const albums = Array.from(
+      new Map(
+        [...artistAlbums, ...broadAlbums].map((album) => [album.itunesCollectionId, album])
+      ).values()
+    ).slice(0, limit);
     return NextResponse.json(
       { results: albums },
       {

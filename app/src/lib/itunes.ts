@@ -1,6 +1,7 @@
 import { Album, AlbumTrack } from './types';
 import { extractVisualFeaturesFromImage, extractFeaturesFromUrl } from './featureExtractor';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
+import { isReliableVisualAnalysis } from './visualValidation';
 
 const ITUNES_BASE_URL = 'https://itunes.apple.com';
 const CACHE_TTL_MS = 1000 * 60 * 5; // Keep metadata fresh while deduplicating bursts.
@@ -96,7 +97,7 @@ export async function normalizeItunesAlbum(rawItem: any): Promise<Album> {
 // ─────────────────────────────────────────────────────────────
 export async function enrichAlbumWithArtwork(album: Album): Promise<Album> {
   if (!album.artworkUrl) return { ...album, visualAnalysisStatus: 'fallback' };
-  if (album.visualAnalysisStatus === 'analyzed' && album.perceptualHash && album.embeddingVersion === 'visual-grid-v2') return album;
+  if (isReliableVisualAnalysis(album)) return album;
 
   const cacheKey = `${album.artworkUrl}|visual-grid-v2`;
   let analysis = artworkCache.get(cacheKey);
@@ -215,15 +216,16 @@ export async function searchItunesAlbums(
   country: string = 'PH',
   limit: number = 25,
   titleOnly: boolean = false,
+  artistOnly: boolean = false,
 ): Promise<Album[]> {
   if (!query || !query.trim()) return [];
 
-  const cacheKey = `search-${query.trim().toLowerCase()}-${country}-${limit}-${titleOnly ? 'title' : 'all'}`;
+  const cacheKey = `search-${query.trim().toLowerCase()}-${country}-${limit}-${titleOnly ? 'title' : artistOnly ? 'artist' : 'all'}`;
   const cached = apiCache.get(cacheKey);
   if (cached) return cached;
 
   const encodedQuery = encodeURIComponent(query.trim());
-  const attribute = titleOnly ? '&attribute=albumTerm' : '';
+  const attribute = titleOnly ? '&attribute=albumTerm' : artistOnly ? '&attribute=artistTerm' : '';
   const url = `${ITUNES_BASE_URL}/search?term=${encodedQuery}&media=music&entity=album${attribute}&country=${country}&limit=${limit}`;
 
   try {

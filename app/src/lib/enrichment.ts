@@ -1,6 +1,7 @@
 import { Album } from './types';
-import { searchItunesAlbums } from './itunes';
-import { getCatalogCandidates } from './db';
+import { enrichAlbumsWithArtwork, searchItunesAlbums } from './itunes';
+import { getCatalogCandidates, saveAlbumsToDb } from './db';
+import { isReliableVisualAnalysis } from './visualValidation';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY || '';
@@ -104,6 +105,19 @@ async function buildCandidatePool(
     } catch (e) {
       // Continue silently
     }
+  }
+
+  const candidates = Array.from(candidatesMap.values());
+  const candidatesToAnalyze = candidates
+    .filter((album) => !isReliableVisualAnalysis(album))
+    .slice(0, 36);
+
+  if (candidatesToAnalyze.length > 0) {
+    const analyzedCandidates = await enrichAlbumsWithArtwork(candidatesToAnalyze, 6);
+    for (const album of analyzedCandidates) {
+      candidatesMap.set(album.itunesCollectionId, album);
+    }
+    await saveAlbumsToDb(analyzedCandidates.filter(isReliableVisualAnalysis));
   }
 
   return {
