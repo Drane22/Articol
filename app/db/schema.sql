@@ -68,3 +68,10 @@ CREATE TABLE IF NOT EXISTS album_similarity_cache (
   PRIMARY KEY (source_album_id, candidate_album_id, mode, scoring_version)
 );
 
+-- Enable Row Level Security (RLS) for secure public read access
+ALTER TABLE albums ENABLE ROW LEVEL SECURITY;
+ALTER TABLE album_similarity_cache ENABLE ROW LEVEL SECURITY;
+
+-- Allow public SELECT access to catalog data for Next.js app queries
+CREATE POLICY "Allow public read access on albums" ON albums FOR SELECT USING (true);
+CREATE POLICY "Allow public read access on similarity cache" ON album_similarity_cache FOR SELECT USING (true);
