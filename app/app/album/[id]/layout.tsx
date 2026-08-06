@@ -3,15 +3,14 @@ import { normalizeStorefront } from '@/lib/storefronts';
 
 export async function generateMetadata({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const query = searchParams ? await searchParams : {};
-  const requestedCountry = typeof query.country === 'string' ? query.country : 'PH';
-  const country = normalizeStorefront(requestedCountry);
+  // Layout metadata cannot receive page searchParams in Next.js. The page
+  // keeps the selected country in its share URL; metadata uses PH as the
+  // crawler-safe default for the artwork preview.
+  const country = normalizeStorefront('PH');
   let title = 'Album artwork';
   let artist = 'Articol';
 
