@@ -1,0 +1,7 @@
+.agents/
+articol_final_refactor_prompt.md
+skills-lock.json
+*.md
+!README.md
+!app/README.md
+!docs/**/*.md

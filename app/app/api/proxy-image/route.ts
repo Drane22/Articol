@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const parsedUrl = new URL(imageUrl);
-    if (!ALLOWED_HOSTS.includes(parsedUrl.hostname)) {
+    const host = parsedUrl.hostname.toLowerCase();
+    const isAllowed = ALLOWED_HOSTS.includes(host) || host.endsWith('.mzstatic.com') || host === 'mzstatic.com';
+    if (!isAllowed) {
       return NextResponse.json({ error: 'Host not allowed' }, { status: 403 });
     }
 

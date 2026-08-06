@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getItunesAlbumById, refreshSeedAlbum } from '@/lib/itunes';
+import { getItunesAlbumById, refreshSeedAlbum, enrichAlbumWithArtwork } from '@/lib/itunes';
 import { generateCandidatePool } from '@/lib/enrichment';
 import { rankDistinctRecommendationTiers } from '@/lib/visualEngine';
 import { Album, RecommendationTiers, SimilarityResult } from '@/lib/types';
 import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
-import { getAlbumFromDb } from '@/lib/db';
+import { getAlbumFromDb, saveAlbumToDb } from '@/lib/db';
 
 const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v1-pgvector';
 const responseCache = new BoundedTtlCache<RecommendationPayload>({
@@ -43,6 +43,20 @@ async function calculateRecommendations(
     const { album: fetched } = await getItunesAlbumById(collectionId, country);
     if (!fetched) throw new Error('Album not found');
     queryAlbum = await refreshSeedAlbum(fetched, country);
+  }
+
+  // Enrich query album if it has not been visually analyzed yet
+  if (
+    queryAlbum.visualAnalysisStatus !== 'indexed' &&
+    queryAlbum.visualAnalysisStatus !== 'analyzed'
+  ) {
+    queryAlbum = await enrichAlbumWithArtwork(queryAlbum);
+    if (
+      queryAlbum.visualAnalysisStatus === 'indexed' ||
+      queryAlbum.visualAnalysisStatus === 'analyzed'
+    ) {
+      await saveAlbumToDb(queryAlbum);
+    }
   }
 
   // Verify visual indexing status (Section 4 & 24: Unindexed albums return not_indexed)

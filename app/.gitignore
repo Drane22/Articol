@@ -47,6 +47,7 @@ out/
 dist/
 dist-ssr/
 coverage/
+*.tsbuildinfo
 
 # Python
 __pycache__/

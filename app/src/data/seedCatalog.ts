@@ -57,6 +57,7 @@ function createSeedAlbum(
     embedding: [],
     embeddingModel: 'seed-fallback',
     embeddingVersion: 'fallback-v1',
+    visualAnalysisStatus: 'analyzed',
     _seed: seed, // internal, used by init
   } as any;
 }
@@ -152,6 +153,7 @@ export async function initSeedAlbums(): Promise<void> {
     album.dominantPalette = palette;
     album.visualFeatures = features;
     album.embedding = embedding;
+    album.visualAnalysisStatus = 'analyzed';
     delete (album as any)._seed;
   }
 }
