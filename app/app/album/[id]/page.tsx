@@ -43,6 +43,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const [isSaved, setIsSaved] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
   const [copiedPalette, setCopiedPalette] = useState(false);
+  const [paletteCopyError, setPaletteCopyError] = useState(false);
 
   // Fetch selected album detail
   useEffect(() => {
@@ -145,6 +146,20 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  const handleCopyPalette = async (hexes: string) => {
+    if (!hexes || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(hexes);
+      setPaletteCopyError(false);
+      setCopiedPalette(true);
+      setTimeout(() => setCopiedPalette(false), 2000);
+    } catch (error) {
+      console.warn('Palette copy failed:', error);
+      setPaletteCopyError(true);
+      setTimeout(() => setPaletteCopyError(false), 2500);
+    }
+  };
+
   // Ambient palette wash color from dominant palette
   const palette = album?.dominantPalette?.slice(0, 3).map((color) => color.hex) || ['#1a1a1a'];
   const ambientBackground = `radial-gradient(ellipse at 18% 0%, ${palette[0]} 0%, transparent 52%), radial-gradient(ellipse at 82% 12%, ${palette[1] || palette[0]} 0%, transparent 48%), radial-gradient(ellipse at 50% 24%, ${palette[2] || palette[0]} 0%, transparent 60%)`;
@@ -231,37 +246,33 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                   <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">
                     Extracted Palette
                   </span>
-                  <button
-                    onClick={() => {
-                      const hexes = album.dominantPalette?.map((p) => p.hex).join(', ') || '';
-                      navigator.clipboard.writeText(hexes);
-                      setCopiedPalette(true);
-                      setTimeout(() => setCopiedPalette(false), 2000);
-                    }}
-                    className="inline-flex items-center space-x-1 text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                  >
-                    {copiedPalette ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedPalette ? 'Copied HEX codes!' : 'Copy palette'}</span>
-                  </button>
                 </div>
-                <div className="flex space-x-2 items-center">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-color)]/70 bg-[var(--bg-card)]/60 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
                   {album.dominantPalette.map((p, idx) => (
                     <div key={idx} className="flex items-center space-x-1">
-                      <span
-                        className="w-6 h-6 rounded-md border border-black/10 shadow-sm cursor-pointer hover:scale-105 transition-transform"
+                      <button
+                        type="button"
+                        className="h-6 w-6 rounded-md border border-black/10 shadow-sm cursor-pointer transition-transform hover:scale-105"
                         style={{ backgroundColor: p.hex }}
                         title={`Copy ${p.hex}`}
-                        onClick={() => {
-                          navigator.clipboard.writeText(p.hex);
-                          setCopiedPalette(true);
-                          setTimeout(() => setCopiedPalette(false), 2000);
-                        }}
+                        aria-label={`Copy ${p.hex}`}
+                        onClick={() => void handleCopyPalette(p.hex)}
                       />
                       <span className="text-[10px] font-mono text-[var(--text-muted)] hidden sm:inline">
                         {p.hex}
                       </span>
                     </div>
                   ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyPalette(album.dominantPalette.map((p) => p.hex).join(', '))}
+                    className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md border border-[var(--border-color)] px-2.5 text-[11px] font-mono text-[var(--text-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
+                  >
+                    {copiedPalette ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                    <span>{copiedPalette ? 'Copied' : paletteCopyError ? 'Copy failed' : 'Copy palette'}</span>
+                  </button>
                 </div>
               </div>
             )}

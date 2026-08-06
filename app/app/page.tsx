@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import { AlbumCard } from '@/components/AlbumCard';
@@ -18,6 +18,9 @@ export default function HomePage() {
   const [seedSpotlight, setSeedSpotlight] = useState<Album[]>([]);
   const [spotlightError, setSpotlightError] = useState(false);
   const [spotlightRetry, setSpotlightRetry] = useState(0);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchRetry, setSearchRetry] = useState(0);
+  const latestQueryRef = useRef('');
 
   // Fetch seed spotlight on mount
   useEffect(() => {
@@ -39,25 +42,33 @@ export default function HomePage() {
     if (!debouncedQuery.trim()) {
       setResults([]);
       setIsLoading(false);
+      setSearchError(null);
       return;
     }
 
     const controller = new AbortController();
     let isCurrentRequest = true;
     setIsLoading(true);
+    setSearchError(null);
     fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&country=${country}&limit=12`, {
       signal: controller.signal,
       cache: 'no-store',
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Search failed');
+        return data;
+      })
       .then((data) => {
-        if (!isCurrentRequest) return;
+        if (!isCurrentRequest || latestQueryRef.current !== debouncedQuery) return;
         setResults(data.results || []);
         setIsLoading(false);
       })
       .catch((err) => {
-        if (err.name === 'AbortError' || !isCurrentRequest) return;
+        if (err.name === 'AbortError' || !isCurrentRequest || latestQueryRef.current !== debouncedQuery) return;
         console.error('Search error:', err);
+        setResults([]);
+        setSearchError('Search is unavailable right now. Please try again.');
         setIsLoading(false);
       });
 
@@ -65,10 +76,14 @@ export default function HomePage() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [debouncedQuery, country]);
+  }, [debouncedQuery, country, searchRetry]);
 
-  const handleAlbumSelect = (collectionId: number) => {
-    router.push(`/album/${collectionId}`);
+  const handleQueryChange = (value: string) => {
+    latestQueryRef.current = value;
+    setQuery(value);
+    setResults([]);
+    setSearchError(null);
+    setIsLoading(Boolean(value.trim()));
   };
 
   return (
@@ -88,38 +103,16 @@ export default function HomePage() {
           <div className="relative flex items-center shadow-lg rounded-xl overflow-hidden border border-[var(--border-color)] bg-[var(--bg-card)] focus-within:border-[var(--text-primary)] transition-all">
             <Search className="w-5 h-5 text-[var(--text-muted)] ml-4 flex-shrink-0" />
             <input
+              id="home-search-input"
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => handleQueryChange(e.target.value)}
               placeholder="Search album or artist..."
               className="w-full py-4 px-3 bg-transparent text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
             />
             {isLoading && <Loader2 className="w-5 h-5 text-[var(--text-muted)] animate-spin mr-4 flex-shrink-0" />}
           </div>
 
-          {/* Autocomplete Dropdown List */}
-          {results.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 z-30 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden max-h-96 overflow-y-auto divide-y divide-[var(--border-color)] text-left">
-              {results.map((alb) => (
-                <div
-                  key={alb.itunesCollectionId}
-                  onClick={() => handleAlbumSelect(alb.itunesCollectionId)}
-                  className="p-3 flex items-center space-x-3 hover:bg-[var(--accent-soft)] cursor-pointer transition-colors"
-                >
-                  <div className="relative w-12 h-12 rounded overflow-hidden flex-shrink-0 bg-[var(--accent-soft)]">
-                    <CoverArtwork src={alb.artworkUrl} alt={`Cover artwork for ${alb.title}`} sizes="40px" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-serif font-medium truncate text-[var(--text-primary)]">{alb.title}</p>
-                    <p className="text-xs text-[var(--text-muted)] truncate">{alb.artistName} • {alb.releaseYear}</p>
-                  </div>
-                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase border border-[var(--border-color)] px-2 py-0.5 rounded">
-                    {alb.genre}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </section>
 
@@ -140,6 +133,20 @@ export default function HomePage() {
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="aspect-square bg-[var(--accent-soft)] rounded-lg animate-pulse" />
               ))}
+            </div>
+          ) : searchError ? (
+            <div className="text-center py-12 text-[var(--text-muted)] space-y-3">
+              <p className="text-sm text-red-400" role="alert">{searchError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLoading(true);
+                  setSearchRetry((value) => value + 1);
+                }}
+                className="min-h-10 rounded-md bg-[var(--accent-soft)] px-4 text-xs text-[var(--text-primary)] hover:bg-[var(--border-color)] transition-colors"
+              >
+                Try again
+              </button>
             </div>
           ) : results.length === 0 ? (
             <div className="text-center py-12 text-[var(--text-muted)] space-y-2">
