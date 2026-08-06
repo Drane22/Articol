@@ -2,6 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { searchItunesAlbums } from '@/lib/itunes';
 import type { Album } from '@/lib/types';
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function matchesScopedField(value: string, query: string): boolean {
+  const fieldTokens = normalizeSearchText(value).split(' ').filter(Boolean);
+  const queryTokens = normalizeSearchText(query).split(' ').filter(Boolean);
+  if (fieldTokens.length === 0 || queryTokens.length === 0) return false;
+
+  return queryTokens.every((queryToken) =>
+    fieldTokens.some((fieldToken) => fieldToken === queryToken || fieldToken.startsWith(queryToken))
+  );
+}
+
+function filterScopedAlbums(albums: Album[], query: string, scope: string): Album[] {
+  if (scope === 'title') return albums.filter((album) => matchesScopedField(album.title, query));
+  if (scope === 'artist') return albums.filter((album) => matchesScopedField(album.artistName, query));
+  return albums;
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get('q') || '';
@@ -31,9 +56,10 @@ export async function GET(request: NextRequest) {
       ]);
       sourceAlbums = [...artistAlbums, ...broadAlbums];
     }
+    const scopedAlbums = filterScopedAlbums(sourceAlbums, query, scope);
     const albums = Array.from(
       new Map(
-        sourceAlbums.map((album) => [album.itunesCollectionId, album])
+        scopedAlbums.map((album) => [album.itunesCollectionId, album])
       ).values()
     ).slice(0, limit);
     return NextResponse.json(
