@@ -140,23 +140,22 @@ const RAW_SEEDS = [
 // ─────────────────────────────────────────────────────────────
 // Initialise all seed albums with unique features + embeddings
 // ─────────────────────────────────────────────────────────────
-let _initialised = false;
+let initialisationPromise: Promise<void> | null = null;
 export const SEED_ALBUMS: Album[] = RAW_SEEDS;
 
-export async function initSeedAlbums(): Promise<void> {
-  if (_initialised) return;
-  _initialised = true;
-
-  for (const album of SEED_ALBUMS) {
-    const seed = (album as any)._seed || `${album.itunesCollectionId}|${album.title}|${album.artistName}`;
-    const { palette, features, embedding } = await extractVisualFeaturesFromImage(null, seed);
-    album.dominantPalette = palette;
-    album.visualFeatures = features;
-    album.embedding = embedding;
-    album.visualAnalysisStatus = 'analyzed';
-    delete (album as any)._seed;
+export function initSeedAlbums(): Promise<void> {
+  if (!initialisationPromise) {
+    initialisationPromise = (async () => {
+      for (const album of SEED_ALBUMS) {
+        const seed = (album as any)._seed || `${album.itunesCollectionId}|${album.title}|${album.artistName}`;
+        const { palette, features, embedding } = await extractVisualFeaturesFromImage(null, seed);
+        album.dominantPalette = palette;
+        album.visualFeatures = features;
+        album.embedding = embedding;
+        album.visualAnalysisStatus = 'analyzed';
+        delete (album as any)._seed;
+      }
+    })();
   }
+  return initialisationPromise;
 }
-
-// Eagerly initialise on module load
-initSeedAlbums();

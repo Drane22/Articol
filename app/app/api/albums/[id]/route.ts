@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getItunesAlbumById, enrichAlbumWithArtwork, refreshSeedAlbum } from '@/lib/itunes';
-import { getAlbumFromDb } from '@/lib/db';
+import { getAlbumFromDb, saveAlbumToDb } from '@/lib/db';
 import { Album } from '@/lib/types';
 
 export async function GET(
@@ -32,9 +32,12 @@ export async function GET(
 
     album = await refreshSeedAlbum(album, country);
     album = await enrichAlbumWithArtwork(album);
+    if (album.visualAnalysisStatus === 'indexed' || album.visualAnalysisStatus === 'analyzed') {
+      await saveAlbumToDb(album);
+    }
     return NextResponse.json(
       { album: { ...album, embedding: undefined, perceptualHash: undefined } },
-      { headers: { 'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400' } },
+      { headers: { 'Cache-Control': 'private, no-store' } },
     );
   } catch (error: any) {
     console.error(`API /api/albums/${id} error:`, error);

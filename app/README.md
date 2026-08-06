@@ -52,6 +52,12 @@ Articol is a visual album-search and discovery platform that prioritizes visual 
    cp .env.example .env.local
    ```
 
+   For the production catalog, configure `NEXT_PUBLIC_SUPABASE_URL` and either
+   the publishable/anon read key. Set the new `SUPABASE_SECRET_KEY` (or legacy
+   `SUPABASE_SERVICE_ROLE_KEY`) only in Vercel server environment variables if
+   album analysis should be written back to Supabase; never expose that key to
+   the browser.
+
 3. **Start Development Server**:
    ```bash
    npm run dev
