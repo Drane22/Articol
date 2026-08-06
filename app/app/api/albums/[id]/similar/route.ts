@@ -51,12 +51,7 @@ async function calculateRecommendations(
     queryAlbum.visualAnalysisStatus !== 'analyzed'
   ) {
     queryAlbum = await enrichAlbumWithArtwork(queryAlbum);
-    if (
-      queryAlbum.visualAnalysisStatus === 'indexed' ||
-      queryAlbum.visualAnalysisStatus === 'analyzed'
-    ) {
-      await saveAlbumToDb(queryAlbum);
-    }
+    await saveAlbumToDb(queryAlbum);
   }
 
   // Verify visual indexing status (Section 4 & 24: Unindexed albums return not_indexed)

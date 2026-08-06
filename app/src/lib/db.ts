@@ -227,15 +227,29 @@ export async function getAlbumFromDb(collectionId: number): Promise<Album | null
 }
 
 export async function saveAlbumToDb(album: Album): Promise<void> {
+  await saveAlbumsToDb([album]);
+}
+
+export async function saveAlbumsToDb(albums: Album[]): Promise<void> {
   await ensureSeedsLoaded();
-  memoryStore.set(album.itunesCollectionId, album);
+  const uniqueAlbums = Array.from(
+    new Map(albums.map((album) => [album.itunesCollectionId, album])).values()
+  );
+  if (uniqueAlbums.length === 0) return;
+
+  for (const album of uniqueAlbums) memoryStore.set(album.itunesCollectionId, album);
   catalogCache.delete('catalog');
 
   const supabase = await getSupabaseClient(true);
-  if (!supabase) return;
+  if (!supabase) {
+    console.warn(
+      'Supabase writes disabled: configure SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) in Vercel.'
+    );
+    return;
+  }
 
   try {
-    const { error } = await supabase.from('albums').upsert({
+    const rows = uniqueAlbums.map((album) => ({
       itunes_collection_id: album.itunesCollectionId,
       itunes_artist_id: album.itunesArtistId,
       title: album.title,
@@ -267,11 +281,15 @@ export async function saveAlbumToDb(album: Album): Promise<void> {
       visual_analysis_status: album.visualAnalysisStatus || 'fallback',
       visual_analysis_error: album.visualAnalysisError,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'itunes_collection_id' });
+    }));
+
+    const { error } = await supabase
+      .from('albums')
+      .upsert(rows, { onConflict: 'itunes_collection_id' });
 
     if (error) throw error;
   } catch (error) {
-    console.warn('Supabase save album failed:', error);
+    console.error('Supabase save albums failed:', error);
   }
 }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllCatalogAlbums } from '@/lib/db';
+import { getAllCatalogAlbums, saveAlbumsToDb } from '@/lib/db';
 import { getColorCategory, matchesColorFilter } from '@/lib/colorUtils';
 import { Album } from '@/lib/types';
 
@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
 
   if (featured) {
     const albums = await getFeaturedSpotlightAlbums();
+    await saveAlbumsToDb(albums);
     return NextResponse.json(
       { count: albums.length, albums, partial: albums.length < 6 },
       { headers: { 'Cache-Control': 'private, no-store' } }
@@ -124,6 +125,10 @@ export async function GET(request: NextRequest) {
   if (genre) {
     albums = albums.filter(a => a.genre.toLowerCase().includes(genre.toLowerCase()));
   }
+
+  // Discovery is an interaction with the catalog: persist the visible rows so
+  // an initially empty Supabase project grows beyond the bundled fallback.
+  await saveAlbumsToDb(albums.slice(0, 100));
 
   return NextResponse.json(
     { count: albums.length, albums },

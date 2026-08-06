@@ -32,9 +32,9 @@ export async function GET(
 
     album = await refreshSeedAlbum(album, country);
     album = await enrichAlbumWithArtwork(album);
-    if (album.visualAnalysisStatus === 'indexed' || album.visualAnalysisStatus === 'analyzed') {
-      await saveAlbumToDb(album);
-    }
+    // Persist metadata even when artwork analysis falls back. Otherwise an
+    // empty Supabase catalog never learns from normal album interactions.
+    await saveAlbumToDb(album);
     return NextResponse.json(
       { album: { ...album, embedding: undefined, perceptualHash: undefined } },
       { headers: { 'Cache-Control': 'private, no-store' } },
