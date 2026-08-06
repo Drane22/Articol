@@ -6,38 +6,47 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: '**.mzstatic.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'is1-ssl.mzstatic.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'is2-ssl.mzstatic.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'is3-ssl.mzstatic.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'is4-ssl.mzstatic.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'is5-ssl.mzstatic.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'coverartarchive.org',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'i.discogs.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'lastfm.freetls.fastly.net',
+        pathname: '/**',
       },
     ],
   },
