@@ -50,7 +50,7 @@ export default function HomePage() {
     let isCurrentRequest = true;
     setIsLoading(true);
     setSearchError(null);
-    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&country=${country}&limit=12`, {
+    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&country=${country}&limit=50`, {
       signal: controller.signal,
       cache: 'no-store',
     })
