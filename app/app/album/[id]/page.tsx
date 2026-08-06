@@ -152,20 +152,43 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
 
   const shareUrl = typeof window === 'undefined'
     ? `/album/${id}?country=${country}`
-    : `${window.location.origin}/album/${id}?country=${country}`;
+    : new URL(`/album/${id}?country=${country}`, window.location.origin).toString();
 
   const handleShare = () => {
     setIsShareOpen(true);
   };
 
-  const handleCopyShare = async () => {
-    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+  const handleCopyShare = async (): Promise<boolean> => {
+    if (typeof navigator === 'undefined' || typeof document === 'undefined') return false;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          copied = true;
+        } catch {
+          // Fall through to the legacy copy path for webviews or blocked
+          // clipboard permissions.
+        }
+      }
+      if (!copied) {
+        const fallbackInput = document.createElement('textarea');
+        fallbackInput.value = shareUrl;
+        fallbackInput.setAttribute('readonly', '');
+        fallbackInput.style.position = 'fixed';
+        fallbackInput.style.opacity = '0';
+        document.body.appendChild(fallbackInput);
+        fallbackInput.select();
+        copied = document.execCommand('copy');
+        fallbackInput.remove();
+        if (!copied) throw new Error('Clipboard fallback failed');
+      }
       setCopiedShare(true);
       setTimeout(() => setCopiedShare(false), 2000);
+      return true;
     } catch (error) {
       console.warn('Share link copy failed:', error);
+      return false;
     }
   };
 
@@ -509,7 +532,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             album={album}
             shareUrl={shareUrl}
             copied={copiedShare}
-            onCopyLink={() => void handleCopyShare()}
+            onCopyLink={handleCopyShare}
             onClose={() => setIsShareOpen(false)}
           />
         )}

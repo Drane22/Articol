@@ -80,7 +80,9 @@ export async function normalizeItunesAlbum(rawItem: any, country: string = 'PH')
     trackCount: rawItem.trackCount || 1,
     explicitness: rawItem.collectionExplicitness || 'notExplicit',
     price: Number.isFinite(normalizedPrice) && normalizedPrice >= 0 ? normalizedPrice : undefined,
-    currency: rawItem.currency || getStorefront(storefront).currency,
+    // The requested storefront controls the displayed currency. iTunes can
+    // return a stale/default currency field for cached or cross-store items.
+    currency: getStorefront(storefront).currency,
     artworkUrl: highResArtwork || rawArtwork,
     artworkSource: 'itunes',
     storeUrl: rawItem.collectionViewUrl || '',

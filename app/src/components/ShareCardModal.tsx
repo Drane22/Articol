@@ -10,7 +10,7 @@ interface ShareCardModalProps {
   album: Album;
   shareUrl: string;
   copied: boolean;
-  onCopyLink: () => void;
+  onCopyLink: () => Promise<boolean>;
   onClose: () => void;
 }
 
@@ -30,7 +30,8 @@ export function ShareCardModal({ album, shareUrl, copied, onCopyLink, onClose }:
 
   const handleNativeShare = async () => {
     if (typeof navigator === 'undefined' || !navigator.share) {
-      onCopyLink();
+      const copiedFallback = await onCopyLink();
+      setShareError(!copiedFallback);
       return;
     }
 
@@ -47,6 +48,11 @@ export function ShareCardModal({ album, shareUrl, copied, onCopyLink, onClose }:
     } finally {
       setIsSharing(false);
     }
+  };
+
+  const handleCopyLink = async () => {
+    const copiedLink = await onCopyLink();
+    setShareError(!copiedLink);
   };
 
   return (
@@ -120,7 +126,7 @@ export function ShareCardModal({ album, shareUrl, copied, onCopyLink, onClose }:
             </button>
             <button
               type="button"
-              onClick={onCopyLink}
+              onClick={() => void handleCopyLink()}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--border-color)] px-4 text-xs font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--accent-soft)]"
             >
               {copied ? <Check className="h-4 w-4 theme-success" /> : <Copy className="h-4 w-4" />}

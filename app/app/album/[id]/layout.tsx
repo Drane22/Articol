@@ -6,10 +6,10 @@ export async function generateMetadata({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const query = await searchParams;
+  const query = searchParams ? await searchParams : {};
   const requestedCountry = typeof query.country === 'string' ? query.country : 'PH';
   const country = normalizeStorefront(requestedCountry);
   let title = 'Album artwork';
@@ -28,8 +28,9 @@ export async function generateMetadata({
   }
 
   const pageTitle = `${title} — ${artist}`;
-  const imagePath = `/album/${id}/opengraph-image?country=${country}`;
-  const pagePath = `/album/${id}?country=${country}`;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://articol-lime.vercel.app';
+  const imageUrl = new URL(`/album/${id}/opengraph-image?country=${country}`, siteUrl).toString();
+  const pageUrl = new URL(`/album/${id}?country=${country}`, siteUrl).toString();
 
   return {
     title: pageTitle,
@@ -38,14 +39,14 @@ export async function generateMetadata({
       title: pageTitle,
       description: `Study the artwork for ${pageTitle} on Articol.`,
       type: 'article',
-      url: pagePath,
-      images: [{ url: imagePath, width: 1200, height: 630, alt: `${pageTitle} share card` }],
+      url: pageUrl,
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: `${pageTitle} share card` }],
     },
     twitter: {
       card: 'summary_large_image',
       title: pageTitle,
       description: `Study the artwork for ${pageTitle} on Articol.`,
-      images: [imagePath],
+      images: [imageUrl],
     },
   };
 }

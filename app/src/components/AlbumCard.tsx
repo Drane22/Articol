@@ -171,7 +171,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
           {showExploreButton && (
             <button
               onClick={handleExplore}
-              className="min-h-9 w-full justify-center px-2.5 rounded-md bg-[var(--accent-editorial)] text-[11px] font-medium inline-flex items-center gap-1 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-90 active:scale-[0.98] sm:min-h-7 sm:w-auto"
+              className="min-h-9 w-full justify-center px-2.5 rounded-md bg-[var(--accent-editorial)] text-[var(--bg-canvas)] text-[11px] font-medium inline-flex items-center gap-1 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-90 active:scale-[0.98] sm:min-h-7 sm:w-auto"
             >
               <span>View</span>
               <ArrowRight className="w-3 h-3" />
