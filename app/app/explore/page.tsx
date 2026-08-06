@@ -5,6 +5,7 @@ import { Compass, Filter, Sparkles, RefreshCw } from 'lucide-react';
 import { AlbumCard } from '@/components/AlbumCard';
 import { ColorSpectrumSlider } from '@/components/ColorSpectrumSlider';
 import { Album } from '@/lib/types';
+import { useCountry } from '@/components/CountryProvider';
 
 const PREDEFINED_COLLECTIONS = [
   'Quiet Minimalism',
@@ -22,6 +23,7 @@ const VISUAL_TAGS = ['Minimal', 'Portrait', 'Illustrated', 'Abstract', 'Monochro
 const DECADES = ['1960', '1970', '1980', '1990', '2000', '2010', '2020'];
 
 export default function ExplorePage() {
+  const { country, ready } = useCountry();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCollection, setActiveCollection] = useState<string | null>(null);
@@ -30,11 +32,13 @@ export default function ExplorePage() {
   const [activeDecade, setActiveDecade] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!ready) return;
     const controller = new AbortController();
     let isCurrentRequest = true;
     setIsLoading(true);
 
     const params = new URLSearchParams();
+    params.set('country', country);
     if (activeCollection) params.set('collection', activeCollection);
     if (activeFilter) params.set('filter', activeFilter);
     if (activeColor) params.set('color', activeColor);
@@ -61,7 +65,7 @@ export default function ExplorePage() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [activeCollection, activeFilter, activeColor, activeDecade]);
+  }, [activeCollection, activeFilter, activeColor, activeDecade, country, ready]);
 
   const handleResetFilters = () => {
     setActiveCollection(null);

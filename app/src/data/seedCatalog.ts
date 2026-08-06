@@ -46,8 +46,9 @@ function createSeedAlbum(
     country: 'PH',
     trackCount: 10,
     explicitness: 'notExplicit',
-    price: 9.99,
-    currency: 'USD',
+    // Seed rows are visual fallbacks only; never present an invented price.
+    price: undefined,
+    currency: undefined,
     artworkUrl,
     artworkSource: 'seed',
     storeUrl: `https://music.apple.com/ph/album/${collectionId}`,

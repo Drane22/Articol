@@ -7,6 +7,7 @@ import { AlbumCard } from '@/components/AlbumCard';
 import { Album, SearchScope } from '@/lib/types';
 import { useDebounce } from 'use-debounce';
 import { CoverArtwork } from '@/components/CoverArtwork';
+import { useCountry } from '@/components/CountryProvider';
 
 export default function HomePage() {
   const router = useRouter();
@@ -14,7 +15,7 @@ export default function HomePage() {
   const [debouncedQuery] = useDebounce(query, 300);
   const [results, setResults] = useState<Album[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [country, setCountry] = useState('PH');
+  const { country, ready } = useCountry();
   const [seedSpotlight, setSeedSpotlight] = useState<Album[]>([]);
   const [spotlightError, setSpotlightError] = useState(false);
   const [spotlightRetry, setSpotlightRetry] = useState(0);
@@ -31,6 +32,7 @@ export default function HomePage() {
 
   // Fetch seed spotlight on mount
   useEffect(() => {
+    if (!ready) return;
     setSpotlightError(false);
     fetch(`/api/discover?featured=true&country=${country}`)
       .then(res => {
@@ -42,10 +44,11 @@ export default function HomePage() {
         setSpotlightError(!data.albums?.length);
       })
       .catch(() => { setSeedSpotlight([]); setSpotlightError(true); });
-  }, [country, spotlightRetry]);
+  }, [country, ready, spotlightRetry]);
 
   // Search execution when debounced query changes
   useEffect(() => {
+    if (!ready) return;
     if (!debouncedQuery.trim()) {
       setResults([]);
       setIsLoading(false);
@@ -83,7 +86,7 @@ export default function HomePage() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [debouncedQuery, country, searchRetry, searchScope]);
+  }, [debouncedQuery, country, ready, searchRetry, searchScope]);
 
   const handleQueryChange = (value: string) => {
     latestQueryRef.current = value;

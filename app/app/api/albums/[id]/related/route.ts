@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getItunesAlbumById, searchItunesAlbums } from '@/lib/itunes';
 import { calculateMusicScore } from '@/lib/visualEngine';
 import { Album } from '@/lib/types';
+import { normalizeStorefront } from '@/lib/storefronts';
 
 export async function GET(
   request: NextRequest,
@@ -9,7 +10,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const collectionId = parseInt(id, 10);
-  const country = (request.nextUrl.searchParams.get('country') || 'PH').toUpperCase();
+  const country = normalizeStorefront(request.nextUrl.searchParams.get('country'));
 
   if (isNaN(collectionId)) {
     return NextResponse.json({ error: 'Invalid album ID' }, { status: 400 });

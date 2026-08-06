@@ -2,6 +2,7 @@ import { Album, AlbumTrack } from './types';
 import { extractVisualFeaturesFromImage, extractFeaturesFromUrl } from './featureExtractor';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 import { isReliableVisualAnalysis } from './visualValidation';
+import { getStorefront, normalizeStorefront } from './storefronts';
 
 const ITUNES_BASE_URL = 'https://itunes.apple.com';
 const CACHE_TTL_MS = 1000 * 60 * 5; // Keep metadata fresh while deduplicating bursts.
@@ -48,7 +49,8 @@ function buildAlbumSeed(rawItem: any): string {
 // Normalise a raw iTunes collection result into an Album object.
 // Uses seed-based feature generation (fast, no image download).
 // ─────────────────────────────────────────────────────────────
-export async function normalizeItunesAlbum(rawItem: any): Promise<Album> {
+export async function normalizeItunesAlbum(rawItem: any, country: string = 'PH'): Promise<Album> {
+  const storefront = normalizeStorefront(country);
   const collectionId = rawItem.collectionId;
   const title = rawItem.collectionName || 'Untitled Album';
   const artistName = rawItem.artistName || 'Unknown Artist';
@@ -61,6 +63,8 @@ export async function normalizeItunesAlbum(rawItem: any): Promise<Album> {
   const seed = buildAlbumSeed(rawItem);
   const { palette, features, embedding } = await extractVisualFeaturesFromImage(null, seed);
 
+  const normalizedPrice = rawItem.collectionPrice == null ? undefined : Number(rawItem.collectionPrice);
+
   return {
     id: `itunes-${collectionId}`,
     itunesCollectionId: collectionId,
@@ -72,11 +76,11 @@ export async function normalizeItunesAlbum(rawItem: any): Promise<Album> {
     genre: rawItem.primaryGenreName || 'Music',
     releaseDate: releaseDateStr,
     releaseYear: isNaN(releaseYear) ? 2020 : releaseYear,
-    country: rawItem.country || 'PH',
+    country: storefront,
     trackCount: rawItem.trackCount || 1,
     explicitness: rawItem.collectionExplicitness || 'notExplicit',
-    price: rawItem.collectionPrice || 0,
-    currency: rawItem.currency || 'USD',
+    price: Number.isFinite(normalizedPrice) && normalizedPrice >= 0 ? normalizedPrice : undefined,
+    currency: rawItem.currency || getStorefront(storefront).currency,
     artworkUrl: highResArtwork || rawArtwork,
     artworkSource: 'itunes',
     storeUrl: rawItem.collectionViewUrl || '',
@@ -220,6 +224,8 @@ export async function searchItunesAlbums(
 ): Promise<Album[]> {
   if (!query || !query.trim()) return [];
 
+  country = normalizeStorefront(country);
+
   const cacheKey = `search-${query.trim().toLowerCase()}-${country}-${limit}-${titleOnly ? 'title' : artistOnly ? 'artist' : 'all'}`;
   const cached = apiCache.get(cacheKey);
   if (cached) return cached;
@@ -245,7 +251,7 @@ export async function searchItunesAlbums(
     const seenIdentities = new Set<string>();
     for (const item of results) {
       if (item.collectionId && item.collectionName) {
-        const alb = await normalizeItunesAlbum(item);
+        const alb = await normalizeItunesAlbum(item, country);
         const identity = `${normalizeAlbumIdentityTitle(alb.normalizedTitle)}|${alb.normalizedArtistName}`;
         if (!seenIdentities.has(identity)) {
           seenIdentities.add(identity);
@@ -269,6 +275,7 @@ export async function getItunesAlbumById(
   collectionId: number | string,
   country: string = 'PH',
 ): Promise<{ album: Album | null; tracks: AlbumTrack[] }> {
+  country = normalizeStorefront(country);
   const cacheKey = `lookup-${collectionId}-${country}`;
   const cached = apiCache.get(cacheKey);
   if (cached) return cached;
@@ -286,11 +293,15 @@ export async function getItunesAlbumById(
 
   try {
     let results: any[] | null = null;
-    const storefronts = Array.from(new Set([country.toUpperCase(), 'US', 'GB', 'JP']));
+    let resolvedStorefront = country;
+    const storefronts = Array.from(new Set([country, 'US', 'GB', 'JP']));
 
     for (const sf of storefronts) {
       results = await fetchLookup(sf);
-      if (results && results.length > 0) break;
+      if (results && results.length > 0) {
+        resolvedStorefront = sf;
+        break;
+      }
     }
 
     if (!results || results.length === 0) {
@@ -301,7 +312,7 @@ export async function getItunesAlbumById(
       results.find((r: any) => r.wrapperType === 'collection') || results[0];
     const trackRaws = results.filter((r: any) => r.wrapperType === 'track');
 
-    const album = await normalizeItunesAlbum(collectionRaw);
+    const album = await normalizeItunesAlbum(collectionRaw, resolvedStorefront);
 
     const tracks: AlbumTrack[] = trackRaws.map((t: any) => ({
       trackId: t.trackId,

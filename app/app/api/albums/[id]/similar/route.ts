@@ -6,6 +6,7 @@ import { Album, RecommendationTiers, SimilarityResult } from '@/lib/types';
 import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
 import { getAlbumFromDb, saveAlbumToDb, saveSimilarityResultsToCache } from '@/lib/db';
 import { isReliableVisualAnalysis } from '@/lib/visualValidation';
+import { normalizeStorefront } from '@/lib/storefronts';
 
 const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v4-palette-transport';
 const responseCache = new BoundedTtlCache<RecommendationPayload>({
@@ -37,14 +38,25 @@ async function calculateRecommendations(
   limit: number
 ): Promise<RecommendationPayload> {
   // Check indexed database catalog first
-  let queryAlbum = await getAlbumFromDb(collectionId);
+  const storedAlbum = await getAlbumFromDb(collectionId);
+  const { album: fetched } = await getItunesAlbumById(collectionId, country);
+  let queryAlbum: Album | null = fetched
+    ? storedAlbum
+      ? {
+          ...storedAlbum,
+          country: fetched.country,
+          price: fetched.price,
+          currency: fetched.currency,
+          storeUrl: fetched.storeUrl,
+          artworkUrl: fetched.artworkUrl || storedAlbum.artworkUrl,
+          trackCount: fetched.trackCount,
+          explicitness: fetched.explicitness,
+        }
+      : fetched
+    : storedAlbum;
 
-  // If not found in DB, check iTunes metadata
-  if (!queryAlbum) {
-    const { album: fetched } = await getItunesAlbumById(collectionId, country);
-    if (!fetched) throw new Error('Album not found');
-    queryAlbum = await refreshSeedAlbum(fetched, country);
-  }
+  if (!queryAlbum) throw new Error('Album not found');
+  queryAlbum = await refreshSeedAlbum(queryAlbum, country);
 
   // Enrich query album if it has not been visually analyzed yet
   if (!isReliableVisualAnalysis(queryAlbum)) {
@@ -97,7 +109,7 @@ export async function GET(
     : 'art_style';
   const requestedLimit = Number.parseInt(request.nextUrl.searchParams.get('limit') || '18', 10);
   const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 18, 18));
-  const country = (request.nextUrl.searchParams.get('country') || 'PH').toUpperCase().slice(0, 2);
+  const country = normalizeStorefront(request.nextUrl.searchParams.get('country'));
 
   if (!Number.isFinite(collectionId)) {
     return NextResponse.json({ error: 'Invalid collection ID' }, { status: 400 });

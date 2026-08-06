@@ -12,6 +12,9 @@ import { AlbumCard } from '@/components/AlbumCard';
 import { WhyMatchModal } from '@/components/WhyMatchModal';
 import { CoverArtwork } from '@/components/CoverArtwork';
 import { RecommendationLoading } from '@/components/RecommendationLoading';
+import { ShareCardModal } from '@/components/ShareCardModal';
+import { useCountry } from '@/components/CountryProvider';
+import { formatStorePrice, getStorefront } from '@/lib/storefronts';
 
 const EMPTY_TIERS: RecommendationTiers = {
   art_style: [],
@@ -29,6 +32,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { country, ready, setCountry } = useCountry();
 
   const [album, setAlbum] = useState<Album | null>(null);
   const [recommendationTiers, setRecommendationTiers] = useState<RecommendationTiers>(EMPTY_TIERS);
@@ -41,15 +45,23 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const [recommendationRetry, setRecommendationRetry] = useState(0);
   const [selectedWhyMatch, setSelectedWhyMatch] = useState<SimilarityResult | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
   const [copiedPalette, setCopiedPalette] = useState(false);
   const [paletteCopyError, setPaletteCopyError] = useState(false);
 
   // Fetch selected album detail
   useEffect(() => {
+    const sharedCountry = searchParams.get('country');
+    if (sharedCountry) setCountry(sharedCountry);
+  }, [searchParams, setCountry]);
+
+  useEffect(() => {
+    if (!ready) return;
     const controller = new AbortController();
     setIsLoadingAlbum(true);
-    fetch(`/api/albums/${id}`, { signal: controller.signal })
+    setAlbum(null);
+    fetch(`/api/albums/${id}?country=${country}`, { signal: controller.signal, cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (data.album) {
@@ -64,11 +76,11 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
         setIsLoadingAlbum(false);
       });
     return () => controller.abort();
-  }, [id]);
+  }, [country, id, ready]);
 
   // Fetch recommendation tiers or handle unindexed album state
   useEffect(() => {
-    if (!album) return;
+    if (!album || !ready) return;
 
     const controller = new AbortController();
     setIsLoadingRecs(true);
@@ -77,13 +89,13 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
     setRecommendationTiers(EMPTY_TIERS);
     setRelatedAlbums([]);
 
-    fetch(`/api/albums/${id}/similar?limit=18`, { signal: controller.signal })
+    fetch(`/api/albums/${id}/similar?country=${country}&limit=18`, { signal: controller.signal })
       .then(async (res) => {
         const data = await res.json();
         if (data.status === 'not_indexed') {
           setIsUnindexed(true);
           // Fetch metadata-based related albums fallback (Section 4)
-          fetch(`/api/albums/${id}/related`, { signal: controller.signal })
+          fetch(`/api/albums/${id}/related?country=${country}`, { signal: controller.signal })
             .then(r => r.json())
             .then(relData => {
               setRelatedAlbums(relData.results || []);
@@ -111,7 +123,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
         setIsLoadingRecs(false);
       });
     return () => controller.abort();
-  }, [id, album?.itunesCollectionId, recommendationRetry]);
+  }, [album?.itunesCollectionId, country, id, ready, recommendationRetry]);
 
   const recommendations = recommendationTiers[mode];
 
@@ -138,11 +150,22 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
     } catch (e) {}
   };
 
+  const shareUrl = typeof window === 'undefined'
+    ? `/album/${id}?country=${country}`
+    : `${window.location.origin}/album/${id}?country=${country}`;
+
   const handleShare = () => {
-    if (typeof window !== 'undefined') {
-      navigator.clipboard.writeText(window.location.href);
+    setIsShareOpen(true);
+  };
+
+  const handleCopyShare = async () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
       setCopiedShare(true);
       setTimeout(() => setCopiedShare(false), 2000);
+    } catch (error) {
+      console.warn('Share link copy failed:', error);
     }
   };
 
@@ -163,6 +186,8 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   // Ambient palette wash color from dominant palette
   const palette = album?.dominantPalette?.slice(0, 3).map((color) => color.hex) || ['#1a1a1a'];
   const ambientBackground = `radial-gradient(ellipse at 18% 0%, ${palette[0]} 0%, transparent 52%), radial-gradient(ellipse at 82% 12%, ${palette[1] || palette[0]} 0%, transparent 48%), radial-gradient(ellipse at 50% 24%, ${palette[2] || palette[0]} 0%, transparent 60%)`;
+  const albumStorefront = getStorefront(album?.country);
+  const formattedStorePrice = formatStorePrice(album?.price, album?.currency, album?.country);
 
   if (isLoadingAlbum) {
     return (
@@ -299,12 +324,12 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               <div>
                 <span className="text-[var(--text-muted)] block">Country Store</span>
-                <span className="font-semibold text-[var(--text-primary)]">{album.country}</span>
+                <span className="font-semibold text-[var(--text-primary)]">{albumStorefront.label} ({album.country})</span>
               </div>
-              {album.price ? (
+              {formattedStorePrice ? (
                 <div>
                   <span className="text-[var(--text-muted)] block">Store Price</span>
-                  <span className="font-semibold text-[var(--text-primary)]">${album.price} {album.currency}</span>
+                  <span className="font-semibold text-[var(--text-primary)]">{formattedStorePrice}</span>
                 </div>
               ) : null}
             </div>
@@ -476,6 +501,16 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             result={selectedWhyMatch}
             mode={mode}
             onClose={() => setSelectedWhyMatch(null)}
+          />
+        )}
+
+        {isShareOpen && album && (
+          <ShareCardModal
+            album={album}
+            shareUrl={shareUrl}
+            copied={copiedShare}
+            onCopyLink={() => void handleCopyShare()}
+            onClose={() => setIsShareOpen(false)}
           />
         )}
 

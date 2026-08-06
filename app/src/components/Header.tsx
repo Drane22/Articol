@@ -6,15 +6,18 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Compass, Bookmark, Sun, Moon, Globe, Search, X, Loader2 } from 'lucide-react';
 import { Album, SearchScope } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
+import { STOREFRONTS, useCountry } from './CountryProvider';
 
 interface HeaderProps {
   country?: string;
   onCountryChange?: (c: string) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange }) => {
+export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const countryContext = useCountry();
+  const selectedCountry = country || countryContext.country;
   const [darkMode, setDarkMode] = useState(true);
   const [themeReady, setThemeReady] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -63,6 +66,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
 
     const controller = new AbortController();
     const trimmedQuery = searchQuery.trim();
+    if (!countryContext.ready) return () => controller.abort();
     if (!trimmedQuery) {
       setSearchResults([]);
       setIsSearching(false);
@@ -73,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
     const timeout = window.setTimeout(() => {
       setIsSearching(true);
       setSearchError(null);
-      fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}&country=${country}&limit=8&scope=${searchScope}`, {
+      fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}&country=${selectedCountry}&limit=8&scope=${searchScope}`, {
         signal: controller.signal,
         cache: 'no-store',
       })
@@ -98,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [country, isSearchOpen, pathname, searchQuery, searchScope]);
+  }, [countryContext.ready, isSearchOpen, pathname, searchQuery, searchScope, selectedCountry]);
 
   useEffect(() => {
     if (!isSearchOpen || pathname === '/') return;
@@ -161,15 +165,6 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
     setSearchError(null);
     setIsSearching(Boolean(searchQuery.trim()));
   };
-
-  const countries = [
-    { code: 'PH', label: 'Philippines (PH)' },
-    { code: 'US', label: 'United States (US)' },
-    { code: 'GB', label: 'United Kingdom (GB)' },
-    { code: 'JP', label: 'Japan (JP)' },
-    { code: 'DE', label: 'Germany (DE)' },
-    { code: 'FR', label: 'France (FR)' },
-  ];
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-canvas)]/80 border-b border-[var(--border-color)] transition-colors">
@@ -302,13 +297,16 @@ export const Header: React.FC<HeaderProps> = ({ country = 'PH', onCountryChange 
           <div className="relative flex min-h-10 items-center space-x-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] px-2 text-xs text-[var(--text-muted)]">
             <Globe className="w-3.5 h-3.5" />
             <select
-              value={country}
-              onChange={(e) => onCountryChange?.(e.target.value)}
+              value={selectedCountry}
+              onChange={(e) => {
+                countryContext.setCountry(e.target.value);
+                onCountryChange?.(e.target.value);
+              }}
               className="w-8 cursor-pointer border-none bg-transparent text-xs text-[var(--text-primary)] focus:outline-none sm:w-auto"
             >
-              {countries.map((c) => (
+              {STOREFRONTS.map((c) => (
                 <option key={c.code} value={c.code} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
-                  {c.code}
+                  {c.code} · {c.label}
                 </option>
               ))}
             </select>
