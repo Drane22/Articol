@@ -159,11 +159,11 @@ export function calculateVisualScore(albumA: Album, albumB: Album): number {
     0,
     Math.min(
       1,
-      0.56 * embeddingSim +
-      0.16 * colorSim +
-      0.11 * layoutSim +
-      0.09 * typographySim +
-      0.08 * complexitySim
+      0.46 * embeddingSim +
+      0.20 * colorSim +
+      0.14 * layoutSim +
+      0.10 * typographySim +
+      0.10 * complexitySim
     )
   );
 }
@@ -178,15 +178,15 @@ export function calculateArtStyleScore(albumA: Album, albumB: Album): number {
   const complexitySim = calculateComplexitySimilarity(albumA, albumB);
 
   let score = (
-    0.62 * embeddingSim +
-    0.15 * colorSim +
-    0.10 * layoutSim +
-    0.07 * typographySim +
-    0.06 * complexitySim
+    0.28 * embeddingSim +
+    0.27 * colorSim +
+    0.20 * layoutSim +
+    0.13 * typographySim +
+    0.12 * complexitySim
   );
 
-  if (colorSim < 0.12 && embeddingSim < 0.45 && layoutSim < 0.40) {
-    score *= 0.88;
+  if (colorSim < 0.18 && layoutSim < 0.45 && complexitySim < 0.45) {
+    score *= 0.45;
   }
 
   return Math.max(0, Math.min(1, score));
@@ -409,12 +409,13 @@ export function rankSimilarAlbums(
     const lastFmSim = lastFmSimilarScores[candidate.itunesCollectionId] || 0.0;
     const musicScore = calculateMusicScore(queryAlbum, candidate, lastFmSim);
 
+    const colorScore = calculateColorSimilarity(queryAlbum.dominantPalette || [], candidate.dominantPalette || []);
     const finalScore =
       mode === 'art_style'
         ? artStyleScore
         : mode === 'balanced'
-        ? 0.60 * visualScore + 0.40 * musicScore
-        : musicScore;
+        ? 0.70 * visualScore + 0.30 * musicScore
+        : 0.75 * musicScore + 0.15 * visualScore + 0.10 * colorScore;
 
     const { reasons, explanation, sharedAttrs } = generateMatchExplanation(
       queryAlbum,
@@ -435,7 +436,7 @@ export function rankSimilarAlbums(
       musicConfidence: lastFmSim > 0 ? 0.9 : 0.5,
       componentScores: {
         embedding: calculateCosineSimilarity(queryAlbum.embedding, candidate.embedding),
-        color: calculateColorSimilarity(queryAlbum.dominantPalette || [], candidate.dominantPalette || []),
+        color: colorScore,
         layout: calculateLayoutSimilarity(queryAlbum, candidate),
         typography: calculateTypographySimilarity(queryAlbum, candidate),
         complexity: calculateComplexitySimilarity(queryAlbum, candidate),
@@ -450,7 +451,7 @@ export function rankSimilarAlbums(
     });
   }
 
-  scoredItems.sort((a, b) => b.finalScore - a.finalScore);
+  scoredItems.sort((a, b) => b.finalScore - a.finalScore || a.album.itunesCollectionId - b.album.itunesCollectionId);
 
   // Maximum Marginal Relevance (MMR)
   const selected: SimilarityResult[] = [];
@@ -503,48 +504,9 @@ export function rankDistinctRecommendationTiers(
   lastFmSimilarScores: Record<number, number> = {},
   limit: number = 18
 ): RecommendationTiers {
-  const artStyle = rankSimilarAlbums(queryAlbum, candidates, 'art_style', lastFmSimilarScores, limit);
-  const leadingArtIds = new Set(artStyle.map((result) => result.album.itunesCollectionId));
-
-  const balancedCandidates = candidates.filter((candidate) => !leadingArtIds.has(candidate.itunesCollectionId));
-  let balanced = rankSimilarAlbums(queryAlbum, balancedCandidates, 'balanced', lastFmSimilarScores, limit);
-
-  if (balanced.length < limit && candidates.length > artStyle.length) {
-    const balancedIds = new Set(balanced.map((r) => r.album.itunesCollectionId));
-    const extraBalanced = rankSimilarAlbums(
-      queryAlbum,
-      candidates.filter(
-        (c) => !leadingArtIds.has(c.itunesCollectionId) && !balancedIds.has(c.itunesCollectionId)
-      ),
-      'balanced',
-      lastFmSimilarScores,
-      limit - balanced.length
-    );
-    balanced = [...balanced, ...extraBalanced];
-  }
-
-  const leadingBalancedIds = new Set(balanced.map((result) => result.album.itunesCollectionId));
-
-  const musicCandidates = candidates.filter(
-    (candidate) =>
-      !leadingArtIds.has(candidate.itunesCollectionId) &&
-      !leadingBalancedIds.has(candidate.itunesCollectionId)
-  );
-  let musicRelation = rankSimilarAlbums(queryAlbum, musicCandidates, 'music_relation', lastFmSimilarScores, limit);
-
-  if (musicRelation.length < limit) {
-    const musicIds = new Set(musicRelation.map((r) => r.album.itunesCollectionId));
-    const extraMusic = rankSimilarAlbums(
-      queryAlbum,
-      candidates.filter(
-        (c) => !musicIds.has(c.itunesCollectionId) && !leadingArtIds.has(c.itunesCollectionId)
-      ),
-      'music_relation',
-      lastFmSimilarScores,
-      limit - musicRelation.length
-    );
-    musicRelation = [...musicRelation, ...extraMusic];
-  }
-
-  return { art_style: artStyle, balanced, music_relation: musicRelation };
+  return {
+    art_style: rankSimilarAlbums(queryAlbum, candidates, 'art_style', lastFmSimilarScores, limit),
+    balanced: rankSimilarAlbums(queryAlbum, candidates, 'balanced', lastFmSimilarScores, limit),
+    music_relation: rankSimilarAlbums(queryAlbum, candidates, 'music_relation', lastFmSimilarScores, limit),
+  };
 }
