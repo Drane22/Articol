@@ -202,29 +202,9 @@ export function calculateVisualScore(albumA: Album, albumB: Album): number {
 }
 
 export function calculateArtStyleScore(albumA: Album, albumB: Album): number {
-  const embeddingSim = albumA.embedding && albumB.embedding
-    ? calculateCosineSimilarity(albumA.embedding, albumB.embedding)
-    : 0;
-  const colorSim = calculateColorSimilarity(albumA.dominantPalette || [], albumB.dominantPalette || []);
-  const layoutSim = calculateLayoutSimilarity(albumA, albumB);
-  const typographySim = calculateTypographySimilarity(albumA, albumB);
-  const complexitySim = calculateComplexitySimilarity(albumA, albumB);
-  const mediumSim = calculateMediumSimilarity(albumA, albumB);
-
-  let score = weightedGeometricScore([
-    [embeddingSim, 0.38],
-    [colorSim, 0.25],
-    [layoutSim, 0.18],
-    [mediumSim, 0.12],
-    [typographySim, 0.03],
-    [complexitySim, 0.04],
-  ]);
-
-  if (colorSim < 0.18 && layoutSim < 0.45 && complexitySim < 0.45) {
-    score *= 0.45;
-  }
-
-  return Math.max(0, Math.min(1, score));
+  // Art Style is intentionally palette-only. Layout, embeddings, typography,
+  // genre, artist, and release year belong to the other recommendation modes.
+  return calculateColorSimilarity(albumA.dominantPalette || [], albumB.dominantPalette || []);
 }
 
 // ==========================================
@@ -297,6 +277,17 @@ export function generateMatchExplanation(
   const sharedAttrs: SharedAttribute[] = [];
   const fQ = query.visualFeatures;
   const fC = candidate.visualFeatures;
+
+  if (mode === 'art_style') {
+    const colorSim = calculateColorSimilarity(query.dominantPalette || [], candidate.dominantPalette || []);
+    const matchType = colorSim >= 0.78 ? 'high' : colorSim >= 0.58 ? 'medium' : 'close';
+    const label = colorSim >= 0.78 ? 'Very similar palette' : 'Related color palette';
+    return {
+      reasons: [{ label, category: 'color' }],
+      explanation: `Palette-only match: ${Math.round(colorSim * 100)}% color similarity. Music and composition do not affect Art Style ranking.`,
+      sharedAttrs: [{ name: 'Palette', value: 'Dominant color distribution', matchType }],
+    };
+  }
 
   if (mode === 'music_relation') {
     if (lastFmScore > 0) {
@@ -466,16 +457,16 @@ export function rankSimilarAlbums(
       album: candidate,
       finalScore: Math.max(0, Math.min(1, finalScore)),
       finalConfidence: 1.0,
-      visualScore,
+      visualScore: mode === 'art_style' ? artStyleScore : visualScore,
       visualConfidence: 1.0,
       musicScore,
       musicConfidence: lastFmSim > 0 ? 0.9 : 0.5,
       componentScores: {
-        embedding: calculateCosineSimilarity(queryAlbum.embedding, candidate.embedding),
+        embedding: mode === 'art_style' ? null : calculateCosineSimilarity(queryAlbum.embedding, candidate.embedding),
         color: colorScore,
-        layout: calculateLayoutSimilarity(queryAlbum, candidate),
-        typography: calculateTypographySimilarity(queryAlbum, candidate),
-        complexity: calculateComplexitySimilarity(queryAlbum, candidate),
+        layout: mode === 'art_style' ? null : calculateLayoutSimilarity(queryAlbum, candidate),
+        typography: mode === 'art_style' ? null : calculateTypographySimilarity(queryAlbum, candidate),
+        complexity: mode === 'art_style' ? null : calculateComplexitySimilarity(queryAlbum, candidate),
       },
       matchReasons: reasons,
       explanation,
@@ -511,7 +502,9 @@ export function rankSimilarAlbums(
 
       let maxSimToSelected = 0;
       for (const sel of selected) {
-        const sim = calculateCosineSimilarity(item.album.embedding, sel.album.embedding);
+        const sim = mode === 'art_style'
+          ? calculateColorSimilarity(item.album.dominantPalette || [], sel.album.dominantPalette || [])
+          : calculateCosineSimilarity(item.album.embedding, sel.album.embedding);
         if (sim > maxSimToSelected) maxSimToSelected = sim;
       }
 
