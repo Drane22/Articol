@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { X, Sparkles, Sliders, Palette, Layout } from 'lucide-react';
+import { X, Sparkles, Palette } from 'lucide-react';
 import { SimilarityResult, Album, SearchMode } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
 
@@ -22,16 +22,22 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
   const isArtStyle = mode === 'art_style';
   const isMusicRelation = mode === 'music_relation';
   const matchPct = Math.round(result.finalScore * 100);
-  const visualPct = Math.round((result.visualScore ?? 0) * 100);
-  const musicPct = Math.round((result.musicScore ?? 0) * 100);
   const confidencePct = Math.round(result.finalConfidence * 100);
-  const rankingSummary = isArtStyle
-    ? 'Ranked from verified palette compatibility, artwork structure, medium, composition, and typography. Music metadata is excluded.'
+  const palettePct = result.componentScores.color === null || result.componentScores.color === undefined
+    ? null
+    : Math.round(result.componentScores.color * 100);
+  const scoreLabel = isMusicRelation ? 'Music relation' : isArtStyle ? 'Visual similarity' : 'Balanced similarity';
+  const explanationLead = isMusicRelation
+    ? 'Music relation · artist and genre context'
+    : `${isArtStyle ? 'Visual-style match' : 'Balanced visual match'}${palettePct === null ? '' : ` · ${palettePct}% palette compatibility`}`;
+  const explanationBody = isArtStyle
+    ? 'Palette, structure, medium, composition, and typography were compared. Music metadata is excluded.'
     : isMusicRelation
-      ? 'Ranked using artist, genre, and release-era relationships. Artwork is shown for context.'
-      : 'Ranked using visual structure, color, typography, texture, and music context.';
+      ? 'Artist, genre, and release-era relationships were compared. Artwork is shown for context.'
+      : 'Palette, structure, composition, typography, and music context were compared.';
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
 
@@ -46,6 +52,22 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onCloseRef.current();
+      if (event.key !== 'Tab') return;
+
+      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) || []);
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -66,7 +88,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         if (event.target === event.currentTarget) onCloseRef.current();
       }}
     >
-      <div className="share-dialog-panel why-match-dialog">
+      <div ref={dialogRef} className="share-dialog-panel why-match-dialog">
         <div className="why-match-dialog__scroll">
           <div className="why-match-dialog__content">
         
@@ -91,142 +113,95 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           </button>
         </header>
 
-        {/* Album Comparison Header */}
-        <div className="why-match-comparison">
-          <div className="why-match-comparison__item">
+        <section className="why-match-comparison" aria-label="Album artwork comparison">
+          <article className="why-match-comparison__item">
+            <span className="why-match-comparison__label">Query artwork</span>
             <div className="why-match-comparison__cover">
-              <CoverArtwork src={queryAlbum.artworkUrl} alt={queryAlbum.title} sizes="(max-width: 640px) 42vw, 12rem" />
+              <CoverArtwork src={queryAlbum.artworkUrl} alt={`Query artwork for ${queryAlbum.title}`} sizes="(max-width: 640px) 38vw, 18rem" priority />
             </div>
             <div className="why-match-comparison__meta">
-              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">Query artwork</span>
               <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{queryAlbum.title}</p>
               <p className="text-xs truncate text-[var(--text-muted)]">{queryAlbum.artistName}</p>
             </div>
-          </div>
+          </article>
 
-          <div className="why-match-comparison__item">
+          <div className="why-match-comparison__versus" aria-hidden="true">VS</div>
+
+          <article className="why-match-comparison__item">
+            <span className="why-match-comparison__label">Matched candidate</span>
             <div className="why-match-comparison__cover">
-              <CoverArtwork src={candidate.artworkUrl} alt={candidate.title} sizes="(max-width: 640px) 42vw, 12rem" />
+              <CoverArtwork src={candidate.artworkUrl} alt={`Matched artwork for ${candidate.title}`} sizes="(max-width: 640px) 38vw, 18rem" priority />
             </div>
             <div className="why-match-comparison__meta">
-              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">Matched candidate</span>
               <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{candidate.title}</p>
               <p className="text-xs truncate text-[var(--text-muted)]">{candidate.artistName}</p>
             </div>
-          </div>
-        </div>
+          </article>
+        </section>
 
-        {/* Natural Language Explanation Box */}
-        <div className="why-match-callout theme-warning-surface text-sm text-[var(--text-primary)] leading-relaxed">
-          <p className="font-serif italic text-base mb-1">“{result.explanation}”</p>
-          <span className="text-xs text-[var(--text-muted)] block font-sans">
-            {rankingSummary}
-          </span>
-        </div>
-
-        {/* Score Breakdown Bar */}
-        <div className="why-match-metrics">
-          <div>
-            <div className="flex justify-between text-xs font-medium mb-1">
-              <span className="flex items-center space-x-1.5">
-                <Sliders className="w-3.5 h-3.5 theme-info" />
-                <span>{isMusicRelation ? 'Music relationship' : isArtStyle ? 'Visual-style similarity' : 'Balanced relationship'}</span>
-              </span>
-              <span className="font-mono theme-info font-bold">{matchPct}% Match</span>
+        <section className="why-match-score" aria-label="Match scores">
+          <div className="why-match-score__metric why-match-score__metric--match">
+            <div className="why-match-score__heading">
+              <span>{scoreLabel}</span>
+              <strong>{matchPct}%</strong>
             </div>
-            <div className="w-full h-2 rounded-full bg-[var(--accent-soft)] overflow-hidden">
-              <div className="h-full theme-info-fill rounded-full" style={{ width: `${matchPct}%` }} />
+            <div className="why-match-score__bar" aria-hidden="true">
+              <span style={{ width: `${matchPct}%` }} />
             </div>
           </div>
-
-          <div>
-            <div className="mb-1 flex justify-between text-xs font-medium">
+          <div className="why-match-score__metric why-match-score__metric--confidence">
+            <div className="why-match-score__heading">
               <span>Evidence confidence</span>
-              <span className="font-mono theme-success">{confidencePct}%</span>
+              <strong>{confidencePct}%</strong>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--accent-soft)]">
-              <div className="h-full rounded-full theme-success-fill" style={{ width: `${confidencePct}%` }} />
+            <div className="why-match-score__bar" aria-hidden="true">
+              <span style={{ width: `${confidencePct}%` }} />
             </div>
           </div>
+        </section>
 
-          {mode === 'balanced' && <div className="why-match-submetrics">
-            <div>
-              <div className="flex justify-between text-xs mb-1 text-[var(--text-muted)]">
-                <span>Visual Score</span>
-                <span className="font-mono font-medium">{visualPct}%</span>
-              </div>
-              <div className="w-full h-1.5 rounded-full bg-[var(--accent-soft)] overflow-hidden">
-                <div className="h-full theme-success-fill rounded-full" style={{ width: `${visualPct}%` }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs mb-1 text-[var(--text-muted)]">
-                <span>Music Context Score</span>
-                <span className="font-mono font-medium">{musicPct}%</span>
-              </div>
-              <div className="w-full h-1.5 rounded-full bg-[var(--accent-soft)] overflow-hidden">
-                <div className="h-full theme-purple-fill rounded-full" style={{ width: `${musicPct}%` }} />
-              </div>
-            </div>
-          </div>}
-        </div>
-
-        {/* Palette Comparison Swatches */}
-        <div className="why-match-palette space-y-3 border-t border-[var(--border-color)]">
-          <div className="flex items-center space-x-1.5 text-xs font-mono uppercase text-[var(--text-muted)]">
-            <Palette className="w-3.5 h-3.5" />
-            <span>{isMusicRelation ? 'Artwork palettes (context)' : 'Palette comparison'}</span>
+        <section className="why-match-explanation text-sm text-[var(--text-primary)] leading-relaxed" aria-label="Match explanation">
+          <div className="why-match-explanation__lead">
+            <Sparkles className="h-3.5 w-3.5 theme-warning" aria-hidden="true" />
+            <strong>{explanationLead}</strong>
           </div>
+          <p className="sr-only">{result.explanation}</p>
+          <span className="text-xs text-[var(--text-muted)] block font-sans">
+            {explanationBody}
+          </span>
+        </section>
 
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="text-[var(--text-muted)]">Query Palette</span>
-              <div className="flex space-x-1">
-                {queryAlbum.dominantPalette.map((p, idx) => (
-                  <span
-                    key={idx}
-                    className="w-5 h-5 rounded-full border theme-swatch-border inline-block"
-                    style={{ backgroundColor: p.hex }}
-                    title={p.hex}
-                  />
+        <section className="why-match-evidence" aria-label="Visual evidence">
+          <div className="why-match-evidence__heading">
+            <Palette className="h-3.5 w-3.5 theme-info" aria-hidden="true" />
+            <span>Visual evidence</span>
+          </div>
+          <div className="why-match-evidence__palettes">
+            <div className="why-match-evidence__palette-row">
+              <span>Query</span>
+              <div className="why-match-evidence__swatches">
+                {queryAlbum.dominantPalette.slice(0, 5).map((p, idx) => (
+                  <span key={idx} style={{ backgroundColor: p.hex }} title={p.hex} />
                 ))}
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="text-[var(--text-muted)]">Candidate Palette</span>
-              <div className="flex space-x-1">
-                {candidate.dominantPalette.map((p, idx) => (
-                  <span
-                    key={idx}
-                    className="w-5 h-5 rounded-full border theme-swatch-border inline-block"
-                    style={{ backgroundColor: p.hex }}
-                    title={p.hex}
-                  />
+            <div className="why-match-evidence__palette-row">
+              <span>Candidate</span>
+              <div className="why-match-evidence__swatches">
+                {candidate.dominantPalette.slice(0, 5).map((p, idx) => (
+                  <span key={idx} style={{ backgroundColor: p.hex }} title={p.hex} />
                 ))}
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Shared Attributes List */}
-        {result.sharedAttributes.length > 0 && (
-          <div className="why-match-attributes border-t border-[var(--border-color)]">
-            <div className="flex items-center space-x-1.5 text-xs font-mono uppercase text-[var(--text-muted)] mb-3">
-              {isArtStyle ? <Palette className="w-3.5 h-3.5" /> : <Layout className="w-3.5 h-3.5" />}
-              <span>{isMusicRelation ? 'Shared Music Evidence' : 'Shared Visual Qualities'}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {result.sharedAttributes.map((attr, idx) => (
-                <div key={idx} className="p-2 rounded bg-[var(--accent-soft)] text-xs flex justify-between items-center">
-                  <span className="text-[var(--text-muted)]">{attr.name}:</span>
-                  <span className="font-medium text-[var(--text-primary)]">{attr.value}</span>
-                </div>
+          {result.sharedAttributes.length > 0 && (
+            <div className="why-match-evidence__qualities">
+              {result.sharedAttributes.slice(0, 3).map((attr, idx) => (
+                <span key={`${attr.name}-${idx}`}>{attr.value}</span>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </section>
 
           </div>
         </div>
