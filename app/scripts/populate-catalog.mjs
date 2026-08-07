@@ -135,11 +135,11 @@ function isReliableAlbum(album) {
     album &&
     album.visualAnalysisStatus === 'analyzed' &&
     album.embeddingVersion === 'visual-grid-v3' &&
+    album.featureExtractionVersion === 'visual-grid-v3' &&
     typeof album.perceptualHash === 'string' &&
     album.perceptualHash.length > 0 &&
-    Array.isArray(album.embedding) &&
-    album.embedding.length === 512 &&
-    album.embedding.every((value) => Number.isFinite(Number(value))) &&
+    hasReliableStoredEmbedding(album.embedding) &&
+    hasReliableStoredPalette(album.dominantPalette) &&
     colorProfile &&
     ['neutralCoverage', 'chromaticCoverage', 'hueConcentration', 'meanLightness', 'lightnessSpread']
       .every((key) => Number.isFinite(Number(colorProfile[key]))) &&
@@ -161,7 +161,31 @@ function hasReliableStoredEmbedding(value) {
           }
         })()
       : [];
-  return parsed.length === 512 && parsed.every((entry) => Number.isFinite(Number(entry)));
+  if (parsed.length !== 512 || !parsed.every((entry) => Number.isFinite(Number(entry)))) return false;
+  const norm = Math.sqrt(parsed.reduce((sum, entry) => sum + Number(entry) ** 2, 0));
+  return norm >= 0.98 && norm <= 1.02;
+}
+
+function hasReliableStoredPalette(value) {
+  const palette = typeof value === 'string'
+    ? (() => {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return [];
+        }
+      })()
+    : value;
+  if (!Array.isArray(palette) || palette.length === 0) return false;
+  const totalWeight = palette.reduce((sum, color) => (
+    sum + (Number.isFinite(Number(color?.weight)) && Number(color.weight) > 0 ? Number(color.weight) : 0)
+  ), 0);
+  return totalWeight > 0 && palette.every((color) => (
+    /^#[0-9a-f]{6}$/i.test(String(color?.hex || '')) &&
+    Array.isArray(color?.lab) &&
+    color.lab.length === 3 &&
+    color.lab.every((entry) => Number.isFinite(Number(entry)))
+  ));
 }
 
 function hasReliableStoredColorProfile(value) {
@@ -313,9 +337,10 @@ async function getReliableAlbumIds(config) {
   const ids = new Set();
   for (let offset = 0; ; offset += CACHE_PAGE_SIZE) {
     const params = new URLSearchParams({
-      select: 'itunes_collection_id,embedding,visual_features',
+      select: 'itunes_collection_id,embedding,dominant_palette,visual_features',
       visual_analysis_status: 'eq.analyzed',
       embedding_version: 'eq.visual-grid-v3',
+      feature_extraction_version: 'eq.visual-grid-v3',
       perceptual_hash: 'not.is.null',
       embedding: 'not.is.null',
       limit: String(CACHE_PAGE_SIZE),
@@ -325,7 +350,12 @@ async function getReliableAlbumIds(config) {
     const rows = Array.isArray(body) ? body : [];
     for (const row of rows) {
       const id = Number(row.itunes_collection_id);
-      if (Number.isFinite(id) && hasReliableStoredEmbedding(row.embedding) && hasReliableStoredColorProfile(row.visual_features)) ids.add(id);
+      if (
+        Number.isFinite(id) &&
+        hasReliableStoredEmbedding(row.embedding) &&
+        hasReliableStoredPalette(row.dominant_palette) &&
+        hasReliableStoredColorProfile(row.visual_features)
+      ) ids.add(id);
     }
     if (rows.length < CACHE_PAGE_SIZE) break;
   }
