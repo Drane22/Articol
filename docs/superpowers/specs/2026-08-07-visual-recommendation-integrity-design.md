@@ -177,10 +177,24 @@ catalog-related, never as a visual match.
 
 - Cards show the meaningful mode score and calibrated confidence. Music
   Relation displays `music relation`, not `match` or a visual-match claim.
+- The information action is not placed inside a non-interactive artwork overlay.
+  Each recommendation card has a dedicated `Why this match` button outside the
+  artwork link, with a 44px minimum touch target, an information icon, visible
+  text, and `aria-haspopup="dialog"`. In narrow card containers it occupies its
+  own full-width row; in wider cards it can share an action row without reducing
+  its hit area. Save remains the only interactive artwork-corner control, and
+  the match score is display-only. This prevents the info action from competing
+  with the artwork link, score badge, or footer controls on mobile and dense
+  desktop grids.
 - Match explanations expose only components that were actually measured and
   explicitly describe palette, composition, medium, typography, or music
   evidence. No generic visual-mood explanation is fabricated when the signals
   did not qualify.
+- The explanation dialog reserves header space for its close control, uses
+  safe-area-aware mobile padding and internal scrolling, and presents score,
+  confidence, palette, and evidence blocks with non-overlapping spacing. The
+  trigger and dialog both support pointer, keyboard, Escape, focus return, and
+  outside-click close behavior.
 - The card footer is based on the card's available inline width, using a
   container-aware grid. At narrow card widths it stacks a palette/copy row over
   a full-width View button. At wider widths it can place both regions side by
@@ -214,6 +228,9 @@ Unit tests cover:
 UI checks cover card widths corresponding to the two-, three-, four-, and
 six-column grids, plus 320px and 375px mobile widths. The palette/copy controls
 and View action must remain visible, keyboard reachable, and non-overlapping.
+At every width, the `Why this match` control must have a visible 44px target,
+remain outside the artwork navigation target, open its explanation through
+pointer and keyboard activation, and return focus when the dialog closes.
 Run the existing test suite and production build after implementation.
 
 ## Acceptance criteria
@@ -223,4 +240,5 @@ palette conflict cannot appear in Art Style or Balanced even when it shares a
 neutral swatch or spatial layout. A card never reports 100% confidence merely
 because fields exist. Results below 30% calculated confidence are excluded
 before diversity selection, weak tiers are shown honestly, and card controls do
-not clip in dense grids.
+not clip in dense grids. The match-information action remains clearly spaced
+and interactable in desktop and mobile card layouts.
