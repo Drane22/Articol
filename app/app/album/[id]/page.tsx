@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { 
-  ExternalLink, Bookmark, Share2, Sparkles, Sliders, 
-  ArrowLeft, Check, Copy, Disc, Music, ShieldAlert, Info 
+  ExternalLink, Bookmark, Share2,
+  ArrowLeft, Check, Copy, Music, ShieldAlert, Info
 } from 'lucide-react';
 import { Album, RecommendationTiers, SearchMode, SimilarityResult } from '@/lib/types';
 import { AlbumCard } from '@/components/AlbumCard';
@@ -15,6 +15,7 @@ import { RecommendationLoading } from '@/components/RecommendationLoading';
 import { ShareCardModal } from '@/components/ShareCardModal';
 import { useCountry } from '@/components/CountryProvider';
 import { formatStorePrice, getStorefront } from '@/lib/storefronts';
+import { getAbsoluteUrl, getAlbumShareImagePath, getAlbumSharePath } from '@/lib/share';
 
 const EMPTY_TIERS: RecommendationTiers = {
   art_style: [],
@@ -30,14 +31,15 @@ interface RelatedAlbumItem {
 
 export default function AlbumDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { country, ready, setCountry } = useCountry();
 
   const [album, setAlbum] = useState<Album | null>(null);
   const [recommendationTiers, setRecommendationTiers] = useState<RecommendationTiers>(EMPTY_TIERS);
   const [isUnindexed, setIsUnindexed] = useState(false);
+  const [showRelatedFallback, setShowRelatedFallback] = useState(false);
   const [relatedAlbums, setRelatedAlbums] = useState<RelatedAlbumItem[]>([]);
+  const [relatedError, setRelatedError] = useState<string | null>(null);
   const [mode, setMode] = useState<SearchMode>('art_style');
   const [isLoadingAlbum, setIsLoadingAlbum] = useState(true);
   const [isLoadingRecs, setIsLoadingRecs] = useState(true);
@@ -46,9 +48,14 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const [selectedWhyMatch, setSelectedWhyMatch] = useState<SimilarityResult | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareOrigin, setShareOrigin] = useState('');
   const [copiedShare, setCopiedShare] = useState(false);
   const [copiedPalette, setCopiedPalette] = useState(false);
   const [paletteCopyError, setPaletteCopyError] = useState(false);
+
+  useEffect(() => {
+    setShareOrigin(window.location.origin);
+  }, []);
 
   // Fetch selected album detail
   useEffect(() => {
@@ -78,7 +85,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
     return () => controller.abort();
   }, [country, id, ready]);
 
-  // Fetch recommendation tiers or handle unindexed album state
+  // Fetch recommendation tiers or handle unindexed/low-confidence album state
   useEffect(() => {
     if (!album || !ready) return;
 
@@ -86,42 +93,62 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
     setIsLoadingRecs(true);
     setRecommendationError(null);
     setIsUnindexed(false);
+    setShowRelatedFallback(false);
+    setRelatedError(null);
     setRecommendationTiers(EMPTY_TIERS);
     setRelatedAlbums([]);
 
-    fetch(`/api/albums/${id}/similar?country=${country}&limit=18`, { signal: controller.signal })
-      .then(async (res) => {
-        const data = await res.json();
+    const loadRelatedFallback = async (reason: 'unindexed' | 'low-confidence') => {
+      if (reason === 'unindexed') setIsUnindexed(true);
+      else setShowRelatedFallback(true);
+
+      try {
+        const relatedResponse = await fetch(`/api/albums/${id}/related?country=${country}`, { signal: controller.signal });
+        const relatedData = await relatedResponse.json();
+        if (!relatedResponse.ok) throw new Error(relatedData.error || 'Related albums could not be loaded');
+        setRelatedAlbums(relatedData.results || []);
+      } catch (error: any) {
+        if (error?.name === 'AbortError') return;
+        console.error('Failed to load related albums:', error);
+        setRelatedError('Related albums are temporarily unavailable.');
+      } finally {
+        setIsLoadingRecs(false);
+      }
+    };
+
+    const loadRecommendations = async () => {
+      try {
+        const response = await fetch(`/api/albums/${id}/similar?country=${country}&limit=18`, { signal: controller.signal });
+        const data = await response.json();
+
         if (data.status === 'not_indexed') {
-          setIsUnindexed(true);
-          // Fetch metadata-based related albums fallback (Section 4)
-          fetch(`/api/albums/${id}/related?country=${country}`, { signal: controller.signal })
-            .then(r => r.json())
-            .then(relData => {
-              setRelatedAlbums(relData.results || []);
-              setIsLoadingRecs(false);
-            })
-            .catch(() => setIsLoadingRecs(false));
-          return null;
+          await loadRelatedFallback('unindexed');
+          return;
         }
-        if (!res.ok) throw new Error(data.error || 'Recommendations could not be loaded');
-        return data;
-      })
-      .then((data) => {
-        if (!data) return;
+        if (!response.ok) throw new Error(data.error || 'Recommendations could not be loaded');
         if (!data.tiers) throw new Error(data.error || 'Recommendations could not be loaded');
+
         setRecommendationTiers(data.tiers);
         if (data.queryAlbum) {
           setAlbum(current => current ? { ...current, ...data.queryAlbum, tracks: current.tracks } : data.queryAlbum);
         }
+
+        const hasEligibleTier = Object.values(data.tiers as RecommendationTiers).some((tier) => tier.length > 0);
+        if (!hasEligibleTier) {
+          await loadRelatedFallback('low-confidence');
+          return;
+        }
+
         setIsLoadingRecs(false);
-      })
-      .catch((err) => {
-        if (err.name === 'AbortError') return;
-        console.error('Failed to load recommendations:', err);
+      } catch (error: any) {
+        if (error?.name === 'AbortError') return;
+        console.error('Failed to load recommendations:', error);
         setRecommendationError('Recommendations are temporarily unavailable. Please try again.');
         setIsLoadingRecs(false);
-      });
+      }
+    };
+
+    void loadRecommendations();
     return () => controller.abort();
   }, [album?.itunesCollectionId, country, id, ready, recommendationRetry]);
 
@@ -150,9 +177,10 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
     } catch (e) {}
   };
 
-  const shareUrl = typeof window === 'undefined'
-    ? `/album/${id}?country=${country}`
-    : new URL(`/album/${id}?country=${country}`, window.location.origin).toString();
+  const sharePath = getAlbumSharePath(id, country);
+  const shareImagePath = getAlbumShareImagePath(id, country);
+  const shareUrl = shareOrigin ? getAbsoluteUrl(sharePath, shareOrigin) : sharePath;
+  const shareImageUrl = shareOrigin ? getAbsoluteUrl(shareImagePath, shareOrigin) : shareImagePath;
 
   const handleShare = () => {
     setIsShareOpen(true);
@@ -257,7 +285,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
         {/* Back Link */}
         <Link
           href="/"
-          className="inline-flex items-center space-x-1.5 text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+          className="inline-flex min-h-11 items-center space-x-1.5 text-xs font-mono text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to search</span>
@@ -268,7 +296,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
           
           {/* Prominent Square Artwork Display */}
           <div className="md:col-span-5 lg:col-span-5 relative aspect-square rounded-xl overflow-hidden shadow-2xl border border-[var(--border-color)] bg-[var(--bg-card)] group">
-            <CoverArtwork src={album.artworkUrl} alt={`Cover artwork for ${album.title} by ${album.artistName}`} priority sizes="(max-width: 768px) calc(100vw - 2rem), 42vw" className="transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-[1.02]" />
+            <CoverArtwork src={album.artworkUrl} alt={`Cover artwork for ${album.title} by ${album.artistName}`} priority sizes="(max-width: 768px) calc(100vw - 2rem), 42vw" className="transition-transform duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.02]" />
           </div>
 
           {/* Archival Catalog Entry Details */}
@@ -301,7 +329,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                     <div key={idx} className="flex items-center space-x-1">
                       <button
                         type="button"
-                        className="h-6 w-6 rounded-md border theme-swatch-border shadow-sm cursor-pointer transition-transform hover:scale-105"
+                        className="h-11 w-11 cursor-pointer rounded-xl border theme-swatch-border shadow-sm transition-transform duration-[160ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.03]"
                         style={{ backgroundColor: p.hex }}
                         title={`Copy ${p.hex}`}
                         aria-label={`Copy ${p.hex}`}
@@ -316,7 +344,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                   <button
                     type="button"
                     onClick={() => void handleCopyPalette(album.dominantPalette.map((p) => p.hex).join(', '))}
-                    className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md border border-[var(--border-color)] px-2.5 text-[11px] font-mono text-[var(--text-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
+                    className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[var(--border-color)] px-3 text-[11px] font-mono text-[var(--text-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
                   >
                     {copiedPalette ? <Check className="h-3 w-3 theme-success" /> : <Copy className="h-3 w-3" />}
                     <span>{copiedPalette ? 'Copied' : paletteCopyError ? 'Copy failed' : 'Copy palette'}</span>
@@ -373,6 +401,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
               )}
 
               <button
+                type="button"
                 onClick={toggleSave}
                 className={`inline-flex w-full sm:w-auto justify-center items-center space-x-2 px-4 py-3 rounded-lg border text-xs font-medium transition-colors ${
                   isSaved
@@ -385,6 +414,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
               </button>
 
               <button
+                type="button"
                 onClick={handleShare}
                 className="inline-flex w-full sm:w-auto justify-center items-center space-x-2 px-4 py-3 rounded-lg border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--accent-soft)] transition-colors text-xs font-medium"
               >
@@ -397,31 +427,35 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
         </section>
 
         {/* Section 4: Honest Unindexed State or Similar Covers */}
-        {isUnindexed ? (
+        {isUnindexed || showRelatedFallback ? (
           <section className="space-y-8 pt-6 border-t border-[var(--border-color)]">
             <div className="p-6 rounded-xl border theme-warning-surface space-y-3">
               <div className="flex items-center space-x-2 theme-warning font-medium text-sm">
                 <Info className="w-4 h-4" />
-                <span>This album has not been visually indexed yet.</span>
+                <span>{isUnindexed ? 'This album has not been visually indexed yet.' : 'No strong visual matches cleared the 30% confidence threshold.'}</span>
               </div>
               <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                Articol can only compare covers that have already been analyzed and added to its visual catalog.
+                {isUnindexed
+                  ? 'Articol can only compare covers that have already been analyzed and added to its visual catalog.'
+                  : 'Articol is keeping uncertain matches out of the collection. These alternatives are related by catalog metadata, not visual similarity.'}
               </p>
             </div>
 
             {/* Separately Labeled Metadata-based Related Albums (Section 4) */}
             <div className="space-y-6">
               <div>
-                <h2 className="text-2xl font-serif font-normal text-[var(--text-primary)]">
-                  Related albums
-                </h2>
-                <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Metadata-based musical recommendations from iTunes.
-                </p>
-              </div>
+                  <h2 className="text-2xl font-serif font-normal text-[var(--text-primary)]">
+                  {isUnindexed ? 'Related albums' : 'Other ways to explore'}
+                  </h2>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
+                  Metadata-based album references from the catalog.
+                  </p>
+                </div>
 
               {isLoadingRecs ? (
                 <RecommendationLoading />
+              ) : relatedError ? (
+                <p className="text-xs theme-danger" role="alert">{relatedError}</p>
               ) : relatedAlbums.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)]">No related albums available.</p>
               ) : (
@@ -450,8 +484,9 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
               {/* 3 User-Selectable Search Mode Selector Pills */}
               <div className="grid grid-cols-3 w-full md:w-auto items-center gap-1 p-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[10px] sm:text-xs">
                 <button
+                  type="button"
                   onClick={() => setMode('art_style')}
-                  className={`min-w-0 px-1.5 sm:px-3 py-2 rounded-md transition-all font-medium whitespace-nowrap ${
+                  className={`min-h-11 min-w-0 rounded-full px-1.5 py-2 font-medium whitespace-nowrap transition-colors ${
                     mode === 'art_style'
                       ? 'bg-[var(--accent-editorial)] text-[var(--bg-canvas)] shadow-sm'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -461,19 +496,21 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                   Art Style
                 </button>
                 <button
+                  type="button"
                   onClick={() => setMode('balanced')}
-                  className={`min-w-0 px-1.5 sm:px-3 py-2 rounded-md transition-all font-medium whitespace-nowrap ${
+                  className={`min-h-11 min-w-0 rounded-full px-1.5 py-2 font-medium whitespace-nowrap transition-colors ${
                     mode === 'balanced'
                       ? 'bg-[var(--accent-editorial)] text-[var(--bg-canvas)] shadow-sm'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
-                  title="60% artwork similarity and 40% music relationship"
+                  title="70% artwork similarity and 30% music relationship"
                 >
                   Balanced
                 </button>
                 <button
+                  type="button"
                   onClick={() => setMode('music_relation')}
-                  className={`min-w-0 px-1.5 sm:px-3 py-2 rounded-md transition-all font-medium whitespace-nowrap ${
+                  className={`min-h-11 min-w-0 rounded-full px-1.5 py-2 font-medium whitespace-nowrap transition-colors ${
                     mode === 'music_relation'
                       ? 'bg-[var(--accent-editorial)] text-[var(--bg-canvas)] shadow-sm'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -491,7 +528,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             ) : recommendationError ? (
               <div className="text-center py-16 border border-dashed border-[var(--border-color)] rounded-xl space-y-3">
                 <p className="text-sm text-[var(--text-muted)]">{recommendationError}</p>
-                <button onClick={() => setRecommendationRetry((value) => value + 1)} className="text-xs font-mono px-3 py-2 rounded-md hover:bg-[var(--accent-soft)]">Try again</button>
+                <button type="button" onClick={() => setRecommendationRetry((value) => value + 1)} className="inline-flex min-h-11 items-center rounded-full px-4 text-xs font-mono hover:bg-[var(--accent-soft)]">Try again</button>
               </div>
             ) : recommendations.length === 0 ? (
               <div className="text-center py-16 border border-dashed border-[var(--border-color)] rounded-xl space-y-3">
@@ -531,6 +568,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
           <ShareCardModal
             album={album}
             shareUrl={shareUrl}
+            shareImageUrl={shareImageUrl}
             copied={copiedShare}
             onCopyLink={handleCopyShare}
             onClose={() => setIsShareOpen(false)}

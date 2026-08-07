@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { normalizeStorefront } from '@/lib/storefronts';
+import { getAbsoluteUrl, getAlbumShareImagePath, getAlbumSharePath } from '@/lib/share';
 
 export async function generateMetadata({
   params,
@@ -28,8 +29,8 @@ export async function generateMetadata({
 
   const pageTitle = `${title} — ${artist}`;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://articol-lime.vercel.app';
-  const imageUrl = new URL(`/album/${id}/opengraph-image?country=${country}`, siteUrl).toString();
-  const pageUrl = new URL(`/album/${id}?country=${country}`, siteUrl).toString();
+  const imageUrl = getAbsoluteUrl(getAlbumShareImagePath(id, country), siteUrl);
+  const pageUrl = getAbsoluteUrl(getAlbumSharePath(id, country), siteUrl);
 
   return {
     title: pageTitle,
