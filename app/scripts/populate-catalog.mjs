@@ -463,7 +463,7 @@ async function indexAlbums(options, state, config) {
 
   const finalIds = await getReliableAlbumIds(config);
   if (finalIds.size < options.targetAlbums) {
-    throw new Error(`Indexed ${finalIds.size} reliable albums; need ${options.targetAlbums}. Increase discovery terms or rerun with the checkpoint.`);
+    console.warn(`Indexed ${finalIds.size} reliable albums; target is ${options.targetAlbums}. Continuing with the reliable set so similarity-cache requests can run.`);
   }
   state.indexedIds = Array.from(finalIds);
   return finalIds;
@@ -535,7 +535,13 @@ async function main() {
     const cacheCount = await populateSimilarityCache(options, state, config, reliableIds);
     const finalReliableIds = await getReliableAlbumIds(config);
     if (finalReliableIds.size < options.targetAlbums || cacheCount < options.targetCache) {
-      throw new Error('Final table verification did not meet both requested targets.');
+      const missingAlbums = Math.max(0, options.targetAlbums - finalReliableIds.size);
+      const missingCacheRows = Math.max(0, options.targetCache - cacheCount);
+      throw new Error(
+        `Population incomplete: ${finalReliableIds.size}/${options.targetAlbums} reliable albums and ` +
+        `${cacheCount}/${options.targetCache} similarity-cache rows. ` +
+        `${missingAlbums} albums and ${missingCacheRows} cache rows remain; rerun with the checkpoint.`,
+      );
     }
     completed = true;
     console.log(`Completed table-only population: ${finalReliableIds.size} reliable albums and ${cacheCount} similarity-cache rows.`);
