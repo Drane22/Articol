@@ -312,6 +312,62 @@
   transition: opacity 260ms var(--motion-enter), transform 260ms var(--motion-enter);
 }
 
+.why-match-dialog {
+  width: min(100%, 52rem);
+  max-height: min(92dvh, 60rem);
+}
+
+.why-match-dialog__scroll {
+  max-height: inherit;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.why-match-dialog__content {
+  position: relative;
+  padding: 4.75rem clamp(1.25rem, 4vw, 2.5rem) max(1.5rem, calc(1rem + env(safe-area-inset-bottom)));
+}
+
+.why-match-dialog__close {
+  position: absolute;
+  top: 1.25rem;
+  right: clamp(1rem, 3vw, 2rem);
+  z-index: 1;
+}
+
+.why-match-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  margin-bottom: 1.75rem;
+}
+
+.why-match-comparison__item {
+  min-width: 0;
+  padding: clamp(0.75rem, 2.4vw, 1.25rem);
+  border: 1px solid var(--border-color);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--accent-soft) 72%, transparent);
+}
+
+.why-match-comparison__cover {
+  position: relative;
+  width: min(100%, 12rem);
+  aspect-ratio: 1;
+  margin: 0 auto 0.9rem;
+  overflow: hidden;
+  border-radius: 0.95rem;
+  background: var(--accent-soft);
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--bg-canvas) 24%, transparent), inset 0 1px 1px rgba(255, 255, 255, 0.14);
+}
+
+.why-match-comparison__meta {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
 @starting-style {
   .share-dialog-panel {
     opacity: 0;
@@ -353,15 +409,35 @@
 
 @media (max-width: 640px) {
   .share-dialog-backdrop {
-    align-items: flex-end;
-    padding: 0.5rem;
+    align-items: center;
+    padding: 0.75rem;
   }
 
   .share-dialog-panel {
     width: 100%;
-    max-height: calc(100dvh - 0.75rem);
-    border-radius: 2rem 2rem 1.25rem 1.25rem;
+    max-height: calc(100dvh - 1.5rem);
+    border-radius: 1.5rem;
     transform: translateY(0);
+  }
+
+  .why-match-dialog__content {
+    padding: 4.5rem 1rem max(1.25rem, calc(0.85rem + env(safe-area-inset-bottom)));
+  }
+
+  .why-match-dialog__close {
+    top: 1rem;
+    right: 0.75rem;
+  }
+
+  .why-match-comparison__item {
+    padding: 0.65rem;
+    border-radius: 1rem;
+  }
+
+  .why-match-comparison__cover {
+    width: 100%;
+    margin-bottom: 0.7rem;
+    border-radius: 0.75rem;
   }
 
   @starting-style {

@@ -66,15 +66,16 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         if (event.target === event.currentTarget) onCloseRef.current();
       }}
     >
-      <div className="share-dialog-panel relative max-w-2xl">
-        <div className="max-h-[calc(100dvh-1rem)] overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:max-h-[calc(100dvh-5rem)] sm:p-6">
+      <div className="share-dialog-panel why-match-dialog">
+        <div className="why-match-dialog__scroll">
+          <div className="why-match-dialog__content">
         
         {/* Close Button */}
         <button
           type="button"
           onClick={onClose}
           ref={closeButtonRef}
-          className="icon-button icon-button--quiet absolute right-3 top-3"
+          className="icon-button icon-button--quiet why-match-dialog__close"
           aria-label="Close modal"
         >
           <X className="h-5 w-5" />
@@ -91,26 +92,26 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         </h3>
 
         {/* Album Comparison Header */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 sm:p-4 rounded-lg bg-[var(--accent-soft)] border border-[var(--border-color)] mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="relative w-14 h-14 rounded overflow-hidden flex-shrink-0">
-              <CoverArtwork src={queryAlbum.artworkUrl} alt={queryAlbum.title} sizes="56px" />
+        <div className="why-match-comparison">
+          <div className="why-match-comparison__item">
+            <div className="why-match-comparison__cover">
+              <CoverArtwork src={queryAlbum.artworkUrl} alt={queryAlbum.title} sizes="(max-width: 640px) 42vw, 12rem" />
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase block">Query Artwork</span>
-              <p className="text-xs font-semibold truncate text-[var(--text-primary)]">{queryAlbum.title}</p>
-              <p className="text-[11px] truncate text-[var(--text-muted)]">{queryAlbum.artistName}</p>
+            <div className="why-match-comparison__meta">
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">Query artwork</span>
+              <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{queryAlbum.title}</p>
+              <p className="text-xs truncate text-[var(--text-muted)]">{queryAlbum.artistName}</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3 border-t sm:border-t-0 sm:border-l border-[var(--border-color)] pt-3 sm:pt-0 sm:pl-4">
-            <div className="relative w-14 h-14 rounded overflow-hidden flex-shrink-0">
-              <CoverArtwork src={candidate.artworkUrl} alt={candidate.title} sizes="56px" />
+          <div className="why-match-comparison__item">
+            <div className="why-match-comparison__cover">
+              <CoverArtwork src={candidate.artworkUrl} alt={candidate.title} sizes="(max-width: 640px) 42vw, 12rem" />
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase block">Matched Candidate</span>
-              <p className="text-xs font-semibold truncate text-[var(--text-primary)]">{candidate.title}</p>
-              <p className="text-[11px] truncate text-[var(--text-muted)]">{candidate.artistName}</p>
+            <div className="why-match-comparison__meta">
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">Matched candidate</span>
+              <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{candidate.title}</p>
+              <p className="text-xs truncate text-[var(--text-muted)]">{candidate.artistName}</p>
             </div>
           </div>
         </div>
@@ -227,6 +228,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           </div>
         )}
 
+          </div>
         </div>
       </div>
     </div>
