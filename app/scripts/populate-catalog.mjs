@@ -91,12 +91,13 @@ async function loadEnvFile(filePath) {
 }
 
 function buildOptions(args) {
-  const targetAlbums = numberOption(args, 'target-albums', 2000, 1, MAX_ALBUM_TARGET);
-  const targetCache = numberOption(args, 'target-cache', 5000, 1, MAX_CACHE_TARGET);
-  const country = String(args.country || DEFAULT_COUNTRY).toUpperCase();
-  const baseUrl = String(args['base-url'] || process.env.ARTICOL_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
+  const npmOption = (key) => process.env[`npm_config_${key.replaceAll('-', '_')}`];
+  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? 2000, 1, MAX_ALBUM_TARGET);
+  const targetCache = numberOption(args, 'target-cache', npmOption('target-cache') ?? 5000, 1, MAX_CACHE_TARGET);
+  const country = String(args.country || npmOption('country') || DEFAULT_COUNTRY).toUpperCase();
+  const baseUrl = String(args['base-url'] || npmOption('base-url') || process.env.ARTICOL_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
   const statePath = path.resolve(
-    String(args['state-path'] || process.env.ARTICOL_POPULATE_STATE || path.join(os.tmpdir(), `articol-catalog-populate-${country}.json`)),
+    String(args['state-path'] || npmOption('state-path') || process.env.ARTICOL_POPULATE_STATE || path.join(os.tmpdir(), `articol-catalog-populate-${country}.json`)),
   );
 
   return {
@@ -108,7 +109,7 @@ function buildOptions(args) {
     lockPath: `${statePath}.lock`,
     discoveryDelayMs: numberOption(args, 'discovery-delay-ms', DEFAULT_DISCOVERY_DELAY_MS, 3000, 60_000),
     requestDelayMs: numberOption(args, 'request-delay-ms', DEFAULT_REQUEST_DELAY_MS, 0, 10_000),
-    reset: args.reset === true,
+    reset: args.reset === true || String(npmOption('reset')).toLowerCase() === 'true',
   };
 }
 
@@ -327,12 +328,6 @@ async function supabaseRequest(config, route, init = {}) {
   return requestJson(`${config.url}${route}`, { ...init, headers });
 }
 
-function parseTotalCount(headers) {
-  const contentRange = headers.get('content-range') || '';
-  const match = contentRange.match(/\/(\d+)$/);
-  return match ? Number(match[1]) : null;
-}
-
 async function getReliableAlbumIds(config) {
   const ids = new Set();
   for (let offset = 0; ; offset += CACHE_PAGE_SIZE) {
@@ -362,14 +357,32 @@ async function getReliableAlbumIds(config) {
   return ids;
 }
 
-async function getCacheCount(config) {
-  const params = new URLSearchParams({
-    select: 'source_album_id',
-    scoring_version: `eq.${ALGORITHM_VERSION}`,
-    limit: '1',
-  });
-  const response = await supabaseRequest(config, `/rest/v1/album_similarity_cache?${params}`);
-  return parseTotalCount(response.headers) ?? (Array.isArray(response.body) ? response.body.length : 0);
+async function getCacheStats(config, reliableIds) {
+  const allowedIds = new Set(reliableIds);
+  if (allowedIds.size === 0) return { count: 0, sourceIds: new Set() };
+
+  let count = 0;
+  const sourceIds = new Set();
+  for (let offset = 0; ; offset += CACHE_PAGE_SIZE) {
+    const params = new URLSearchParams({
+      select: 'source_album_id,candidate_album_id',
+      scoring_version: `eq.${ALGORITHM_VERSION}`,
+      limit: String(CACHE_PAGE_SIZE),
+      offset: String(offset),
+    });
+    const { body } = await supabaseRequest(config, `/rest/v1/album_similarity_cache?${params}`);
+    const rows = Array.isArray(body) ? body : [];
+    for (const row of rows) {
+      const sourceId = Number(row.source_album_id);
+      const candidateId = Number(row.candidate_album_id);
+      if (allowedIds.has(sourceId) && allowedIds.has(candidateId)) {
+        count += 1;
+        sourceIds.add(sourceId);
+      }
+    }
+    if (rows.length < CACHE_PAGE_SIZE) break;
+  }
+  return { count, sourceIds };
 }
 
 async function discoverAlbums(options, state) {
@@ -415,7 +428,9 @@ async function discoverAlbums(options, state) {
 
 async function indexAlbums(options, state, config) {
   const remoteIds = await getReliableAlbumIds(config);
-  const indexed = new Set([...state.indexedIds, ...remoteIds]);
+  // The database is authoritative. Checkpoint IDs can outlive a dropped or
+  // rebuilt albums table and must never inflate the reliable count.
+  const indexed = new Set(remoteIds);
   const failed = new Set(state.failedIds);
   state.indexedIds = Array.from(indexed);
   state.phase = 'index';
@@ -470,11 +485,12 @@ async function indexAlbums(options, state, config) {
 }
 
 async function populateSimilarityCache(options, state, config, reliableIds) {
-  let cacheCount = await getCacheCount(config);
+  let cacheStats = await getCacheStats(config, reliableIds);
+  let cacheCount = cacheStats.count;
   console.log(`Similarity cache rows: ${cacheCount}/${options.targetCache}`);
   if (cacheCount >= options.targetCache) return cacheCount;
 
-  const completedSources = new Set(state.cacheSourceIds);
+  const completedSources = cacheStats.sourceIds;
   state.phase = 'similarity';
   await writeState(options, state);
 
@@ -494,7 +510,8 @@ async function populateSimilarityCache(options, state, config, reliableIds) {
       const tierCount = ['art_style', 'balanced', 'music_relation']
         .map((mode) => Array.isArray(body?.tiers?.[mode]) ? body.tiers[mode].length : 0)
         .reduce((sum, count) => sum + count, 0);
-      cacheCount = await getCacheCount(config);
+      cacheStats = await getCacheStats(config, reliableIds);
+      cacheCount = cacheStats.count;
       console.log(`  cached ${id}: ${tierCount} candidate rows; table total ${cacheCount}/${options.targetCache}`);
     } catch (error) {
       if (error instanceof HttpError && error.status === 401) {
@@ -506,7 +523,7 @@ async function populateSimilarityCache(options, state, config, reliableIds) {
     await sleep(options.requestDelayMs);
   }
 
-  cacheCount = await getCacheCount(config);
+  cacheCount = (await getCacheStats(config, reliableIds)).count;
   if (cacheCount < options.targetCache) {
     throw new Error(`Generated ${cacheCount} similarity-cache rows; need ${options.targetCache}. Rerun to continue from the checkpoint.`);
   }
