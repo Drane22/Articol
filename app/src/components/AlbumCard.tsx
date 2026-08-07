@@ -4,12 +4,13 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Info, ArrowRight, Bookmark, Check, Copy } from 'lucide-react';
-import { Album, SimilarityResult } from '../lib/types';
+import { Album, SearchMode, SimilarityResult } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
 
 interface AlbumCardProps {
   album: Album;
   similarity?: SimilarityResult;
+  mode?: SearchMode;
   onWhyMatchClick?: (result: SimilarityResult) => void;
   showExploreButton?: boolean;
 }
@@ -17,6 +18,7 @@ interface AlbumCardProps {
 export const AlbumCard: React.FC<AlbumCardProps> = ({
   album,
   similarity,
+  mode,
   onWhyMatchClick,
   showExploreButton = true,
 }) => {
@@ -25,6 +27,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
   const [copiedPalette, setCopiedPalette] = useState(false);
   const matchPercentage = similarity ? Math.round(similarity.finalScore * 100) : null;
   const confidencePercentage = similarity ? Math.round(similarity.finalConfidence * 100) : null;
+  const scoreLabel = mode === 'music_relation' ? 'music relation' : 'visual match';
 
   useEffect(() => {
     try {
@@ -71,7 +74,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
   };
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-color)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 focus-within:ring-[var(--text-muted)]/60">
+    <article className="album-card group flex flex-col overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-color)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 focus-within:ring-[var(--text-muted)]/60">
       <div className="relative aspect-square w-full overflow-hidden bg-[var(--accent-soft)]">
         <Link
           href={`/album/${album.itunesCollectionId}`}
@@ -86,29 +89,11 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
           />
         </Link>
 
-        {/* Overlay Actions and Match Score */}
-        <div className="pointer-events-none absolute inset-0 z-20">
-          {similarity && onWhyMatchClick && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onWhyMatchClick(similarity);
-              }}
-              className="card-icon-button pointer-events-auto absolute right-3 top-3 bg-black/70 text-white hover:bg-black/90"
-              title={`Why ${album.title} is a match`}
-              aria-label={`Why ${album.title} is a match`}
-            >
-              <Info className="h-4 w-4 theme-info" strokeWidth={1.6} />
-            </button>
-          )}
-          {matchPercentage !== null && (
-            <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] truncate rounded-full bg-black/75 px-2.5 py-1 text-[10px] font-mono text-white">
-              {matchPercentage}% match{confidencePercentage !== null && <span className="text-white/55"> · {confidencePercentage}% trusted</span>}
-            </span>
-          )}
-        </div>
+        {matchPercentage !== null && (
+          <span className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[calc(100%-1.5rem)] truncate rounded-full bg-black/75 px-2.5 py-1 text-[10px] font-mono text-white">
+            {matchPercentage}% {scoreLabel}{confidencePercentage !== null && <span className="text-white/60"> · {confidencePercentage}% confidence</span>}
+          </span>
+        )}
 
         <button
           type="button"
@@ -154,11 +139,23 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
           </div>
         ) : null}
 
-        {/* Clean Non-Overlapping Footer */}
-        <div className="flex flex-col gap-2 border-t border-[var(--border-color)]/30 pt-3 sm:flex-row sm:items-center sm:justify-between">
+        {similarity && onWhyMatchClick ? (
+          <button
+            type="button"
+            onClick={() => onWhyMatchClick(similarity)}
+            className="match-details-button"
+            aria-haspopup="dialog"
+            aria-label={`Why ${album.title} is a ${scoreLabel}`}
+          >
+            <Info className="h-4 w-4 theme-info" strokeWidth={1.8} aria-hidden="true" />
+            <span>Why this {mode === 'music_relation' ? 'relation' : 'match'}</span>
+          </button>
+        ) : null}
+
+        <div className="card-footer border-t border-[var(--border-color)]/30 pt-3">
           {album.dominantPalette?.length ? (
-            <div className="flex min-h-11 items-center justify-between gap-2" aria-label="Extracted cover palette">
-              <div className="flex items-center gap-1.5">
+            <div className="card-palette" aria-label="Extracted cover palette">
+              <div className="card-palette__swatches">
                 {album.dominantPalette.slice(0, 5).map((color, index) => (
                   <span
                     key={index}
@@ -183,7 +180,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
               </button>
             </div>
           ) : (
-            <span />
+            <span className="hidden" />
           )}
 
           {showExploreButton && (

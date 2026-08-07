@@ -153,6 +153,12 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   }, [album?.itunesCollectionId, country, id, ready, recommendationRetry]);
 
   const recommendations = recommendationTiers[mode];
+  const recommendationHeading = mode === 'music_relation' ? 'Musically Related Albums' : 'More Like This Cover';
+  const recommendationDescription = mode === 'art_style'
+    ? 'Covers connected by verified color language, composition, medium, typography, and texture.'
+    : mode === 'balanced'
+      ? 'Albums connected by a verified visual relationship and music context.'
+      : 'Albums connected by artist, genre/style, and release-era evidence. Artwork is shown for context.';
 
   const checkIsSaved = (colId: number) => {
     try {
@@ -474,10 +480,10 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
                 <h2 className="text-2xl sm:text-3xl font-serif font-normal text-[var(--text-primary)]">
-                  More Like This Cover
+                  {recommendationHeading}
                 </h2>
                 <p className="text-xs sm:text-sm text-[var(--text-muted)] font-sans mt-1">
-                  Albums connected by composition, color, typography, texture, and overall visual mood.
+                  {recommendationDescription}
                 </p>
               </div>
 
@@ -491,7 +497,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                       ? 'bg-[var(--accent-editorial)] text-[var(--bg-canvas)] shadow-sm'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
-                  title="Ranked using artwork similarity only"
+                  title="Ranked using verified palette, composition, medium, and typography evidence"
                 >
                   Art Style
                 </button>
@@ -503,7 +509,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                       ? 'bg-[var(--accent-editorial)] text-[var(--bg-canvas)] shadow-sm'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
-                  title="70% artwork similarity and 30% music relationship"
+                  title="70% verified artwork relationship and 30% music relationship"
                 >
                   Balanced
                 </button>
@@ -515,7 +521,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                       ? 'bg-[var(--accent-editorial)] text-[var(--bg-canvas)] shadow-sm'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
-                  title="Ranked using music relationship only"
+                  title="Ranked using artist, genre/style, and release-era evidence; artwork is contextual"
                 >
                   Music Relation
                 </button>
@@ -533,7 +539,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             ) : recommendations.length === 0 ? (
               <div className="text-center py-16 border border-dashed border-[var(--border-color)] rounded-xl space-y-3">
                 <p className="text-sm text-[var(--text-muted)]">
-                  No visual matches found in current candidate pool.
+                  {mode === 'music_relation' ? 'No music relationships found in the current candidate pool.' : 'No strong visual matches found in the current candidate pool.'}
                 </p>
                 <p className="text-xs text-[var(--text-muted)]">
                   Try switching modes or exploring other record covers.
@@ -546,6 +552,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                     key={rec.album.itunesCollectionId}
                     album={rec.album}
                     similarity={rec}
+                    mode={mode}
                     onWhyMatchClick={setSelectedWhyMatch}
                   />
                 ))}

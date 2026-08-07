@@ -19,14 +19,15 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
   onClose,
 }) => {
   const candidate = result.album;
-  const isPaletteOnly = mode === 'art_style';
+  const isArtStyle = mode === 'art_style';
+  const isMusicRelation = mode === 'music_relation';
   const matchPct = Math.round(result.finalScore * 100);
   const visualPct = Math.round((result.visualScore ?? 0) * 100);
   const musicPct = Math.round((result.musicScore ?? 0) * 100);
   const confidencePct = Math.round(result.finalConfidence * 100);
-  const rankingSummary = isPaletteOnly
-    ? 'Ranked only with the full dominant-color distribution. Music, artist, layout, typography, and embeddings are excluded.'
-    : mode === 'music_relation'
+  const rankingSummary = isArtStyle
+    ? 'Ranked from verified palette compatibility, artwork structure, medium, composition, and typography. Music metadata is excluded.'
+    : isMusicRelation
       ? 'Ranked using artist, genre, and release-era relationships. Artwork is shown for context.'
       : 'Ranked using visual structure, color, typography, texture, and music context.';
 
@@ -66,7 +67,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
       }}
     >
       <div className="share-dialog-panel relative max-w-2xl">
-        <div className="max-h-[calc(100dvh-5rem)] overflow-y-auto p-4 sm:p-6">
+        <div className="max-h-[calc(100dvh-1rem)] overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:max-h-[calc(100dvh-5rem)] sm:p-6">
         
         {/* Close Button */}
         <button
@@ -80,13 +81,13 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         </button>
 
         {/* Modal Header */}
-        <div className="flex items-center space-x-2 text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">
+        <div className="flex items-center space-x-2 pr-12 text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">
           <Sparkles className="w-4 h-4 theme-warning" />
-          <span>Visual Match Explanation</span>
+          <span>{isMusicRelation ? 'Music Relation Explanation' : 'Visual Match Explanation'}</span>
         </div>
 
-        <h3 id="why-match-title" className="text-xl font-serif font-medium text-[var(--text-primary)] mb-4">
-          Why these covers were matched
+        <h3 id="why-match-title" className="pr-12 text-xl font-serif font-medium text-[var(--text-primary)] mb-4">
+          {isMusicRelation ? 'Why these albums are related' : 'Why these covers were matched'}
         </h3>
 
         {/* Album Comparison Header */}
@@ -128,7 +129,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             <div className="flex justify-between text-xs font-medium mb-1">
               <span className="flex items-center space-x-1.5">
                 <Sliders className="w-3.5 h-3.5 theme-info" />
-                <span>{isPaletteOnly ? 'Palette Similarity' : 'Total Combined Similarity'}</span>
+                <span>{isMusicRelation ? 'Music relationship' : isArtStyle ? 'Visual-style similarity' : 'Balanced relationship'}</span>
               </span>
               <span className="font-mono theme-info font-bold">{matchPct}% Match</span>
             </div>
@@ -147,7 +148,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             </div>
           </div>
 
-          {!isPaletteOnly && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {mode === 'balanced' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <div className="flex justify-between text-xs mb-1 text-[var(--text-muted)]">
                 <span>Visual Score</span>
@@ -174,7 +175,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         <div className="space-y-3 pt-2 border-t border-[var(--border-color)]">
           <div className="flex items-center space-x-1.5 text-xs font-mono uppercase text-[var(--text-muted)]">
             <Palette className="w-3.5 h-3.5" />
-            <span>Palette Comparison</span>
+            <span>{isMusicRelation ? 'Artwork palettes (context)' : 'Palette comparison'}</span>
           </div>
 
           <div className="space-y-2">
@@ -212,8 +213,8 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
         {result.sharedAttributes.length > 0 && (
           <div className="mt-6 pt-4 border-t border-[var(--border-color)]">
             <div className="flex items-center space-x-1.5 text-xs font-mono uppercase text-[var(--text-muted)] mb-3">
-              {isPaletteOnly ? <Palette className="w-3.5 h-3.5" /> : <Layout className="w-3.5 h-3.5" />}
-              <span>Shared Visual Qualities</span>
+              {isArtStyle ? <Palette className="w-3.5 h-3.5" /> : <Layout className="w-3.5 h-3.5" />}
+              <span>{isMusicRelation ? 'Shared Music Evidence' : 'Shared Visual Qualities'}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {result.sharedAttributes.map((attr, idx) => (
