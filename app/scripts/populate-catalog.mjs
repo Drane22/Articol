@@ -1,0 +1,494 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ALGORITHM_VERSION = 'articol-v5-confidence-gate';
+const DEFAULT_COUNTRY = 'PH';
+const DEFAULT_BASE_URL = 'http://localhost:3000';
+const DEFAULT_DISCOVERY_DELAY_MS = 3500;
+const DEFAULT_REQUEST_DELAY_MS = 250;
+const REQUEST_TIMEOUT_MS = 90_000;
+const MAX_ALBUM_TARGET = 2500;
+const MAX_CACHE_TARGET = 10_000;
+const DISCOVERY_BUFFER = 1.3;
+const DISCOVERY_PAGE_SIZE = 200;
+const CACHE_PAGE_SIZE = 1000;
+let interrupted = false;
+
+const DISCOVERY_TERMS = [
+  'rock', 'pop', 'hip hop', 'jazz', 'classical', 'electronic', 'r&b',
+  'soul', 'metal', 'punk', 'indie', 'alternative', 'folk', 'country',
+  'reggae', 'blues', 'ambient', 'soundtrack', 'world music', 'latin',
+  'k-pop', 'gospel', 'opera', 'experimental', 'singer songwriter', 'lo-fi',
+  'house', 'techno', 'disco', 'funk', 'grunge', 'hardcore',
+];
+
+class HttpError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
+function parseArgs(argv) {
+  const result = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (!token.startsWith('--')) continue;
+    const [rawKey, inlineValue] = token.slice(2).split('=', 2);
+    if (inlineValue !== undefined) {
+      result[rawKey] = inlineValue;
+      continue;
+    }
+    const next = argv[index + 1];
+    if (next && !next.startsWith('--')) {
+      result[rawKey] = next;
+      index += 1;
+    } else {
+      result[rawKey] = true;
+    }
+  }
+  return result;
+}
+
+function numberOption(args, key, fallback, minimum, maximum) {
+  const candidate = Number(args[key] ?? fallback);
+  if (!Number.isFinite(candidate)) return fallback;
+  return Math.min(Math.max(Math.floor(candidate), minimum), maximum);
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function throwIfInterrupted() {
+  if (interrupted) throw new Error('Population interrupted; the checkpoint was retained for resume.');
+}
+
+async function loadEnvFile(filePath) {
+  try {
+    const source = await fs.readFile(filePath, 'utf8');
+    for (const line of source.split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!match || match[1] in process.env) continue;
+      let value = match[2];
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      process.env[match[1]] = value;
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+}
+
+function buildOptions(args) {
+  const targetAlbums = numberOption(args, 'target-albums', 2000, 1, MAX_ALBUM_TARGET);
+  const targetCache = numberOption(args, 'target-cache', 5000, 1, MAX_CACHE_TARGET);
+  const country = String(args.country || DEFAULT_COUNTRY).toUpperCase();
+  const baseUrl = String(args['base-url'] || process.env.ARTICOL_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
+  const statePath = path.resolve(
+    String(args['state-path'] || process.env.ARTICOL_POPULATE_STATE || path.join(os.tmpdir(), `articol-catalog-populate-${country}.json`)),
+  );
+
+  return {
+    targetAlbums,
+    targetCache,
+    country,
+    baseUrl,
+    statePath,
+    lockPath: `${statePath}.lock`,
+    discoveryDelayMs: numberOption(args, 'discovery-delay-ms', DEFAULT_DISCOVERY_DELAY_MS, 3000, 60_000),
+    requestDelayMs: numberOption(args, 'request-delay-ms', DEFAULT_REQUEST_DELAY_MS, 0, 10_000),
+    reset: args.reset === true,
+  };
+}
+
+function assertLocalBaseUrl(baseUrl) {
+  const parsed = new URL(baseUrl);
+  const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+  if (!localHosts.has(parsed.hostname)) {
+    throw new Error(`Refusing remote base URL ${baseUrl}. Run the worker against local Next.js.`);
+  }
+}
+
+function getSupabaseConfig() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!url || !key) {
+    throw new Error('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) before running the worker.');
+  }
+  return { url, key };
+}
+
+function isReliableAlbum(album) {
+  return Boolean(
+    album &&
+    album.visualAnalysisStatus === 'analyzed' &&
+    album.embeddingVersion === 'visual-grid-v2' &&
+    typeof album.perceptualHash === 'string' &&
+    album.perceptualHash.length > 0 &&
+    Array.isArray(album.embedding) &&
+    album.embedding.length === 512 &&
+    album.embedding.every((value) => Number.isFinite(Number(value))),
+  );
+}
+
+function hasReliableStoredEmbedding(value) {
+  const parsed = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(value);
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+  return parsed.length === 512 && parsed.every((entry) => Number.isFinite(Number(entry)));
+}
+
+function defaultState(options) {
+  return {
+    version: 1,
+    country: options.country,
+    targetAlbums: options.targetAlbums,
+    targetCache: options.targetCache,
+    discoveryIndex: 0,
+    discoveredIds: [],
+    indexedIds: [],
+    failedIds: [],
+    attempts: {},
+    cacheSourceIds: [],
+    phase: 'discover',
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function normalizeState(state, options) {
+  if (!state || state.version !== 1) return defaultState(options);
+  if (state.country !== options.country || state.targetAlbums !== options.targetAlbums || state.targetCache !== options.targetCache) {
+    throw new Error(`Checkpoint ${options.statePath} belongs to different targets/country. Use --reset to start a new run.`);
+  }
+  return {
+    ...defaultState(options),
+    ...state,
+    discoveredIds: Array.from(new Set((state.discoveredIds || []).map(Number).filter(Number.isFinite))),
+    indexedIds: Array.from(new Set((state.indexedIds || []).map(Number).filter(Number.isFinite))),
+    failedIds: Array.from(new Set((state.failedIds || []).map(Number).filter(Number.isFinite))),
+    cacheSourceIds: Array.from(new Set((state.cacheSourceIds || []).map(Number).filter(Number.isFinite))),
+    attempts: state.attempts && typeof state.attempts === 'object' ? state.attempts : {},
+  };
+}
+
+async function readState(options) {
+  if (options.reset) {
+    await fs.rm(options.statePath, { force: true });
+    return defaultState(options);
+  }
+  try {
+    const state = JSON.parse(await fs.readFile(options.statePath, 'utf8'));
+    return normalizeState(state, options);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return defaultState(options);
+    if (error instanceof SyntaxError) throw new Error(`Checkpoint ${options.statePath} is invalid. Use --reset to discard it.`);
+    throw error;
+  }
+}
+
+async function writeState(options, state) {
+  state.updatedAt = new Date().toISOString();
+  await fs.mkdir(path.dirname(options.statePath), { recursive: true });
+  const temporaryPath = `${options.statePath}.${process.pid}.tmp`;
+  await fs.writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  await fs.rename(temporaryPath, options.statePath);
+}
+
+async function acquireLock(options) {
+  try {
+    await fs.mkdir(path.dirname(options.lockPath), { recursive: true });
+    const handle = await fs.open(options.lockPath, 'wx');
+    await handle.writeFile(`${process.pid}\n`, 'utf8');
+    await handle.close();
+  } catch (error) {
+    if (error?.code === 'EEXIST') throw new Error(`Another catalog population process is using ${options.lockPath}.`);
+    throw error;
+  }
+}
+
+async function releaseLock(options) {
+  await fs.rm(options.lockPath, { force: true });
+}
+
+async function requestJson(url, init = {}, retries = 3) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      const text = await response.text();
+      let body = {};
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        body = { raw: text.slice(0, 200) };
+      }
+      if (response.ok) return { body, headers: response.headers };
+      const error = new HttpError(body?.error || body?.message || `HTTP ${response.status}`, response.status);
+      if (attempt >= retries || (response.status !== 408 && response.status !== 425 && response.status !== 429 && (response.status < 500 || response.status >= 600))) {
+        throw error;
+      }
+      lastError = error;
+    } catch (error) {
+      if (error instanceof HttpError && error.status !== 408 && error.status !== 425 && error.status !== 429 && error.status < 500) throw error;
+      lastError = error;
+      if (attempt >= retries) throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+    await sleep(Math.min(30_000, 1000 * 2 ** attempt));
+  }
+  throw lastError || new Error(`Request failed: ${url}`);
+}
+
+async function apiRequest(options, route, init = {}) {
+  const headers = new Headers(init.headers || {});
+  if (process.env.INDEXING_SECRET) headers.set('Authorization', `Bearer ${process.env.INDEXING_SECRET}`);
+  return requestJson(`${options.baseUrl}${route}`, { ...init, headers });
+}
+
+async function supabaseRequest(config, route, init = {}) {
+  const headers = new Headers(init.headers || {});
+  headers.set('apikey', config.key);
+  headers.set('Authorization', `Bearer ${config.key}`);
+  headers.set('Prefer', 'count=exact');
+  return requestJson(`${config.url}${route}`, { ...init, headers });
+}
+
+function parseTotalCount(headers) {
+  const contentRange = headers.get('content-range') || '';
+  const match = contentRange.match(/\/(\d+)$/);
+  return match ? Number(match[1]) : null;
+}
+
+async function getReliableAlbumIds(config) {
+  const ids = new Set();
+  for (let offset = 0; ; offset += CACHE_PAGE_SIZE) {
+    const params = new URLSearchParams({
+      select: 'itunes_collection_id,embedding',
+      visual_analysis_status: 'eq.analyzed',
+      embedding_version: 'eq.visual-grid-v2',
+      perceptual_hash: 'not.is.null',
+      embedding: 'not.is.null',
+      limit: String(CACHE_PAGE_SIZE),
+      offset: String(offset),
+    });
+    const { body } = await supabaseRequest(config, `/rest/v1/albums?${params}`);
+    const rows = Array.isArray(body) ? body : [];
+    for (const row of rows) {
+      const id = Number(row.itunes_collection_id);
+      if (Number.isFinite(id) && hasReliableStoredEmbedding(row.embedding)) ids.add(id);
+    }
+    if (rows.length < CACHE_PAGE_SIZE) break;
+  }
+  return ids;
+}
+
+async function getCacheCount(config) {
+  const params = new URLSearchParams({
+    select: 'source_album_id',
+    scoring_version: `eq.${ALGORITHM_VERSION}`,
+    limit: '1',
+  });
+  const response = await supabaseRequest(config, `/rest/v1/album_similarity_cache?${params}`);
+  return parseTotalCount(response.headers) ?? (Array.isArray(response.body) ? response.body.length : 0);
+}
+
+async function discoverAlbums(options, state) {
+  const discoveryTarget = Math.min(
+    Math.ceil(options.targetAlbums * DISCOVERY_BUFFER),
+    Math.max(options.targetAlbums + 100, 3500),
+  );
+  const discovered = new Set(state.discoveredIds);
+  console.log(`Discovering at least ${discoveryTarget} candidate IDs across ${DISCOVERY_TERMS.length} genre terms...`);
+
+  for (let index = state.discoveryIndex; index < DISCOVERY_TERMS.length && discovered.size < discoveryTarget; index += 1) {
+    throwIfInterrupted();
+    const term = DISCOVERY_TERMS[index];
+    const params = new URLSearchParams({
+      term,
+      country: options.country,
+      media: 'music',
+      entity: 'album',
+      limit: String(DISCOVERY_PAGE_SIZE),
+    });
+    try {
+      const { body } = await requestJson(`https://itunes.apple.com/search?${params}`);
+      throwIfInterrupted();
+      for (const row of Array.isArray(body?.results) ? body.results : []) {
+        const id = Number(row.collectionId);
+        if (Number.isFinite(id)) discovered.add(id);
+      }
+      console.log(`  ${term}: ${discovered.size}/${discoveryTarget} candidate IDs`);
+    } catch (error) {
+      console.warn(`  Search failed for ${term}; continuing: ${error.message}`);
+    }
+    state.discoveryIndex = index + 1;
+    state.discoveredIds = Array.from(discovered);
+    state.phase = 'discover';
+    await writeState(options, state);
+    if (discovered.size < discoveryTarget) await sleep(options.discoveryDelayMs);
+  }
+
+  if (discovered.size < options.targetAlbums) {
+    throw new Error(`Only discovered ${discovered.size} candidate IDs; need ${options.targetAlbums}. Add more discovery terms before running again.`);
+  }
+}
+
+async function indexAlbums(options, state, config) {
+  const remoteIds = await getReliableAlbumIds(config);
+  const indexed = new Set([...state.indexedIds, ...remoteIds]);
+  const failed = new Set(state.failedIds);
+  state.indexedIds = Array.from(indexed);
+  state.phase = 'index';
+  await writeState(options, state);
+
+  if (indexed.size >= options.targetAlbums) {
+    console.log(`Reliable albums already available: ${indexed.size}/${options.targetAlbums}`);
+    return indexed;
+  }
+
+  console.log(`Indexing reliable albums: ${indexed.size}/${options.targetAlbums}`);
+  for (const id of state.discoveredIds) {
+    throwIfInterrupted();
+    if (indexed.size >= options.targetAlbums) break;
+    if (indexed.has(id) || failed.has(id)) continue;
+
+    const attempts = Number(state.attempts[id] || 0);
+    if (attempts >= 3) {
+      failed.add(id);
+      continue;
+    }
+
+    state.attempts[id] = attempts + 1;
+    await writeState(options, state);
+    try {
+      const { body } = await apiRequest(options, `/api/albums/${id}/index`, { method: 'POST' });
+      throwIfInterrupted();
+      if (!isReliableAlbum(body?.album)) {
+        throw new Error('Index route returned a fallback or incomplete visual analysis');
+      }
+      indexed.add(id);
+      state.indexedIds = Array.from(indexed);
+      console.log(`  indexed ${id}: ${indexed.size}/${options.targetAlbums}`);
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 401) {
+        throw new Error('The local indexing route rejected INDEXING_SECRET. Check .env.local and restart Next.js.');
+      }
+      if (state.attempts[id] >= 3) failed.add(id);
+      console.warn(`  skipped ${id} (attempt ${state.attempts[id]}/3): ${error.message}`);
+    }
+    state.failedIds = Array.from(failed);
+    await writeState(options, state);
+    await sleep(options.requestDelayMs);
+  }
+
+  const finalIds = await getReliableAlbumIds(config);
+  if (finalIds.size < options.targetAlbums) {
+    throw new Error(`Indexed ${finalIds.size} reliable albums; need ${options.targetAlbums}. Increase discovery terms or rerun with the checkpoint.`);
+  }
+  state.indexedIds = Array.from(finalIds);
+  return finalIds;
+}
+
+async function populateSimilarityCache(options, state, config, reliableIds) {
+  let cacheCount = await getCacheCount(config);
+  console.log(`Similarity cache rows: ${cacheCount}/${options.targetCache}`);
+  if (cacheCount >= options.targetCache) return cacheCount;
+
+  const completedSources = new Set(state.cacheSourceIds);
+  state.phase = 'similarity';
+  await writeState(options, state);
+
+  for (const id of reliableIds) {
+    throwIfInterrupted();
+    if (cacheCount >= options.targetCache) break;
+    if (completedSources.has(id)) continue;
+    try {
+      const { body } = await apiRequest(options, `/api/albums/${id}/similar?country=${options.country}&limit=18`);
+      throwIfInterrupted();
+      if (body?.status !== 'indexed') {
+        console.warn(`  similarity skipped ${id}: source is not indexed`);
+        continue;
+      }
+      completedSources.add(id);
+      state.cacheSourceIds = Array.from(completedSources);
+      const tierCount = ['art_style', 'balanced', 'music_relation']
+        .map((mode) => Array.isArray(body?.tiers?.[mode]) ? body.tiers[mode].length : 0)
+        .reduce((sum, count) => sum + count, 0);
+      cacheCount = await getCacheCount(config);
+      console.log(`  cached ${id}: ${tierCount} candidate rows; table total ${cacheCount}/${options.targetCache}`);
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 401) {
+        throw new Error('The local indexing route rejected INDEXING_SECRET. Check .env.local and restart Next.js.');
+      }
+      console.warn(`  similarity failed for ${id}; continuing: ${error.message}`);
+    }
+    await writeState(options, state);
+    await sleep(options.requestDelayMs);
+  }
+
+  cacheCount = await getCacheCount(config);
+  if (cacheCount < options.targetCache) {
+    throw new Error(`Generated ${cacheCount} similarity-cache rows; need ${options.targetCache}. Rerun to continue from the checkpoint.`);
+  }
+  return cacheCount;
+}
+
+async function main() {
+  await loadEnvFile(path.join(PROJECT_ROOT, '.env.local'));
+  await loadEnvFile(path.join(PROJECT_ROOT, '.env'));
+
+  const options = buildOptions(parseArgs(process.argv.slice(2)));
+  process.once('SIGINT', () => { interrupted = true; });
+  process.once('SIGTERM', () => { interrupted = true; });
+  assertLocalBaseUrl(options.baseUrl);
+  if (!process.env.INDEXING_SECRET) {
+    throw new Error('Set INDEXING_SECRET in app/.env.local. The worker refuses unauthenticated indexing requests.');
+  }
+  const config = getSupabaseConfig();
+  const state = await readState(options);
+  let completed = false;
+
+  await acquireLock(options);
+  try {
+    await discoverAlbums(options, state);
+    const reliableIds = await indexAlbums(options, state, config);
+    const cacheCount = await populateSimilarityCache(options, state, config, reliableIds);
+    const finalReliableIds = await getReliableAlbumIds(config);
+    if (finalReliableIds.size < options.targetAlbums || cacheCount < options.targetCache) {
+      throw new Error('Final table verification did not meet both requested targets.');
+    }
+    completed = true;
+    console.log(`Completed table-only population: ${finalReliableIds.size} reliable albums and ${cacheCount} similarity-cache rows.`);
+  } finally {
+    await releaseLock(options);
+    if (completed) await fs.rm(options.statePath, { force: true });
+    else console.log(`Checkpoint retained at ${options.statePath} for resume.`);
+  }
+}
+
+main().catch((error) => {
+  console.error(`Catalog population stopped: ${error.message}`);
+  process.exitCode = 1;
+});

@@ -462,7 +462,9 @@ export async function extractFeaturesFromUrl(
           'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         },
         signal: controller.signal,
-        next: { revalidate: 86400 },
+        // Artwork is analyzed in memory and must not enter Next's persistent
+        // data cache. The database stores only the extracted descriptors.
+        cache: 'no-store',
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 

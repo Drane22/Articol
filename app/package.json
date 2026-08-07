@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "catalog:populate": "node scripts/populate-catalog.mjs",
     "cleanup:artwork": "node scripts/cleanup-artwork.mjs",
     "prepare:git": "npm run cleanup:artwork"
   },

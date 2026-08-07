@@ -76,6 +76,32 @@ Articol is a visual album-search and discovery platform that prioritizes visual 
 
 ---
 
+## Bulk Catalog Population
+
+The repository includes a local, resumable worker for building a larger
+Supabase catalog without using a long-running Vercel function:
+
+1. Set `INDEXING_SECRET`, `NEXT_PUBLIC_SUPABASE_URL`, and
+   `SUPABASE_SECRET_KEY` in `app/.env.local`.
+2. Start the local Next.js server with `npm run dev`.
+3. In a second terminal, run:
+   ```bash
+   npm run catalog:populate -- --target-albums=2000 --target-cache=5000
+   ```
+
+The worker discovers albums across multiple genres, analyzes artwork in memory,
+and writes only metadata, visual features, embeddings, and similarity rows to
+Supabase. It does not save image files. A small checkpoint and lock are created
+in the operating system temporary directory; the checkpoint is deleted after a
+successful run and retained after an interruption so the job can resume.
+
+The worker is deliberately restricted to a local Next.js base URL. It should
+not be pointed at the Vercel deployment for bulk processing. If it stops before
+the targets are reached, rerun the same command; do not use `--reset` unless a
+fresh catalog population is intended.
+
+---
+
 ## API Documentation
 
 - `GET /api/search?q={query}&country=PH&limit=25`: iTunes search proxy.

@@ -31,7 +31,7 @@ returns table-ready fields. It does not create a temporary image path.
 
 ## Worker architecture
 
-Add `app/scripts/populate-catalog.ts`, run locally through a package script.
+Add `app/scripts/populate-catalog.mjs`, run locally through a package script.
 The worker has four bounded phases:
 
 1. Discover unique candidate albums from genre terms until the target pool is
@@ -42,9 +42,10 @@ The worker has four bounded phases:
    `art_style`, `balanced`, and `music_relation` modes.
 4. Upsert similarity-cache rows until the requested minimum row count is met.
 
-The worker uses the existing `saveAlbumsToDb`, ranking, and
-`saveSimilarityResultsToCache` domain functions rather than duplicating the
-Supabase row mapping. The server-only Supabase secret is read from the local
+The worker calls the existing local indexing and similarity routes rather than
+duplicating the Supabase row mapping. The Next.js server remains the only code
+that writes album and similarity rows. The worker uses the server-only
+Supabase secret only for exact progress counts; it is read from the local
 environment and is never printed.
 
 ## Checkpoint and cleanup

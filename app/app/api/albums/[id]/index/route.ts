@@ -31,6 +31,7 @@ export async function POST(
     try {
       const imgRes = await fetch(album.artworkUrl, {
         headers: { 'User-Agent': 'Articol-Indexer/1.0' },
+        cache: 'no-store',
       });
       if (imgRes.ok) {
         const arrayBuf = await imgRes.arrayBuffer();
