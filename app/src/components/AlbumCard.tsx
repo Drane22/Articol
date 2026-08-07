@@ -86,8 +86,8 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
           />
         </Link>
 
-        {/* Top Overlay Badges */}
-        <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5">
+        {/* Overlay Actions and Match Score */}
+        <div className="pointer-events-none absolute inset-0 z-20">
           {similarity && onWhyMatchClick && (
             <button
               type="button"
@@ -96,7 +96,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
                 event.stopPropagation();
                 onWhyMatchClick(similarity);
               }}
-              className="card-icon-button bg-black/70 text-white hover:bg-black/90"
+              className="card-icon-button pointer-events-auto absolute right-3 top-3 bg-black/70 text-white hover:bg-black/90"
               title={`Why ${album.title} is a match`}
               aria-label={`Why ${album.title} is a match`}
             >
@@ -104,7 +104,7 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
             </button>
           )}
           {matchPercentage !== null && (
-            <span className="rounded-full bg-black/75 px-2.5 py-1 text-[10px] font-mono text-white">
+            <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] truncate rounded-full bg-black/75 px-2.5 py-1 text-[10px] font-mono text-white">
               {matchPercentage}% match{confidencePercentage !== null && <span className="text-white/55"> · {confidencePercentage}% trusted</span>}
             </span>
           )}
