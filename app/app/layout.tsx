@@ -59,6 +59,7 @@ export default function RootLayout({
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0 font-mono">
             <span>articol © {new Date().getFullYear()} — Visual Album Discovery</span>
             <span>Data powered by iTunes API & CLIP Embeddings</span>
+            <span className="text-[var(--accent-info)]">Built by Drane</span>
           </div>
         </footer>
         </CountryProvider>

@@ -24,6 +24,10 @@ Articol is a visual album-search and discovery platform that prioritizes visual 
 - **Maximum Marginal Relevance (MMR)**: Diversity reranking (`lambda = 0.80`) preventing duplicate cover variations.
 - **Explainable Matches**: Deterministic natural language explanations ("Why this match") and match reason chips.
 - **Confidence-Gated Recommendations**: Results below 30% evidence confidence are withheld and replaced with clearly labeled catalog-related alternatives when available.
+- **Canonical Share Cards**: Album pages expose a stable Open Graph image with the cover artwork, metadata, country context, and extracted palette so previews stay consistent across Messenger, Viber, and other platforms.
+- **Palette-Aware Experience**: Dominant cover colors are surfaced throughout album cards, detail pages, copyable palette controls, and share previews.
+- **Responsive Mobile UI**: Touch-safe controls, centered card actions, compact country/theme controls, bottom-sheet modals, and layouts designed for narrow screens.
+- **Premium Motion and Accessibility**: Focus-visible states, keyboard-friendly dialogs, reduced-motion support, restrained hover/press transitions, and mobile-safe interaction zones.
 - **Digital Cover Archive (Explore Mode)**: Dynamic color spectrum slider control, decade filters, visual attribute tags, and curated collections (Quiet Minimalism, Red and Black, Dreamlike Portraits, Hand-Drawn Worlds, Brutalist Type, Analog Grain, Soft Pastels, Dark Monochrome, Maximalist Collage).
 - **Saved References**: Local storage personal cover archive.
 - **PostgreSQL & pgvector Support**: Complete SQL schema migration script with ANN vector index and similarity caching (with built-in pre-seeded dataset fallback).
@@ -77,6 +81,7 @@ Articol is a visual album-search and discovery platform that prioritizes visual 
 - `GET /api/search?q={query}&country=PH&limit=25`: iTunes search proxy.
 - `GET /api/albums/{collectionId}`: Album metadata & track listing.
 - `GET /api/albums/{collectionId}/similar?mode=art_style&limit=18`: Visual similarity recommendation engine.
+- `GET /album/{collectionId}/opengraph-image?country=PH`: Canonical album share-card image used for social previews.
 - `POST /api/albums/{collectionId}/index`: Internal indexing endpoint for generating embeddings and feature extraction.
 - `GET /api/discover?collection={collection}&color={hex}&filter={filter}`: Explore mode discovery feed.
 - `GET /api/proxy-image?url={url}`: Safe image proxy with caching headers.
