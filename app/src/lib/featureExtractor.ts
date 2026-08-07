@@ -1,4 +1,4 @@
-import { DominantColor, VisualFeatures } from './types';
+import { ColorProfile, DominantColor, VisualFeatures } from './types';
 import { hexToRgb, rgbToHex, rgbToLab } from './colorUtils';
 
 // ─────────────────────────────────────────────────────────────
@@ -90,6 +90,24 @@ function generateSeedPalette(seed: string): DominantColor[] {
 // Generate UNIQUE visual features from a seed string
 // ─────────────────────────────────────────────────────────────
 const r2 = (v: number) => Math.round(v * 100) / 100;
+
+function rgbHueDegrees(r: number, g: number, b: number): number {
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+  const max = Math.max(rNorm, gNorm, bNorm);
+  const min = Math.min(rNorm, gNorm, bNorm);
+  const delta = max - min;
+  if (delta === 0) return 0;
+
+  let hue = max === rNorm
+    ? ((gNorm - bNorm) / delta) % 6
+    : max === gNorm
+      ? (bNorm - rNorm) / delta + 2
+      : (rNorm - gNorm) / delta + 4;
+  hue *= 60;
+  return hue < 0 ? hue + 360 : hue;
+}
 
 function generateSeedFeatures(seed: string): VisualFeatures {
   const rng = createRng('features-' + seed);
@@ -271,11 +289,17 @@ async function extractFromBuffer(
     const channels = info.channels; // should be 3 after removeAlpha
 
     let totalL = 0;
+    let totalLightnessSq = 0;
     let minL = 255;
     let maxL = 0;
     let warmSum = 0;
     let satSum = 0;
     let monoCount = 0;
+    let neutralPixelCount = 0;
+    let chromaticPixelCount = 0;
+    let hueVectorX = 0;
+    let hueVectorY = 0;
+    let hueWeight = 0;
     let totalR = 0;
     let totalG = 0;
     let totalB = 0;
@@ -294,12 +318,23 @@ async function extractFromBuffer(
       const minC = Math.min(r, g, b);
       const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       totalL += lum;
+      totalLightnessSq += (lum / 255) ** 2;
       if (lum < minL) minL = lum;
       if (lum > maxL) maxL = lum;
 
       const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
       satSum += sat;
       warmSum += (r - b) / 255;
+
+      if (sat < 0.12) {
+        neutralPixelCount++;
+      } else {
+        chromaticPixelCount++;
+        const hueRadians = rgbHueDegrees(r, g, b) * (Math.PI / 180);
+        hueVectorX += Math.cos(hueRadians) * sat;
+        hueVectorY += Math.sin(hueRadians) * sat;
+        hueWeight += sat;
+      }
 
       if (Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b)) < 18) {
         monoCount++;
@@ -319,6 +354,19 @@ async function extractFromBuffer(
     const saturation = satSum / pixelCount;
     const warmCool = Math.max(-1, Math.min(1, warmSum / pixelCount));
     const monochromeScore = monoCount / pixelCount;
+    const meanLightness = totalL / (pixelCount * 255);
+    const lightnessVariance = Math.max(0, totalLightnessSq / pixelCount - meanLightness ** 2);
+    const hueMagnitude = Math.sqrt(hueVectorX ** 2 + hueVectorY ** 2);
+    const colorProfile: ColorProfile = {
+      neutralCoverage: r2(neutralPixelCount / pixelCount),
+      chromaticCoverage: r2(chromaticPixelCount / pixelCount),
+      dominantHue: hueWeight > 0
+        ? Math.round(((Math.atan2(hueVectorY, hueVectorX) * 180 / Math.PI + 360) % 360) * 10) / 10
+        : 0,
+      hueConcentration: hueWeight > 0 ? r2(hueMagnitude / hueWeight) : 0,
+      meanLightness: r2(meanLightness),
+      lightnessSpread: r2(Math.sqrt(lightnessVariance)),
+    };
 
     // Top 5 palette
     const sortedBuckets = Object.values(colorBuckets)
@@ -396,6 +444,7 @@ async function extractFromBuffer(
       abstractProb: r2(Math.min(1, visualEntropy * 0.85)),
       collageProb: r2(Math.min(1, edgeDensity * (1 - symmetryScore) * 1.8)),
       minimalismScore: r2(minimalismScore),
+      colorProfile,
     };
 
     const embedding = buildVisualDescriptor(

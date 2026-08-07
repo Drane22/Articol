@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getItunesAlbumById } from '@/lib/itunes';
 import { extractVisualFeaturesFromImage } from '@/lib/featureExtractor';
 import { saveAlbumToDb } from '@/lib/db';
+import { VERIFIED_VISUAL_ANALYSIS_VERSION } from '@/lib/visualValidation';
 
 export async function POST(
   request: NextRequest,
@@ -53,7 +54,8 @@ export async function POST(
     album.perceptualHash = perceptualHash;
     album.visualAnalysisStatus = perceptualHash ? 'analyzed' : 'fallback';
     album.embeddingModel = perceptualHash ? 'spatial-palette-descriptor' : 'seed-fallback';
-    album.embeddingVersion = perceptualHash ? 'visual-grid-v2' : 'fallback-v1';
+    album.embeddingVersion = perceptualHash ? VERIFIED_VISUAL_ANALYSIS_VERSION : 'fallback-v1';
+    album.featureExtractionVersion = perceptualHash ? VERIFIED_VISUAL_ANALYSIS_VERSION : 'fallback-v1';
 
     await saveAlbumToDb(album);
 

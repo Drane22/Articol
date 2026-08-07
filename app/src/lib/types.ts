@@ -76,6 +76,21 @@ export interface ComplexityFeatures {
   complexityConfidence?: number;
 }
 
+export interface ColorProfile {
+  /** Fraction of decoded pixels that are visually neutral (low chroma). */
+  neutralCoverage: number;
+  /** Fraction of decoded pixels with a meaningful hue. */
+  chromaticCoverage: number;
+  /** Circular mean hue of chromatic pixels, in degrees from 0 to <360. */
+  dominantHue: number;
+  /** 0 for dispersed hues and 1 for one concentrated hue family. */
+  hueConcentration: number;
+  /** Mean CIE-style perceptual lightness on a 0..1 scale. */
+  meanLightness: number;
+  /** Standard deviation of perceptual lightness on a 0..1 scale. */
+  lightnessSpread: number;
+}
+
 export interface VisualFeatures {
   luminance: number; // 0 to 1
   contrast: number; // 0 to 1
@@ -97,6 +112,7 @@ export interface VisualFeatures {
   collageProb: number; // 0 to 1
   minimalismScore: number; // 0 to 1
   layoutType?: 'centered_subject' | 'off_center' | 'minimal_text' | 'dense_pattern' | 'grid_collage';
+  colorProfile?: ColorProfile;
   
   // Extended modular feature blocks
   typography?: TypographyFeatures;
@@ -174,6 +190,7 @@ export interface ComponentScores {
   layout: number | null;
   typography: number | null;
   complexity: number | null;
+  medium?: number | null;
 }
 
 export interface SimilarityResult {

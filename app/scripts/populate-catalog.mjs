@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ALGORITHM_VERSION = 'articol-v5-confidence-gate';
+const ALGORITHM_VERSION = 'articol-v6-verified-visual-v3';
 const DEFAULT_COUNTRY = 'PH';
 const DEFAULT_BASE_URL = 'http://localhost:3000';
 const DEFAULT_DISCOVERY_DELAY_MS = 3500;
@@ -130,15 +130,22 @@ function getSupabaseConfig() {
 }
 
 function isReliableAlbum(album) {
+  const colorProfile = album?.visualFeatures?.colorProfile;
   return Boolean(
     album &&
     album.visualAnalysisStatus === 'analyzed' &&
-    album.embeddingVersion === 'visual-grid-v2' &&
+    album.embeddingVersion === 'visual-grid-v3' &&
     typeof album.perceptualHash === 'string' &&
     album.perceptualHash.length > 0 &&
     Array.isArray(album.embedding) &&
     album.embedding.length === 512 &&
-    album.embedding.every((value) => Number.isFinite(Number(value))),
+    album.embedding.every((value) => Number.isFinite(Number(value))) &&
+    colorProfile &&
+    ['neutralCoverage', 'chromaticCoverage', 'hueConcentration', 'meanLightness', 'lightnessSpread']
+      .every((key) => Number.isFinite(Number(colorProfile[key]))) &&
+    Number.isFinite(Number(colorProfile.dominantHue)) &&
+    Number(colorProfile.neutralCoverage) + Number(colorProfile.chromaticCoverage) >= 0.95 &&
+    Number(colorProfile.neutralCoverage) + Number(colorProfile.chromaticCoverage) <= 1.05,
   );
 }
 
@@ -155,6 +162,27 @@ function hasReliableStoredEmbedding(value) {
         })()
       : [];
   return parsed.length === 512 && parsed.every((entry) => Number.isFinite(Number(entry)));
+}
+
+function hasReliableStoredColorProfile(value) {
+  const features = typeof value === 'string'
+    ? (() => {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return null;
+        }
+      })()
+    : value;
+  const profile = features?.colorProfile;
+  return Boolean(
+    profile &&
+    ['neutralCoverage', 'chromaticCoverage', 'hueConcentration', 'meanLightness', 'lightnessSpread']
+      .every((key) => Number.isFinite(Number(profile[key]))) &&
+    Number.isFinite(Number(profile.dominantHue)) &&
+    Number(profile.neutralCoverage) + Number(profile.chromaticCoverage) >= 0.95 &&
+    Number(profile.neutralCoverage) + Number(profile.chromaticCoverage) <= 1.05,
+  );
 }
 
 function defaultState(options) {
@@ -285,9 +313,9 @@ async function getReliableAlbumIds(config) {
   const ids = new Set();
   for (let offset = 0; ; offset += CACHE_PAGE_SIZE) {
     const params = new URLSearchParams({
-      select: 'itunes_collection_id,embedding',
+      select: 'itunes_collection_id,embedding,visual_features',
       visual_analysis_status: 'eq.analyzed',
-      embedding_version: 'eq.visual-grid-v2',
+      embedding_version: 'eq.visual-grid-v3',
       perceptual_hash: 'not.is.null',
       embedding: 'not.is.null',
       limit: String(CACHE_PAGE_SIZE),
@@ -297,7 +325,7 @@ async function getReliableAlbumIds(config) {
     const rows = Array.isArray(body) ? body : [];
     for (const row of rows) {
       const id = Number(row.itunes_collection_id);
-      if (Number.isFinite(id) && hasReliableStoredEmbedding(row.embedding)) ids.add(id);
+      if (Number.isFinite(id) && hasReliableStoredEmbedding(row.embedding) && hasReliableStoredColorProfile(row.visual_features)) ids.add(id);
     }
     if (rows.length < CACHE_PAGE_SIZE) break;
   }

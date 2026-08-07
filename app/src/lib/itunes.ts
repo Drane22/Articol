@@ -1,7 +1,7 @@
 import { Album, AlbumTrack } from './types';
 import { extractVisualFeaturesFromImage, extractFeaturesFromUrl } from './featureExtractor';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
-import { isReliableVisualAnalysis } from './visualValidation';
+import { isReliableVisualAnalysis, VERIFIED_VISUAL_ANALYSIS_VERSION } from './visualValidation';
 import { getStorefront, normalizeStorefront } from './storefronts';
 
 const ITUNES_BASE_URL = 'https://itunes.apple.com';
@@ -105,7 +105,7 @@ export async function enrichAlbumWithArtwork(album: Album): Promise<Album> {
   if (!album.artworkUrl) return { ...album, visualAnalysisStatus: 'fallback' };
   if (isReliableVisualAnalysis(album)) return album;
 
-  const cacheKey = `${album.artworkUrl}|visual-grid-v2`;
+  const cacheKey = `${album.artworkUrl}|${VERIFIED_VISUAL_ANALYSIS_VERSION}`;
   let analysis = artworkCache.get(cacheKey);
 
   if (!analysis) {
@@ -118,7 +118,7 @@ export async function enrichAlbumWithArtwork(album: Album): Promise<Album> {
         // broken cover cannot be redownloaded repeatedly during one browsing session.
         artworkCache.set(cacheKey, result, extracted.analyzed ? undefined : 1000 * 60 * 5);
         if (extracted.resolvedArtworkUrl && extracted.resolvedArtworkUrl !== album.artworkUrl) {
-          artworkCache.set(`${extracted.resolvedArtworkUrl}|visual-grid-v2`, result);
+          artworkCache.set(`${extracted.resolvedArtworkUrl}|${VERIFIED_VISUAL_ANALYSIS_VERSION}`, result);
         }
         return result;
       } catch (error) {
@@ -139,7 +139,8 @@ export async function enrichAlbumWithArtwork(album: Album): Promise<Album> {
       visualFeatures: features,
       embedding,
       embeddingModel: analyzed ? 'spatial-palette-descriptor' : 'seed-fallback',
-      embeddingVersion: analyzed ? 'visual-grid-v2' : 'fallback-v1',
+      embeddingVersion: analyzed ? VERIFIED_VISUAL_ANALYSIS_VERSION : 'fallback-v1',
+      featureExtractionVersion: analyzed ? VERIFIED_VISUAL_ANALYSIS_VERSION : 'fallback-v1',
       perceptualHash,
       visualAnalysisStatus: analyzed ? 'analyzed' : 'fallback',
     };

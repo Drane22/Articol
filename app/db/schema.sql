@@ -91,7 +91,8 @@ AS $$
   SELECT a.*
   FROM albums AS a
   WHERE a.embedding IS NOT NULL
-    AND a.visual_analysis_status IN ('indexed', 'analyzed')
+    AND a.visual_analysis_status = 'analyzed'
+    AND a.embedding_version = 'visual-grid-v3'
     AND (exclude_collection_id IS NULL OR a.itunes_collection_id <> exclude_collection_id)
   ORDER BY a.embedding <=> query_embedding
   LIMIT LEAST(GREATEST(match_count, 1), 250);
@@ -105,11 +106,21 @@ CREATE TABLE IF NOT EXISTS album_similarity_cache (
   visual_score REAL,
   visual_confidence REAL,
   music_score REAL,
+  music_confidence REAL,
   final_score REAL,
+  final_confidence REAL,
+  component_scores JSONB,
+  eligibility_version TEXT,
   scoring_version TEXT NOT NULL,
   calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (source_album_id, candidate_album_id, mode, scoring_version)
 );
+
+-- Safe for installations created before recommendation confidence was audited.
+ALTER TABLE album_similarity_cache ADD COLUMN IF NOT EXISTS music_confidence REAL;
+ALTER TABLE album_similarity_cache ADD COLUMN IF NOT EXISTS final_confidence REAL;
+ALTER TABLE album_similarity_cache ADD COLUMN IF NOT EXISTS component_scores JSONB;
+ALTER TABLE album_similarity_cache ADD COLUMN IF NOT EXISTS eligibility_version TEXT;
 
 -- Enable Row Level Security (RLS) for secure public read access
 ALTER TABLE albums ENABLE ROW LEVEL SECURITY;
