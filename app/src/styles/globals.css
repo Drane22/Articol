@@ -314,7 +314,7 @@
 
 .why-match-dialog {
   width: min(100%, 52rem);
-  max-height: min(92dvh, 60rem);
+  max-height: min(86dvh, 54rem);
 }
 
 .why-match-dialog__scroll {
