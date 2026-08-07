@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X, Sparkles, Sliders, Palette, Layout } from 'lucide-react';
 import { SimilarityResult, Album, SearchMode } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
@@ -23,23 +23,60 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
   const matchPct = Math.round(result.finalScore * 100);
   const visualPct = Math.round((result.visualScore ?? 0) * 100);
   const musicPct = Math.round((result.musicScore ?? 0) * 100);
+  const confidencePct = Math.round(result.finalConfidence * 100);
   const rankingSummary = isPaletteOnly
     ? 'Ranked only with the full dominant-color distribution. Music, artist, layout, typography, and embeddings are excluded.'
     : mode === 'music_relation'
       ? 'Ranked using artist, genre, and release-era relationships. Artwork is shown for context.'
       : 'Ranked using visual structure, color, typography, texture, and music context.';
 
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCloseRef.current();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+      previousFocusRef.current?.focus?.();
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 theme-overlay backdrop-blur-sm animate-fade-in">
-      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto">
+    <div
+      className="share-dialog-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="why-match-title"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onCloseRef.current();
+      }}
+    >
+      <div className="share-dialog-panel relative max-w-2xl">
+        <div className="max-h-[calc(100dvh-5rem)] overflow-y-auto p-4 sm:p-6">
         
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-3 right-3 min-h-9 min-w-9 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 rounded-lg hover:bg-[var(--accent-soft)] transition-colors"
+          ref={closeButtonRef}
+          className="icon-button icon-button--quiet absolute right-3 top-3"
           aria-label="Close modal"
         >
-          <X className="w-5 h-5" />
+          <X className="h-5 w-5" />
         </button>
 
         {/* Modal Header */}
@@ -48,7 +85,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           <span>Visual Match Explanation</span>
         </div>
 
-        <h3 className="text-xl font-serif font-medium text-[var(--text-primary)] mb-4">
+        <h3 id="why-match-title" className="text-xl font-serif font-medium text-[var(--text-primary)] mb-4">
           Why these covers were matched
         </h3>
 
@@ -97,6 +134,16 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             </div>
             <div className="w-full h-2 rounded-full bg-[var(--accent-soft)] overflow-hidden">
               <div className="h-full theme-info-fill rounded-full" style={{ width: `${matchPct}%` }} />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="mb-1 flex justify-between text-xs font-medium">
+              <span>Evidence confidence</span>
+              <span className="font-mono theme-success">{confidencePct}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--accent-soft)]">
+              <div className="h-full rounded-full theme-success-fill" style={{ width: `${confidencePct}%` }} />
             </div>
           </div>
 
@@ -179,6 +226,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           </div>
         )}
 
+        </div>
       </div>
     </div>
   );

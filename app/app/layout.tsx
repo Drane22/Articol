@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
-import { Inter, Newsreader } from 'next/font/google';
+import { Newsreader, Plus_Jakarta_Sans } from 'next/font/google';
 import '@/styles/globals.css';
 import { Header } from '@/components/Header';
 import { CountryProvider } from '@/components/CountryProvider';
 
-const inter = Inter({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-jakarta',
   display: 'swap',
 });
 
@@ -47,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${newsreader.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${jakarta.variable} ${newsreader.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

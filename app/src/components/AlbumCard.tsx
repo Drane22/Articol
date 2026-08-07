@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Info, ArrowRight, Bookmark, Check, Copy } from 'lucide-react';
@@ -24,6 +24,16 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const [copiedPalette, setCopiedPalette] = useState(false);
   const matchPercentage = similarity ? Math.round(similarity.finalScore * 100) : null;
+  const confidencePercentage = similarity ? Math.round(similarity.finalConfidence * 100) : null;
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('articol_saved_albums') || '[]');
+      setIsSaved(saved.some((item: Album) => item.itunesCollectionId === album.itunesCollectionId));
+    } catch (error) {
+      console.warn('Saved album state could not be restored:', error);
+    }
+  }, [album.itunesCollectionId]);
 
   const toggleSave = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -45,18 +55,23 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
     router.push(`/album/${album.itunesCollectionId}`);
   };
 
-  const handleCopyPalette = (event: React.MouseEvent) => {
+  const handleCopyPalette = async (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
     if (!album.dominantPalette?.length) return;
     const hexes = album.dominantPalette.map((c) => c.hex).join(', ');
-    navigator.clipboard.writeText(hexes);
-    setCopiedPalette(true);
-    setTimeout(() => setCopiedPalette(false), 2000);
+    try {
+      if (!navigator.clipboard?.writeText) return;
+      await navigator.clipboard.writeText(hexes);
+      setCopiedPalette(true);
+      window.setTimeout(() => setCopiedPalette(false), 2000);
+    } catch (error) {
+      console.warn('Palette copy failed:', error);
+    }
   };
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-xl bg-[var(--bg-card)] ring-1 ring-[var(--border-color)] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 hover:ring-[var(--text-muted)]/45 focus-within:ring-[var(--text-muted)]/60">
+    <article className="group flex flex-col overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[var(--border-color)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 focus-within:ring-[var(--text-muted)]/60">
       <div className="relative aspect-square w-full overflow-hidden bg-[var(--accent-soft)]">
         <Link
           href={`/album/${album.itunesCollectionId}`}
@@ -67,48 +82,50 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
             src={album.artworkUrl}
             alt={`Cover artwork for ${album.title} by ${album.artistName}`}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-            className="transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-[1.03] group-focus-within:scale-[1.03]"
+            className="transition-transform duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03] group-focus-within:scale-[1.03]"
           />
         </Link>
 
         {/* Top Overlay Badges */}
-        <div className="absolute top-2.5 right-2.5 flex items-center space-x-1 z-10">
+        <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5">
           {similarity && onWhyMatchClick && (
             <button
+              type="button"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onWhyMatchClick(similarity);
               }}
-              className="min-h-9 min-w-9 p-2 rounded bg-black/75 hover:bg-black text-white transition-colors"
+              className="card-icon-button bg-black/70 text-white hover:bg-black/90"
               title={`Why ${album.title} is a match`}
               aria-label={`Why ${album.title} is a match`}
             >
-              <Info className="w-3.5 h-3.5 theme-info" />
+              <Info className="h-4 w-4 theme-info" strokeWidth={1.6} />
             </button>
           )}
           {matchPercentage !== null && (
-            <span className="px-2 py-0.5 rounded bg-black/80 text-[11px] font-mono text-white">
-              {matchPercentage}% match
+            <span className="rounded-full bg-black/75 px-2.5 py-1 text-[10px] font-mono text-white">
+              {matchPercentage}% match{confidencePercentage !== null && <span className="text-white/55"> · {confidencePercentage}% trusted</span>}
             </span>
           )}
         </div>
 
         <button
+          type="button"
           onClick={toggleSave}
-          className="absolute top-2.5 left-2.5 min-h-9 min-w-9 p-2 rounded-full bg-black/60 hover:bg-black/85 text-white transition-colors z-10"
+          className="card-icon-button absolute left-3 top-3 z-20 bg-black/70 text-white hover:bg-black/90"
           title={isSaved ? 'Remove from saved' : 'Save cover'}
           aria-label={isSaved ? `Remove ${album.title} from saved` : `Save ${album.title}`}
         >
           {isSaved ? (
-            <Check className="w-3.5 h-3.5 theme-success" />
+            <Check className="h-4 w-4 theme-success" strokeWidth={1.8} />
           ) : (
-            <Bookmark className="w-3.5 h-3.5" />
+            <Bookmark className="h-4 w-4" strokeWidth={1.6} />
           )}
         </button>
       </div>
 
-      <div className="p-3 sm:p-3.5 flex flex-col flex-1 justify-between space-y-3">
+      <div className="flex flex-1 flex-col justify-between space-y-3 p-3 sm:p-3.5">
         <div>
           <Link
             href={`/album/${album.itunesCollectionId}`}
@@ -138,29 +155,30 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
         ) : null}
 
         {/* Clean Non-Overlapping Footer */}
-        <div className="flex flex-col items-stretch gap-2 pt-2 border-t border-[var(--border-color)]/30 sm:flex-row sm:items-center sm:justify-between sm:pt-1">
+        <div className="flex flex-col gap-2 border-t border-[var(--border-color)]/30 pt-3 sm:flex-row sm:items-center sm:justify-between">
           {album.dominantPalette?.length ? (
-            <div className="flex min-h-8 items-center space-x-1.5" aria-label="Extracted cover palette">
-              <div className="flex -space-x-1.5">
+            <div className="flex min-h-11 items-center justify-between gap-2" aria-label="Extracted cover palette">
+              <div className="flex items-center gap-1.5">
                 {album.dominantPalette.slice(0, 5).map((color, index) => (
                   <span
                     key={index}
-                    className="w-3.5 h-3.5 rounded-full ring-1 ring-[var(--bg-card)]"
+                    className="h-4 w-4 rounded-full ring-1 ring-[var(--bg-card)]"
                     style={{ backgroundColor: color.hex }}
                     title={color.hex}
                   />
                 ))}
               </div>
-              <button
-                onClick={handleCopyPalette}
-                className="min-h-8 min-w-8 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            <button
+              type="button"
+              onClick={(event) => void handleCopyPalette(event)}
+                className="card-icon-button card-icon-button--light"
                 title={copiedPalette ? 'Copied HEX codes!' : 'Copy palette HEX codes'}
                 aria-label="Copy palette HEX codes"
               >
                 {copiedPalette ? (
-                  <Check className="w-3 h-3 theme-success" />
+                  <Check className="h-3.5 w-3.5 theme-success" />
                 ) : (
-                  <Copy className="w-3 h-3" />
+                  <Copy className="h-3.5 w-3.5" />
                 )}
               </button>
             </div>
@@ -170,11 +188,12 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
 
           {showExploreButton && (
             <button
+              type="button"
               onClick={handleExplore}
-              className="min-h-9 w-full justify-center px-2.5 rounded-md bg-[var(--accent-editorial)] text-[var(--bg-canvas)] text-[11px] font-medium inline-flex items-center gap-1 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:opacity-90 active:scale-[0.98] sm:min-h-7 sm:w-auto"
+              className="card-view-button"
             >
               <span>View</span>
-              <ArrowRight className="w-3 h-3" />
+              <ArrowRight className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

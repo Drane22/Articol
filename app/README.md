@@ -23,6 +23,7 @@ Articol is a visual album-search and discovery platform that prioritizes visual 
   - **Music Relation** (`alpha = 0.40`): Musical relationship becomes stronger while preserving visual match.
 - **Maximum Marginal Relevance (MMR)**: Diversity reranking (`lambda = 0.80`) preventing duplicate cover variations.
 - **Explainable Matches**: Deterministic natural language explanations ("Why this match") and match reason chips.
+- **Confidence-Gated Recommendations**: Results below 30% evidence confidence are withheld and replaced with clearly labeled catalog-related alternatives when available.
 - **Digital Cover Archive (Explore Mode)**: Dynamic color spectrum slider control, decade filters, visual attribute tags, and curated collections (Quiet Minimalism, Red and Black, Dreamlike Portraits, Hand-Drawn Worlds, Brutalist Type, Analog Grain, Soft Pastels, Dark Monochrome, Maximalist Collage).
 - **Saved References**: Local storage personal cover archive.
 - **PostgreSQL & pgvector Support**: Complete SQL schema migration script with ANN vector index and similarity caching (with built-in pre-seeded dataset fallback).
@@ -35,7 +36,7 @@ Articol is a visual album-search and discovery platform that prioritizes visual 
 - **Styling**: Tailwind CSS v4 + Vanilla CSS Custom Properties
 - **Vector Database**: PostgreSQL with `pgvector` extension & Supabase integration
 - **Feature Processing**: `sharp`, `@xenova/transformers` (CLIP embeddings), CIELAB color math
-- **Icons & Motion**: `lucide-react`, `framer-motion`
+- **Icons & Motion**: `lucide-react` + CSS transitions
 
 ---
 

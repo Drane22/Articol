@@ -128,7 +128,7 @@ export default function HomePage() {
 
         {/* Restrained Editorial Search Bar */}
         <div className="relative max-w-xl mx-auto pt-2">
-          <div className="relative flex items-center shadow-lg rounded-xl overflow-hidden border border-[var(--border-color)] bg-[var(--bg-card)] focus-within:border-[var(--text-primary)] transition-all">
+          <div className="relative flex items-center overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-lg transition-[border-color,background-color,box-shadow] duration-200 focus-within:border-[var(--text-primary)]">
             <Search className="w-5 h-5 text-[var(--text-muted)] ml-4 flex-shrink-0" />
             <input
               id="home-search-input"
@@ -149,7 +149,7 @@ export default function HomePage() {
                 type="button"
                 onClick={() => handleScopeChange(scope.value)}
                 aria-pressed={searchScope === scope.value}
-                className={`min-h-9 rounded-full border px-3 text-xs transition-colors ${
+                className={`min-h-10 rounded-full border px-3 text-xs transition-colors ${
                   searchScope === scope.value
                     ? 'border-[var(--text-primary)] bg-[var(--accent-soft)] font-semibold text-[var(--text-primary)]'
                     : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -190,7 +190,7 @@ export default function HomePage() {
                   setIsLoading(true);
                   setSearchRetry((value) => value + 1);
                 }}
-                className="min-h-10 rounded-md bg-[var(--accent-soft)] px-4 text-xs text-[var(--text-primary)] hover:bg-[var(--border-color)] transition-colors"
+                className="min-h-11 rounded-full bg-[var(--accent-soft)] px-4 text-xs text-[var(--text-primary)] transition-colors hover:bg-[var(--border-color)]"
               >
                 Try again
               </button>

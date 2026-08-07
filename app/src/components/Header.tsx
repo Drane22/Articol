@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Compass, Bookmark, Sun, Moon, Globe, Search, X, Loader2 } from 'lucide-react';
+import { Compass, Bookmark, Sun, Moon, Globe, Search, X, Loader2, ChevronDown } from 'lucide-react';
 import { Album, SearchScope } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
 import { STOREFRONTS, useCountry } from './CountryProvider';
@@ -193,7 +193,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
               onClick={handleSearchClick}
               aria-expanded={pathname !== '/' ? isSearchOpen : undefined}
               aria-controls={pathname !== '/' ? 'global-search-panel' : 'home-search-input'}
-              className={`inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:w-auto md:rounded-none md:px-0 ${
+              className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:w-auto md:rounded-none md:px-0 ${
                 pathname === '/' || isSearchOpen ? 'bg-[var(--accent-soft)] text-[var(--text-primary)] font-semibold md:bg-transparent' : 'text-[var(--text-muted)]'
               }`}
             >
@@ -221,7 +221,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
                     <button
                       type="button"
                       onClick={() => handleHeaderQueryChange('')}
-                      className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
+                      className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
                       aria-label="Clear search"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -237,7 +237,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
                       type="button"
                       onClick={() => handleHeaderScopeChange(scope.value)}
                       aria-pressed={searchScope === scope.value}
-                      className={`min-h-8 rounded-full border px-2.5 text-[11px] transition-colors ${
+                      className={`min-h-10 rounded-full border px-2.5 text-[11px] transition-colors ${
                         searchScope === scope.value
                           ? 'border-[var(--text-primary)] bg-[var(--accent-soft)] font-semibold text-[var(--text-primary)]'
                           : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -278,7 +278,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
           </div>
           <Link
             href="/explore"
-            className={`flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:flex-none md:justify-start md:rounded-none md:px-0 ${
+              className={`flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:flex-none md:justify-start md:rounded-none md:px-0 ${
               pathname === '/explore' ? 'bg-[var(--accent-soft)] text-[var(--text-primary)] font-semibold md:bg-transparent' : 'text-[var(--text-muted)]'
             }`}
           >
@@ -287,7 +287,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
           </Link>
           <Link
             href="/saved"
-            className={`flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:flex-none md:justify-start md:rounded-none md:px-0 ${
+              className={`flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg px-2 transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] md:flex-none md:justify-start md:rounded-none md:px-0 ${
               pathname === '/saved' ? 'bg-[var(--accent-soft)] text-[var(--text-primary)] font-semibold md:bg-transparent' : 'text-[var(--text-muted)]'
             }`}
           >
@@ -299,15 +299,16 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
         {/* Utilities: Storefront selector & Theme toggle */}
         <div className="flex shrink-0 items-center justify-self-end gap-2 md:gap-3">
           {/* Storefront selector */}
-          <div className="relative flex min-h-10 items-center space-x-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] px-2 text-xs text-[var(--text-muted)]">
-            <Globe className="w-3.5 h-3.5" />
+          <div className="relative flex min-h-11 min-w-[5.25rem] items-center gap-1 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] px-2 text-xs text-[var(--text-muted)]">
+            <Globe className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <select
               value={selectedCountry}
+              aria-label="Storefront country"
               onChange={(e) => {
                 countryContext.setCountry(e.target.value);
                 onCountryChange?.(e.target.value);
               }}
-              className="w-8 cursor-pointer border-none bg-transparent text-xs text-[var(--text-primary)] focus:outline-none sm:w-auto"
+              className="min-h-11 w-full appearance-none cursor-pointer border-none bg-transparent px-0.5 pr-4 text-xs font-medium text-[var(--text-primary)] outline-none"
             >
               {STOREFRONTS.map((c) => (
                 <option key={c.code} value={c.code} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
@@ -315,12 +316,13 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
                 </option>
               ))}
             </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 h-3.5 w-3.5 text-[var(--text-muted)]" aria-hidden="true" />
           </div>
 
           {/* Dark / Light Mode Toggle */}
           <button
             onClick={() => setDarkMode((current) => !current)}
-            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[var(--border-color)] p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--border-color)] p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
             title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             aria-pressed={darkMode}
