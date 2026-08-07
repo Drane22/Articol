@@ -31,17 +31,31 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
     ? 'Music relation · artist and genre context'
     : `${isArtStyle ? 'Visual-style match' : 'Balanced visual match'}${palettePct === null ? '' : ` · ${palettePct}% palette compatibility`}`;
   const explanationBody = isArtStyle
-    ? 'Palette, structure, medium, composition, and typography were compared. Music metadata is excluded.'
+    ? 'A palette-led reading of structure, medium, composition, and typography; music metadata stays out of scope.'
     : isMusicRelation
-      ? 'Artist, genre, and release-era relationships were compared. Artwork is shown for context.'
-      : 'Palette, structure, composition, typography, and music context were compared.';
+      ? 'A music-first connection across artist, genre, and release era; the artwork remains visual context.'
+      : 'A balanced read of palette, structure, composition, typography, and music context.';
   const reasonLabels = result.matchReasons
     .map((reason) => reason.label.trim())
     .filter(Boolean)
     .slice(0, 2);
-  const reasonSentence = reasonLabels.length > 0
-    ? `${reasonLabels.join(' · ')}.`
-    : explanationBody;
+  const sharedAttributeValues = result.sharedAttributes
+    .map((attribute) => attribute.value.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+  const primaryCategory = result.matchReasons[0]?.category;
+  const visualOpeners: Record<string, string> = {
+    color: 'The palette sets the handshake:',
+    layout: 'The compositions speak the same visual dialect:',
+    typography: 'The covers share a typographic voice:',
+    texture: 'The surfaces carry a related tactility:',
+    mood: 'The mood lands in the same register:',
+    music: 'The catalogue connection starts with:',
+  };
+  const reasonDetails = reasonLabels.map((label) => label.toLowerCase());
+  const reasonSentence = isMusicRelation
+    ? `This relationship is anchored by ${reasonDetails.join(' and ') || 'a shared musical thread'}${sharedAttributeValues.length ? `, with ${sharedAttributeValues.join(' and ').toLowerCase()} keeping it grounded in the catalogue.` : '.'}`
+    : `${visualOpeners[primaryCategory || ''] || 'The visual connection starts with'} ${reasonDetails.join(' and ') || 'a shared visual language'}${sharedAttributeValues.length ? `; ${sharedAttributeValues.join(' and ').toLowerCase()} give the resemblance its shape.` : '.'}`;
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);

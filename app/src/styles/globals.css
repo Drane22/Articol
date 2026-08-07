@@ -356,13 +356,14 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: clamp(1rem, 2.2vw, 2rem);
+  container-type: inline-size;
   margin: 1.25rem 0 1.5rem;
 }
 
 .why-match-comparison__item {
   display: grid;
   justify-items: center;
-  width: clamp(15rem, 28vw, 20rem);
+  width: 100%;
   min-width: 0;
   text-align: center;
 }
@@ -380,6 +381,7 @@
 .why-match-comparison__cover {
   position: relative;
   width: 100%;
+  width: min(100%, 42cqw, 30dvh);
   max-width: 100%;
   aspect-ratio: 1;
   margin: 0;
