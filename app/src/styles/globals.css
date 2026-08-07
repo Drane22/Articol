@@ -103,6 +103,7 @@
 :root {
   --motion-enter: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-move: cubic-bezier(0.25, 1, 0.5, 1);
+  --app-header-height: 4rem;
 }
 
 .eyebrow-label {
@@ -281,8 +282,11 @@
 
 .share-dialog-backdrop {
   position: fixed;
-  inset: 0;
-  z-index: 50;
+  top: var(--app-header-height, 4rem);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -314,7 +318,7 @@
 
 .why-match-dialog {
   width: min(100%, 52rem);
-  max-height: min(86dvh, 54rem);
+  max-height: min(calc(100dvh - var(--app-header-height, 4rem) - 2rem), 54rem);
 }
 
 .why-match-dialog__scroll {
@@ -465,7 +469,7 @@
 
   .share-dialog-panel {
     width: 100%;
-    max-height: calc(100dvh - 1.5rem);
+    max-height: calc(100% - 1.5rem);
     border-radius: 1.5rem;
     transform: translateY(0);
   }

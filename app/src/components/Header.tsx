@@ -26,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchScope, setSearchScope] = useState<SearchScope>('all');
+  const headerRef = useRef<HTMLElement>(null);
   const searchContainerRef = useRef<HTMLElement>(null);
   const searchRequestIdRef = useRef(0);
 
@@ -61,6 +62,29 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
       // Theme still applies for this session when storage is unavailable.
     }
   }, [darkMode, themeReady]);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const updateHeaderHeight = () => {
+      document.documentElement.style.setProperty(
+        '--app-header-height',
+        `${Math.ceil(header.getBoundingClientRect().height)}px`,
+      );
+    };
+
+    updateHeaderHeight();
+    window.addEventListener('resize', updateHeaderHeight);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateHeaderHeight);
+    observer?.observe(header);
+
+    return () => {
+      window.removeEventListener('resize', updateHeaderHeight);
+      observer?.disconnect();
+      document.documentElement.style.removeProperty('--app-header-height');
+    };
+  }, []);
 
   useEffect(() => {
     const requestId = ++searchRequestIdRef.current;
@@ -172,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
   };
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-canvas)]/80 border-b border-[var(--border-color)] transition-colors">
+    <header ref={headerRef} className="site-header sticky top-0 z-50 backdrop-blur-md bg-[var(--bg-canvas)]/80 border-b border-[var(--border-color)] transition-colors">
       <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6 md:flex md:min-h-16 md:gap-4 md:px-6 md:py-2 lg:px-8">
         
         {/* Wordmark */}
