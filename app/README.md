@@ -52,10 +52,20 @@ Articol is a visual album-search and discovery platform that prioritizes visual 
    ```
 
 2. **Environment Variables**:
-   Copy `.env.example` to `.env.local` and add your optional database or API credentials:
+   If `app/.env.local` does not exist, create it from the included template:
    ```bash
    cp .env.example .env.local
    ```
+
+   In PowerShell, use:
+   ```powershell
+   Copy-Item .env.example .env.local
+   ```
+
+   Then fill in at least `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and
+   `INDEXING_SECRET`. The Supabase secret and indexing secret are server-only;
+   never commit `.env.local`.
 
    For the production catalog, configure `NEXT_PUBLIC_SUPABASE_URL` and either
    the publishable/anon read key. Set the new `SUPABASE_SECRET_KEY` (or legacy
@@ -99,6 +109,11 @@ The worker is deliberately restricted to a local Next.js base URL. It should
 not be pointed at the Vercel deployment for bulk processing. If it stops before
 the targets are reached, rerun the same command; do not use `--reset` unless a
 fresh catalog population is intended.
+
+The population is repeat-safe. Album rows are upserted by their unique iTunes
+collection ID. Similarity rows are upserted by source album, candidate album,
+ranking mode, and algorithm version. Re-running the command will resume or
+upgrade existing rows rather than create duplicate records.
 
 ---
 
