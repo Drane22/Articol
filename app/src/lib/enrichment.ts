@@ -1,7 +1,6 @@
 import { Album } from './types';
-import { enrichAlbumsWithArtwork, searchItunesAlbums } from './itunes';
-import { getCatalogCandidates, saveAlbumsToDb } from './db';
-import { isReliableVisualAnalysis } from './visualValidation';
+import { searchItunesAlbums } from './itunes';
+import { getCatalogCandidates } from './db';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY || '';
@@ -53,8 +52,7 @@ async function buildCandidatePool(
 
   const addCandidate = (alb: Album, score: number = 0) => {
     if (
-      alb.itunesCollectionId === queryAlbum.itunesCollectionId ||
-      alb.normalizedArtistName === queryAlbum.normalizedArtistName
+      alb.itunesCollectionId === queryAlbum.itunesCollectionId
     ) return;
 
     if (!candidatesMap.has(alb.itunesCollectionId)) candidatesMap.set(alb.itunesCollectionId, alb);
@@ -105,19 +103,6 @@ async function buildCandidatePool(
     } catch (e) {
       // Continue silently
     }
-  }
-
-  const candidates = Array.from(candidatesMap.values());
-  const candidatesToAnalyze = candidates
-    .filter((album) => !isReliableVisualAnalysis(album))
-    .slice(0, 36);
-
-  if (candidatesToAnalyze.length > 0) {
-    const analyzedCandidates = await enrichAlbumsWithArtwork(candidatesToAnalyze, 6);
-    for (const album of analyzedCandidates) {
-      candidatesMap.set(album.itunesCollectionId, album);
-    }
-    await saveAlbumsToDb(analyzedCandidates.filter(isReliableVisualAnalysis));
   }
 
   return {

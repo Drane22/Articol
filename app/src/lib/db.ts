@@ -1,8 +1,9 @@
 import { Album, RecommendationTiers, SearchMode, SimilarityResult } from './types';
 import { SEED_ALBUMS, initSeedAlbums } from '../data/seedCatalog';
-import { rankDistinctRecommendationTiers } from './visualEngine';
+import { calculatePaletteCompatibility, rankDistinctRecommendationTiers } from './visualEngine';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 import { hexToRgb, rgbToLab } from './colorUtils';
+import { isReliableVisualAnalysis } from './visualValidation';
 
 // The process-local map is a fast fallback and a write-through view of the catalog.
 const memoryStore = new Map<number, Album>();
@@ -215,8 +216,18 @@ export async function getCatalogCandidates(queryAlbum: Album, limit: number = 20
         return sameGenre || nearbyEra;
       })
       .slice(0, limit);
+    const paletteCandidates = isReliableVisualAnalysis(queryAlbum)
+      ? catalog
+        .filter((album) => album.itunesCollectionId !== queryAlbum.itunesCollectionId && isReliableVisualAnalysis(album))
+        .map((album) => ({ album, compatibility: calculatePaletteCompatibility(queryAlbum, album) }))
+        .filter((entry) => entry.compatibility >= 0.30)
+        .sort((left, right) => right.compatibility - left.compatibility)
+        .slice(0, Math.min(limit, 160))
+        .map((entry) => entry.album)
+      : [];
     const candidates = new Map<number, Album>();
     for (const album of visualCandidates) candidates.set(album.itunesCollectionId, album);
+    for (const album of paletteCandidates) candidates.set(album.itunesCollectionId, album);
     for (const album of metadataCandidates) candidates.set(album.itunesCollectionId, album);
     if (candidates.size === 0) {
       for (const album of catalog.slice(0, limit)) candidates.set(album.itunesCollectionId, album);
@@ -315,7 +326,11 @@ export async function saveSimilarityResultsToCache(
       visual_score: result.visualScore,
       visual_confidence: result.visualConfidence,
       music_score: result.musicScore,
+      music_confidence: result.musicConfidence,
       final_score: result.finalScore,
+      final_confidence: result.finalConfidence,
+      component_scores: result.componentScores,
+      eligibility_version: scoringVersion,
       scoring_version: scoringVersion,
       calculated_at: new Date().toISOString(),
     }))

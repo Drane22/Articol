@@ -11,6 +11,12 @@ import { calculateColorSimilarity } from './colorUtils';
 import { isReliableVisualAnalysis } from './visualValidation';
 
 export const MIN_RECOMMENDATION_CONFIDENCE = 0.30;
+export const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v6-verified-visual-v3';
+export const RECOMMENDATION_ELIGIBILITY_VERSION = 'verified-visual-v3';
+export const MIN_ART_STYLE_PALETTE_COMPATIBILITY = 0.60;
+export const MIN_BALANCED_PALETTE_COMPATIBILITY = 0.48;
+export const MIN_ART_STYLE_SCORE = 0.58;
+export const MIN_BALANCED_SCORE = 0.54;
 
 export function isRecommendationConfidenceEligible(confidence: number): boolean {
   return Number.isFinite(confidence) && confidence >= MIN_RECOMMENDATION_CONFIDENCE;
@@ -36,6 +42,70 @@ function hasGenre(album: Album): boolean {
   return Boolean(album.genre?.trim());
 }
 
+function hasFiniteVisualValues(album: Album, keys: Array<keyof Album['visualFeatures']>): boolean {
+  return keys.every((key) => Number.isFinite(album.visualFeatures?.[key] as number));
+}
+
+function hasColorProfile(album: Album): boolean {
+  const profile = album.visualFeatures?.colorProfile;
+  return Boolean(
+    profile &&
+    Number.isFinite(profile.neutralCoverage) &&
+    Number.isFinite(profile.chromaticCoverage) &&
+    Number.isFinite(profile.dominantHue) &&
+    Number.isFinite(profile.hueConcentration) &&
+    Number.isFinite(profile.meanLightness) &&
+    Number.isFinite(profile.lightnessSpread)
+  );
+}
+
+function hasLayoutEvidence(album: Album): boolean {
+  return hasFiniteVisualValues(album, [
+    'centroidX', 'centroidY', 'foregroundRatio', 'symmetryScore', 'textRatio', 'edgeDensity',
+  ]);
+}
+
+function hasMediumEvidence(album: Album): boolean {
+  return hasFiniteVisualValues(album, [
+    'portraitProb', 'illustrationProb', 'photographyProb', 'abstractProb', 'collageProb',
+    'monochromeScore', 'saturation', 'warmCool',
+  ]);
+}
+
+function hasTypographyEvidence(album: Album): boolean {
+  const typography = album.visualFeatures?.typography;
+  return Boolean(
+    (typography?.textRatio?.available && Number.isFinite(typography.textRatio.value)) ||
+    hasFiniteVisualValues(album, ['textRatio', 'textRegionCount', 'centroidX', 'centroidY'])
+  );
+}
+
+function hasComplexityEvidence(album: Album): boolean {
+  return hasFiniteVisualValues(album, ['visualEntropy', 'edgeDensity', 'minimalismScore']);
+}
+
+function hasVisualPairEvidence(
+  queryAlbum: Album,
+  candidate: Album,
+  predicate: (album: Album) => boolean,
+): boolean {
+  return predicate(queryAlbum) && predicate(candidate);
+}
+
+function weightedAvailableScore(components: Array<{ score: number | null; weight: number }>): {
+  score: number;
+  coverage: number;
+} {
+  const totalWeight = components.reduce((sum, component) => sum + component.weight, 0);
+  const available = components.filter((component) => component.score !== null && Number.isFinite(component.score));
+  const availableWeight = available.reduce((sum, component) => sum + component.weight, 0);
+  if (availableWeight === 0 || totalWeight === 0) return { score: 0, coverage: 0 };
+  return {
+    score: clamp01(available.reduce((sum, component) => sum + (component.score as number) * component.weight, 0) / availableWeight),
+    coverage: clamp01(availableWeight / totalWeight),
+  };
+}
+
 /**
  * Confidence describes how much trustworthy evidence supports a score. It is
  * deliberately separate from similarity: a low similarity can be a valid,
@@ -47,22 +117,15 @@ export function calculateVisualEvidenceConfidence(
   candidate: Album,
   mode: SearchMode,
 ): number {
-  if (mode === 'art_style') {
-    return hasPalette(queryAlbum) && hasPalette(candidate) ? 1 : 0;
-  }
+  const quality = Number(isReliableVisualAnalysis(queryAlbum) && isReliableVisualAnalysis(candidate));
+  const visual = buildVisualMeasurements(queryAlbum, candidate);
+  const requiredPalette = Number(visual.palette !== null);
+  const supportingSignals = [visual.embedding, visual.medium, visual.layout, visual.typographyTexture]
+    .filter((value) => value !== null).length;
 
-  const signals = [
-    isReliableVisualAnalysis(queryAlbum),
-    isReliableVisualAnalysis(candidate),
-    hasPalette(queryAlbum),
-    hasPalette(candidate),
-  ];
-
-  if (mode === 'balanced') {
-    signals.push(hasEmbedding(queryAlbum), hasEmbedding(candidate));
-  }
-
-  return signals.filter(Boolean).length / signals.length;
+  if (mode === 'music_relation') return clamp01(quality * visual.coverage);
+  if (!requiredPalette || supportingSignals < 2) return 0;
+  return clamp01(quality * visual.coverage);
 }
 
 export function calculateMusicEvidenceConfidence(
@@ -70,11 +133,7 @@ export function calculateMusicEvidenceConfidence(
   candidate: Album,
   lastFmSimilarScore = 0,
 ): number {
-  const genreEvidence = hasGenre(queryAlbum) && hasGenre(candidate);
-  const eraEvidence = hasReleaseYear(queryAlbum) && hasReleaseYear(candidate);
-  const lastFmEvidence = clamp01(lastFmSimilarScore);
-
-  return (Number(genreEvidence) + Number(eraEvidence) + lastFmEvidence) / 3;
+  return buildMusicMeasurements(queryAlbum, candidate, lastFmSimilarScore).coverage;
 }
 
 export function calculateRecommendationConfidence(
@@ -82,16 +141,29 @@ export function calculateRecommendationConfidence(
   candidate: Album,
   mode: SearchMode,
   lastFmSimilarScore = 0,
+  finalScore?: number,
 ): { finalConfidence: number; visualConfidence: number; musicConfidence: number } {
   const visualConfidence = calculateVisualEvidenceConfidence(queryAlbum, candidate, mode);
   const musicConfidence = calculateMusicEvidenceConfidence(queryAlbum, candidate, lastFmSimilarScore);
-  const paletteConfidence = hasPalette(queryAlbum) && hasPalette(candidate) ? 1 : 0;
-
-  const finalConfidence = mode === 'art_style'
+  const visual = buildVisualMeasurements(queryAlbum, candidate);
+  const music = buildMusicMeasurements(queryAlbum, candidate, lastFmSimilarScore);
+  const derivedScore = finalScore ?? (
+    mode === 'art_style'
+      ? visual.artStyleScore
+      : mode === 'balanced'
+        ? clamp01(0.70 * visual.balancedVisualScore + 0.30 * music.score)
+        : music.score
+  );
+  const decisiveAgreement = mode === 'music_relation'
+    ? music.strongestEvidence
+    : visual.palette ?? 0;
+  const evidenceQuality = mode === 'art_style'
     ? visualConfidence
     : mode === 'balanced'
-      ? 0.70 * visualConfidence + 0.30 * musicConfidence
-      : 0.75 * musicConfidence + 0.15 * visualConfidence + 0.10 * paletteConfidence;
+      ? clamp01(0.70 * visualConfidence + 0.30 * musicConfidence)
+      : musicConfidence;
+  const agreement = Math.sqrt(clamp01(derivedScore) * clamp01(decisiveAgreement));
+  const finalConfidence = evidenceQuality * agreement;
 
   return {
     finalConfidence: clamp01(finalConfidence),
@@ -254,6 +326,125 @@ function calculateMediumSimilarity(albumA: Album, albumB: Album): number {
   ));
 }
 
+function circularHueSimilarity(firstHue: number, secondHue: number): number {
+  const difference = Math.abs(((firstHue - secondHue + 540) % 360) - 180);
+  return clamp01(1 - difference / 180);
+}
+
+/**
+ * Palette compatibility is stricter than raw palette transport distance. It
+ * explicitly models how much meaningful chromatic content each cover has, so
+ * shared black or white cannot make a colorful and monochrome cover compatible.
+ */
+export function calculatePaletteCompatibility(albumA: Album, albumB: Album): number {
+  if (!hasPalette(albumA) || !hasPalette(albumB) || !hasColorProfile(albumA) || !hasColorProfile(albumB)) {
+    return 0;
+  }
+
+  const first = albumA.visualFeatures.colorProfile!;
+  const second = albumB.visualFeatures.colorProfile!;
+  const transportSimilarity = calculateColorSimilarity(albumA.dominantPalette, albumB.dominantPalette);
+  const chromaticCoverageSimilarity = clamp01(1 - Math.abs(first.chromaticCoverage - second.chromaticCoverage));
+  const lightnessSimilarity = clamp01(
+    1 - 0.70 * Math.abs(first.meanLightness - second.meanLightness) -
+    0.30 * Math.abs(first.lightnessSpread - second.lightnessSpread),
+  );
+
+  const bothChromatic = first.chromaticCoverage >= 0.28 && second.chromaticCoverage >= 0.28;
+  const bothNeutral = first.neutralCoverage >= 0.70 && second.neutralCoverage >= 0.70;
+  const hueSimilarity = bothChromatic
+    ? circularHueSimilarity(first.dominantHue, second.dominantHue)
+    : bothNeutral
+      ? 1
+      : 0;
+  const concentrationSimilarity = bothChromatic
+    ? clamp01(1 - Math.abs(first.hueConcentration - second.hueConcentration))
+    : bothNeutral
+      ? 1
+      : 0;
+
+  let compatibility = clamp01(
+    0.48 * transportSimilarity +
+    0.22 * hueSimilarity +
+    0.14 * chromaticCoverageSimilarity +
+    0.10 * lightnessSimilarity +
+    0.06 * concentrationSimilarity,
+  );
+
+  const chromaticGap = Math.abs(first.chromaticCoverage - second.chromaticCoverage);
+  if (chromaticGap >= 0.35) compatibility *= 0.50;
+  if (bothChromatic && hueSimilarity < 0.45) compatibility *= 0.55;
+  if (!bothChromatic && !bothNeutral) compatibility *= 0.45;
+
+  return clamp01(compatibility);
+}
+
+interface VisualMeasurements {
+  palette: number | null;
+  embedding: number | null;
+  medium: number | null;
+  layout: number | null;
+  typographyTexture: number | null;
+  typography: number | null;
+  complexity: number | null;
+  artStyleScore: number;
+  balancedVisualScore: number;
+  coverage: number;
+}
+
+function buildVisualMeasurements(albumA: Album, albumB: Album): VisualMeasurements {
+  const palette = hasVisualPairEvidence(albumA, albumB, (album) => hasPalette(album) && hasColorProfile(album))
+    ? calculatePaletteCompatibility(albumA, albumB)
+    : null;
+  const embedding = hasVisualPairEvidence(albumA, albumB, hasEmbedding)
+    ? calculateCosineSimilarity(albumA.embedding, albumB.embedding)
+    : null;
+  const medium = hasVisualPairEvidence(albumA, albumB, hasMediumEvidence)
+    ? calculateMediumSimilarity(albumA, albumB)
+    : null;
+  const layout = hasVisualPairEvidence(albumA, albumB, hasLayoutEvidence)
+    ? calculateLayoutSimilarity(albumA, albumB)
+    : null;
+  const typography = hasVisualPairEvidence(albumA, albumB, hasTypographyEvidence)
+    ? calculateTypographySimilarity(albumA, albumB)
+    : null;
+  const complexity = hasVisualPairEvidence(albumA, albumB, hasComplexityEvidence)
+    ? calculateComplexitySimilarity(albumA, albumB)
+    : null;
+  const typographyTexture = weightedAvailableScore([
+    { score: typography, weight: 0.5 },
+    { score: complexity, weight: 0.5 },
+  ]).score || (typography !== null || complexity !== null ? 0 : null);
+
+  const artStyle = weightedAvailableScore([
+    { score: palette, weight: 0.48 },
+    { score: embedding, weight: 0.20 },
+    { score: medium, weight: 0.14 },
+    { score: layout, weight: 0.10 },
+    { score: typographyTexture, weight: 0.08 },
+  ]);
+  const balancedVisual = weightedAvailableScore([
+    { score: palette, weight: 0.40 },
+    { score: embedding, weight: 0.25 },
+    { score: medium, weight: 0.15 },
+    { score: layout, weight: 0.10 },
+    { score: typographyTexture, weight: 0.10 },
+  ]);
+
+  return {
+    palette,
+    embedding,
+    medium,
+    layout,
+    typographyTexture,
+    typography,
+    complexity,
+    artStyleScore: artStyle.score,
+    balancedVisualScore: balancedVisual.score,
+    coverage: artStyle.coverage,
+  };
+}
+
 function weightedGeometricScore(components: Array<[number, number]>): number {
   const weightedLog = components.reduce(
     (sum, [value, weight]) => sum + weight * Math.log(Math.max(0.05, Math.min(1, value))),
@@ -267,34 +458,11 @@ function weightedGeometricScore(components: Array<[number, number]>): number {
 // ==========================================
 
 export function calculateVisualScore(albumA: Album, albumB: Album): number {
-  const embeddingSim = albumA.embedding && albumB.embedding
-    ? calculateCosineSimilarity(albumA.embedding, albumB.embedding)
-    : 0;
-
-  const colorSim = calculateColorSimilarity(
-    albumA.dominantPalette || [],
-    albumB.dominantPalette || []
-  );
-
-  const layoutSim = calculateLayoutSimilarity(albumA, albumB);
-  const typographySim = calculateTypographySimilarity(albumA, albumB);
-  const complexitySim = calculateComplexitySimilarity(albumA, albumB);
-  const mediumSim = calculateMediumSimilarity(albumA, albumB);
-
-  return weightedGeometricScore([
-    [embeddingSim, 0.38],
-    [colorSim, 0.24],
-    [layoutSim, 0.18],
-    [mediumSim, 0.12],
-    [typographySim, 0.04],
-    [complexitySim, 0.04],
-  ]);
+  return buildVisualMeasurements(albumA, albumB).balancedVisualScore;
 }
 
 export function calculateArtStyleScore(albumA: Album, albumB: Album): number {
-  // Art Style is intentionally palette-only. Layout, embeddings, typography,
-  // genre, artist, and release year belong to the other recommendation modes.
-  return calculateColorSimilarity(albumA.dominantPalette || [], albumB.dominantPalette || []);
+  return buildVisualMeasurements(albumA, albumB).artStyleScore;
 }
 
 // ==========================================
@@ -306,11 +474,34 @@ export function calculateMusicScore(
   albumB: Album,
   lastFmSimilarScore: number = 0.0
 ): number {
+  return buildMusicMeasurements(albumA, albumB, lastFmSimilarScore).score;
+}
+
+interface MusicMeasurements {
+  score: number;
+  coverage: number;
+  evidenceCount: number;
+  strongestEvidence: number;
+  hasStrongArtistAffinity: boolean;
+  artist: number | null;
+  genre: number | null;
+  era: number | null;
+}
+
+function buildMusicMeasurements(
+  albumA: Album,
+  albumB: Album,
+  lastFmSimilarScore: number = 0,
+): MusicMeasurements {
   const isSameArtist =
     albumA.normalizedArtistName === albumB.normalizedArtistName ||
     (albumA.itunesArtistId && albumA.itunesArtistId === albumB.itunesArtistId);
 
-  const artistSim = isSameArtist ? 1.0 : Math.max(0, Math.min(1, lastFmSimilarScore));
+  const artist = isSameArtist
+    ? 1
+    : lastFmSimilarScore > 0
+      ? clamp01(lastFmSimilarScore)
+      : null;
 
   const genreTokens = (genre: string, styles: string[] = []) =>
     new Set(
@@ -321,21 +512,34 @@ export function calculateMusicScore(
         .filter((token) => token.length > 2 && !['music', 'album'].includes(token))
     );
 
+  const hasGenreEvidence = hasGenre(albumA) && hasGenre(albumB);
   const genresA = genreTokens(albumA.genre, albumA.styles);
   const genresB = genreTokens(albumB.genre, albumB.styles);
   const intersection = [...genresA].filter((token) => genresB.has(token)).length;
   const union = new Set([...genresA, ...genresB]).size;
-  const genreSim = union ? intersection / union : 0;
+  const genre = hasGenreEvidence && union ? intersection / union : null;
 
-  const yearA = albumA.releaseYear || (albumA.releaseDate ? parseInt(albumA.releaseDate.slice(0, 4)) : 2000);
-  const yearB = albumB.releaseYear || (albumB.releaseDate ? parseInt(albumB.releaseDate.slice(0, 4)) : 2000);
-  const yearDiff = Math.abs(yearA - yearB);
-  const releaseEraSim = Math.exp(-yearDiff / 12.0);
+  const hasEraEvidence = hasReleaseYear(albumA) && hasReleaseYear(albumB);
+  const yearDiff = hasEraEvidence ? Math.abs(albumA.releaseYear - albumB.releaseYear) : 0;
+  const era = hasEraEvidence ? Math.exp(-yearDiff / 12.0) : null;
 
-  if (artistSim > 0) {
-    return Math.max(0, Math.min(1, 0.55 * artistSim + 0.30 * genreSim + 0.15 * releaseEraSim));
-  }
-  return Math.max(0, Math.min(1, (0.70 * genreSim + 0.30 * releaseEraSim) * 0.72));
+  const measured = weightedAvailableScore([
+    { score: artist, weight: 0.60 },
+    { score: genre, weight: 0.25 },
+    { score: era, weight: 0.15 },
+  ]);
+  const availableScores = [artist, genre, era].filter((value): value is number => value !== null);
+
+  return {
+    score: measured.score,
+    coverage: measured.coverage,
+    evidenceCount: availableScores.length,
+    strongestEvidence: availableScores.length ? Math.max(...availableScores) : 0,
+    hasStrongArtistAffinity: (artist ?? 0) >= 0.70,
+    artist,
+    genre,
+    era,
+  };
 }
 
 // ==========================================
@@ -369,47 +573,49 @@ export function generateMatchExplanation(
   const fC = candidate.visualFeatures;
 
   if (mode === 'art_style') {
-    const colorSim = calculateColorSimilarity(query.dominantPalette || [], candidate.dominantPalette || []);
-    const matchType = colorSim >= 0.78 ? 'high' : colorSim >= 0.58 ? 'medium' : 'close';
-    const label = colorSim >= 0.78 ? 'Very similar palette' : 'Related color palette';
+    const paletteCompatibility = calculatePaletteCompatibility(query, candidate);
+    const matchType = paletteCompatibility >= 0.82 ? 'high' : paletteCompatibility >= 0.68 ? 'medium' : 'close';
+    const label = paletteCompatibility >= 0.82 ? 'Very similar color language' : 'Compatible palette and visual language';
     return {
       reasons: [{ label, category: 'color' }],
-      explanation: `Palette-only match: ${Math.round(colorSim * 100)}% color similarity. Music and composition do not affect Art Style ranking.`,
-      sharedAttrs: [{ name: 'Palette', value: 'Dominant color distribution', matchType }],
+      explanation: `Visual-style match: ${Math.round(paletteCompatibility * 100)}% palette compatibility, checked alongside artwork structure, medium, and typography. Music metadata does not affect this tier.`,
+      sharedAttrs: [{ name: 'Palette', value: 'Compatible dominant color profile', matchType }],
     };
   }
 
   if (mode === 'music_relation') {
-    if (lastFmScore > 0) {
-      reasons.push({ label: 'Related artist', category: 'music' });
+    const music = buildMusicMeasurements(query, candidate, lastFmScore);
+    const sameArtist = query.normalizedArtistName === candidate.normalizedArtistName ||
+      Boolean(query.itunesArtistId && query.itunesArtistId === candidate.itunesArtistId);
+    if (music.artist !== null) {
+      reasons.push({ label: sameArtist ? 'Another release by the same artist' : 'Related artist', category: 'music' });
       sharedAttrs.push({
         name: 'Artist affinity',
-        value: 'Last.fm relationship',
-        matchType: lastFmScore >= 0.7 ? 'high' : 'medium',
+        value: sameArtist ? 'Shared artist' : 'Verified artist relationship',
+        matchType: music.artist >= 0.7 ? 'high' : 'medium',
       });
     }
-    if (query.genre.toLowerCase() === candidate.genre.toLowerCase()) {
-      reasons.push({ label: `Shared ${query.genre} genre`, category: 'music' });
+    if (music.genre !== null && music.genre > 0) {
+      reasons.push({ label: `Shared ${query.genre} genre/style`, category: 'music' });
       sharedAttrs.push({ name: 'Genre', value: query.genre, matchType: 'high' });
     }
-    const yearDistance = Math.abs((query.releaseYear || 2000) - (candidate.releaseYear || 2000));
-    if (yearDistance <= 8) {
+    const yearDistance = Math.abs((query.releaseYear || 0) - (candidate.releaseYear || 0));
+    if (music.era !== null && yearDistance <= 8) {
       reasons.push({ label: 'Close release era', category: 'music' });
       sharedAttrs.push({ name: 'Era', value: `${candidate.releaseYear}`, matchType: yearDistance <= 3 ? 'high' : 'close' });
     }
-    if (!reasons.length) reasons.push({ label: 'Metadata music relation', category: 'music' });
     return {
       reasons: reasons.slice(0, 3),
-      explanation: `${candidate.artistName} is connected through musical metadata and artist affinity, with a ${Math.round(
+      explanation: `${candidate.artistName} is connected through measured artist, genre/style, and release-era evidence, with a ${Math.round(
         musicScore * 100
-      )}% music-relation score. Artwork is shown for context but does not affect this tier's ranking.`,
+      )}% music-relation score. Artwork is shown for context and does not affect this tier's ranking.`,
       sharedAttrs,
     };
   }
 
   // 1. Color check
-  const colorSim = calculateColorSimilarity(query.dominantPalette || [], candidate.dominantPalette || []);
-  if (colorSim > 0.78) {
+  const colorSim = calculatePaletteCompatibility(query, candidate);
+  if (colorSim > 0.72) {
     if (fQ.monochromeScore > 0.6 && fC.monochromeScore > 0.6) {
       reasons.push({ label: 'Similar monochrome treatment', category: 'color' });
       sharedAttrs.push({ name: 'Palette', value: 'Dark Monochrome', matchType: 'high' });
@@ -466,8 +672,12 @@ export function generateMatchExplanation(
     sharedAttrs.push({ name: 'Typography', value: 'Text-Free Artwork', matchType: 'high' });
   }
 
-  if (reasons.length === 0) {
-    reasons.push({ label: 'Comparable overall visual mood', category: 'mood' });
+  if (reasons.length === 0 || sharedAttrs.length === 0) {
+    return {
+      reasons: [],
+      explanation: 'No qualifying measured visual attributes were available for this comparison.',
+      sharedAttrs: [],
+    };
   }
 
   const topReasons = reasons.map((r) => r.label.toLowerCase());
@@ -501,17 +711,19 @@ export function rankSimilarAlbums(
   limit: number = 18,
   allowMultipleArtistAlbums: boolean = false
 ): SimilarityResult[] {
-  // Exclude duplicate album collection ID, identical artist name/id, failed analysis status, identical artwork URL/perceptual hash
+  // Exclude source identity, duplicate artwork, and visual records that do not
+  // meet the verified data contract. Music Relation deliberately keeps distinct
+  // releases by the same artist because that is meaningful music evidence.
   const filteredCandidates = candidates.filter((c) => {
     if (c.itunesCollectionId === queryAlbum.itunesCollectionId) return false;
-    if (
+    const isSameArtist =
       c.normalizedArtistName === queryAlbum.normalizedArtistName ||
-      (queryAlbum.itunesArtistId && c.itunesArtistId === queryAlbum.itunesArtistId)
-    ) {
+      (queryAlbum.itunesArtistId && c.itunesArtistId === queryAlbum.itunesArtistId);
+    if (mode !== 'music_relation' && isSameArtist) {
       return false;
     }
     if (c.visualAnalysisStatus === 'failed') return false;
-    if (mode !== 'music_relation' && !isReliableVisualAnalysis(c)) return false;
+    if (mode !== 'music_relation' && (!isReliableVisualAnalysis(queryAlbum) || !isReliableVisualAnalysis(c))) return false;
     if (c.artworkUrl && c.artworkUrl === queryAlbum.artworkUrl) return false;
     const sameTitle = c.normalizedTitle === queryAlbum.normalizedTitle;
     if (sameTitle && calculateHammingDistance(c.perceptualHash, queryAlbum.perceptualHash) <= 8) return false;
@@ -521,18 +733,34 @@ export function rankSimilarAlbums(
   const scoredItems: SimilarityResult[] = [];
 
   for (const candidate of filteredCandidates) {
-    const visualScore = calculateVisualScore(queryAlbum, candidate);
-    const artStyleScore = calculateArtStyleScore(queryAlbum, candidate);
+    const visual = buildVisualMeasurements(queryAlbum, candidate);
     const lastFmSim = lastFmSimilarScores[candidate.itunesCollectionId] || 0.0;
-    const musicScore = calculateMusicScore(queryAlbum, candidate, lastFmSim);
-
-    const colorScore = calculateColorSimilarity(queryAlbum.dominantPalette || [], candidate.dominantPalette || []);
+    const music = buildMusicMeasurements(queryAlbum, candidate, lastFmSim);
+    const visualSupportingSignals = [visual.embedding, visual.medium, visual.layout, visual.typographyTexture]
+      .filter((value) => value !== null).length;
+    const hasRequiredVisualEvidence = visual.palette !== null && visualSupportingSignals >= 2;
+    const visualScore = visual.balancedVisualScore;
+    const artStyleScore = visual.artStyleScore;
+    const musicScore = music.score;
     const finalScore =
       mode === 'art_style'
         ? artStyleScore
         : mode === 'balanced'
         ? 0.70 * visualScore + 0.30 * musicScore
-        : 0.75 * musicScore + 0.15 * visualScore + 0.10 * colorScore;
+        : musicScore;
+
+    const passesVisualEligibility = mode === 'art_style'
+      ? hasRequiredVisualEvidence &&
+        (visual.palette ?? 0) >= MIN_ART_STYLE_PALETTE_COMPATIBILITY &&
+        finalScore >= MIN_ART_STYLE_SCORE
+      : mode === 'balanced'
+        ? hasRequiredVisualEvidence &&
+          (visual.palette ?? 0) >= MIN_BALANCED_PALETTE_COMPATIBILITY &&
+          finalScore >= MIN_BALANCED_SCORE
+        : true;
+    const passesMusicEligibility = mode !== 'music_relation' ||
+      music.evidenceCount >= 2 || music.hasStrongArtistAffinity;
+    if (!passesVisualEligibility || !passesMusicEligibility) continue;
 
     const { reasons, explanation, sharedAttrs } = generateMatchExplanation(
       queryAlbum,
@@ -542,7 +770,9 @@ export function rankSimilarAlbums(
       mode,
       lastFmSim
     );
-    const confidence = calculateRecommendationConfidence(queryAlbum, candidate, mode, lastFmSim);
+    if (sharedAttrs.length === 0) continue;
+    const confidence = calculateRecommendationConfidence(queryAlbum, candidate, mode, lastFmSim, finalScore);
+    if (!isRecommendationConfidenceEligible(confidence.finalConfidence)) continue;
 
     scoredItems.push({
       album: candidate,
@@ -553,11 +783,12 @@ export function rankSimilarAlbums(
       musicScore,
       musicConfidence: confidence.musicConfidence,
       componentScores: {
-        embedding: mode === 'art_style' ? null : calculateCosineSimilarity(queryAlbum.embedding, candidate.embedding),
-        color: colorScore,
-        layout: mode === 'art_style' ? null : calculateLayoutSimilarity(queryAlbum, candidate),
-        typography: mode === 'art_style' ? null : calculateTypographySimilarity(queryAlbum, candidate),
-        complexity: mode === 'art_style' ? null : calculateComplexitySimilarity(queryAlbum, candidate),
+        embedding: mode === 'music_relation' ? null : visual.embedding,
+        color: mode === 'music_relation' ? null : visual.palette,
+        layout: mode === 'music_relation' ? null : visual.layout,
+        typography: mode === 'music_relation' ? null : visual.typography,
+        complexity: mode === 'music_relation' ? null : visual.complexity,
+        medium: mode === 'music_relation' ? null : visual.medium,
       },
       matchReasons: reasons,
       explanation,
@@ -574,10 +805,10 @@ export function rankSimilarAlbums(
   // Maximum Marginal Relevance (MMR)
   const selected: SimilarityResult[] = [];
   const artistCounts: Record<string, number> = {};
-  const lambda = mode === 'art_style' ? 0.86 : mode === 'balanced' ? 0.80 : 0.90;
-  const pool = scoredItems.filter((item) => isRecommendationConfidenceEligible(item.finalConfidence));
+  const lambda = mode === 'art_style' ? 0.82 : mode === 'balanced' ? 0.80 : 0.85;
+  const pool = [...scoredItems];
 
-  const maxAllowedPerArtist = allowMultipleArtistAlbums ? 3 : 1;
+  const maxAllowedPerArtist = allowMultipleArtistAlbums ? 3 : mode === 'music_relation' ? 2 : 1;
 
   while (pool.length > 0 && selected.length < limit) {
     let bestCandidateIdx = -1;
@@ -594,8 +825,10 @@ export function rankSimilarAlbums(
       let maxSimToSelected = 0;
       for (const sel of selected) {
         const sim = mode === 'art_style'
-          ? calculateColorSimilarity(item.album.dominantPalette || [], sel.album.dominantPalette || [])
-          : calculateCosineSimilarity(item.album.embedding, sel.album.embedding);
+          ? calculateArtStyleScore(item.album, sel.album)
+          : mode === 'balanced'
+            ? calculateVisualScore(item.album, sel.album)
+            : calculateMusicScore(item.album, sel.album);
         if (sim > maxSimToSelected) maxSimToSelected = sim;
       }
 

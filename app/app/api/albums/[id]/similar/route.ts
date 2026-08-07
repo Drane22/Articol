@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getItunesAlbumById, refreshSeedAlbum, enrichAlbumWithArtwork } from '@/lib/itunes';
 import { generateCandidatePool } from '@/lib/enrichment';
-import { rankDistinctRecommendationTiers } from '@/lib/visualEngine';
+import { RECOMMENDATION_ALGORITHM_VERSION, rankDistinctRecommendationTiers } from '@/lib/visualEngine';
 import { Album, RecommendationTiers, SimilarityResult } from '@/lib/types';
 import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
 import { getAlbumFromDb, saveAlbumToDb, saveSimilarityResultsToCache } from '@/lib/db';
 import { isReliableVisualAnalysis } from '@/lib/visualValidation';
 import { normalizeStorefront } from '@/lib/storefronts';
 
-const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v5-confidence-gate';
 const responseCache = new BoundedTtlCache<RecommendationPayload>({
   maxEntries: 48,
   ttlMs: 1000 * 30,
