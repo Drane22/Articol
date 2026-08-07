@@ -10,6 +10,96 @@ import {
 import { calculateColorSimilarity } from './colorUtils';
 import { isReliableVisualAnalysis } from './visualValidation';
 
+export const MIN_RECOMMENDATION_CONFIDENCE = 0.30;
+
+export function isRecommendationConfidenceEligible(confidence: number): boolean {
+  return Number.isFinite(confidence) && confidence >= MIN_RECOMMENDATION_CONFIDENCE;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+}
+
+function hasPalette(album: Album): boolean {
+  return Array.isArray(album.dominantPalette) && album.dominantPalette.length > 0;
+}
+
+function hasEmbedding(album: Album): boolean {
+  return Array.isArray(album.embedding) && album.embedding.length > 0;
+}
+
+function hasReleaseYear(album: Album): boolean {
+  return Number.isFinite(album.releaseYear) && album.releaseYear > 0;
+}
+
+function hasGenre(album: Album): boolean {
+  return Boolean(album.genre?.trim());
+}
+
+/**
+ * Confidence describes how much trustworthy evidence supports a score. It is
+ * deliberately separate from similarity: a low similarity can be a valid,
+ * fully-evidenced result, while a high score with missing descriptors should
+ * not be presented as reliable.
+ */
+export function calculateVisualEvidenceConfidence(
+  queryAlbum: Album,
+  candidate: Album,
+  mode: SearchMode,
+): number {
+  if (mode === 'art_style') {
+    return hasPalette(queryAlbum) && hasPalette(candidate) ? 1 : 0;
+  }
+
+  const signals = [
+    isReliableVisualAnalysis(queryAlbum),
+    isReliableVisualAnalysis(candidate),
+    hasPalette(queryAlbum),
+    hasPalette(candidate),
+  ];
+
+  if (mode === 'balanced') {
+    signals.push(hasEmbedding(queryAlbum), hasEmbedding(candidate));
+  }
+
+  return signals.filter(Boolean).length / signals.length;
+}
+
+export function calculateMusicEvidenceConfidence(
+  queryAlbum: Album,
+  candidate: Album,
+  lastFmSimilarScore = 0,
+): number {
+  const genreEvidence = hasGenre(queryAlbum) && hasGenre(candidate);
+  const eraEvidence = hasReleaseYear(queryAlbum) && hasReleaseYear(candidate);
+  const lastFmEvidence = clamp01(lastFmSimilarScore);
+
+  return (Number(genreEvidence) + Number(eraEvidence) + lastFmEvidence) / 3;
+}
+
+export function calculateRecommendationConfidence(
+  queryAlbum: Album,
+  candidate: Album,
+  mode: SearchMode,
+  lastFmSimilarScore = 0,
+): { finalConfidence: number; visualConfidence: number; musicConfidence: number } {
+  const visualConfidence = calculateVisualEvidenceConfidence(queryAlbum, candidate, mode);
+  const musicConfidence = calculateMusicEvidenceConfidence(queryAlbum, candidate, lastFmSimilarScore);
+  const paletteConfidence = hasPalette(queryAlbum) && hasPalette(candidate) ? 1 : 0;
+
+  const finalConfidence = mode === 'art_style'
+    ? visualConfidence
+    : mode === 'balanced'
+      ? 0.70 * visualConfidence + 0.30 * musicConfidence
+      : 0.75 * musicConfidence + 0.15 * visualConfidence + 0.10 * paletteConfidence;
+
+  return {
+    finalConfidence: clamp01(finalConfidence),
+    visualConfidence: clamp01(visualConfidence),
+    musicConfidence: clamp01(musicConfidence),
+  };
+}
+
 // ==========================================
 // 1. EMBEDDING SIMILARITY
 // ==========================================
@@ -452,15 +542,16 @@ export function rankSimilarAlbums(
       mode,
       lastFmSim
     );
+    const confidence = calculateRecommendationConfidence(queryAlbum, candidate, mode, lastFmSim);
 
     scoredItems.push({
       album: candidate,
       finalScore: Math.max(0, Math.min(1, finalScore)),
-      finalConfidence: 1.0,
+      finalConfidence: confidence.finalConfidence,
       visualScore: mode === 'art_style' ? artStyleScore : visualScore,
-      visualConfidence: 1.0,
+      visualConfidence: confidence.visualConfidence,
       musicScore,
-      musicConfidence: lastFmSim > 0 ? 0.9 : 0.5,
+      musicConfidence: confidence.musicConfidence,
       componentScores: {
         embedding: mode === 'art_style' ? null : calculateCosineSimilarity(queryAlbum.embedding, candidate.embedding),
         color: colorScore,
@@ -484,7 +575,7 @@ export function rankSimilarAlbums(
   const selected: SimilarityResult[] = [];
   const artistCounts: Record<string, number> = {};
   const lambda = mode === 'art_style' ? 0.86 : mode === 'balanced' ? 0.80 : 0.90;
-  const pool = [...scoredItems];
+  const pool = scoredItems.filter((item) => isRecommendationConfidenceEligible(item.finalConfidence));
 
   const maxAllowedPerArtist = allowMultipleArtistAlbums ? 3 : 1;
 

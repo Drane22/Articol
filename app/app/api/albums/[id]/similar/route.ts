@@ -8,7 +8,7 @@ import { getAlbumFromDb, saveAlbumToDb, saveSimilarityResultsToCache } from '@/l
 import { isReliableVisualAnalysis } from '@/lib/visualValidation';
 import { normalizeStorefront } from '@/lib/storefronts';
 
-const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v4-palette-transport';
+const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v5-confidence-gate';
 const responseCache = new BoundedTtlCache<RecommendationPayload>({
   maxEntries: 48,
   ttlMs: 1000 * 30,
