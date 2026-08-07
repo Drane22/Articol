@@ -35,6 +35,13 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
     : isMusicRelation
       ? 'Artist, genre, and release-era relationships were compared. Artwork is shown for context.'
       : 'Palette, structure, composition, typography, and music context were compared.';
+  const reasonLabels = result.matchReasons
+    .map((reason) => reason.label.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+  const reasonSentence = reasonLabels.length > 0
+    ? `${reasonLabels.join(' · ')}.`
+    : explanationBody;
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -201,6 +208,10 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
               ))}
             </div>
           )}
+          <div className="why-match-evidence__reason">
+            <span>Why this match</span>
+            <p>{reasonSentence}</p>
+          </div>
         </section>
 
           </div>
