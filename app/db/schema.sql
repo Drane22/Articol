@@ -116,6 +116,9 @@ CREATE TABLE IF NOT EXISTS album_similarity_cache (
   PRIMARY KEY (source_album_id, candidate_album_id, mode, scoring_version)
 );
 
+CREATE INDEX IF NOT EXISTS idx_similarity_cache_source_version_score
+ON album_similarity_cache(source_album_id, scoring_version, final_score DESC);
+
 -- Safe for installations created before recommendation confidence was audited.
 ALTER TABLE album_similarity_cache ADD COLUMN IF NOT EXISTS music_confidence REAL;
 ALTER TABLE album_similarity_cache ADD COLUMN IF NOT EXISTS final_confidence REAL;

@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { getItunesAlbumById, refreshSeedAlbum, enrichAlbumWithArtwork } from '@/lib/itunes';
 import { generateCandidatePool } from '@/lib/enrichment';
 import { RECOMMENDATION_ALGORITHM_VERSION, rankDistinctRecommendationTiers } from '@/lib/visualEngine';
 import { Album, RecommendationTiers, SimilarityResult } from '@/lib/types';
 import { BoundedTtlCache, InflightRequests } from '@/lib/boundedCache';
-import { getAlbumFromDb, saveAlbumToDb, saveSimilarityResultsToCache } from '@/lib/db';
+import { getAlbumFromDb, getSimilarityResultsFromCache, saveAlbumToDb, saveSimilarityResultsToCache } from '@/lib/db';
 import { isReliableVisualAnalysis } from '@/lib/visualValidation';
 import { normalizeStorefront } from '@/lib/storefronts';
 
@@ -36,37 +36,69 @@ async function calculateRecommendations(
   country: string,
   limit: number
 ): Promise<RecommendationPayload> {
-  // Check indexed database catalog first
   const storedAlbum = await getAlbumFromDb(collectionId);
-  const { album: fetched } = await getItunesAlbumById(collectionId, country, false);
-  let queryAlbum: Album | null = fetched
-    ? storedAlbum
-      ? {
-          ...storedAlbum,
-          country: fetched.country,
-          price: fetched.price,
-          currency: fetched.currency,
-          storeUrl: fetched.storeUrl,
-          artworkUrl: fetched.artworkUrl || storedAlbum.artworkUrl,
-          trackCount: fetched.trackCount,
-          explicitness: fetched.explicitness,
-        }
-      : fetched
-    : storedAlbum;
+
+  if (storedAlbum && isReliableVisualAnalysis(storedAlbum)) {
+    const cached = await getSimilarityResultsFromCache(
+      storedAlbum,
+      RECOMMENDATION_ALGORITHM_VERSION,
+      limit,
+    );
+    if (cached) {
+      const tiers = Object.fromEntries(
+        Object.entries(cached).map(([mode, results]) => [mode, results.map(publicResult)])
+      ) as unknown as RecommendationTiers;
+      return {
+        status: 'indexed',
+        queryAlbum: withoutInternalVector(storedAlbum),
+        count: Math.max(...Object.values(tiers).map((results) => results.length), 0),
+        tiers,
+        algorithmVersion: RECOMMENDATION_ALGORITHM_VERSION,
+      };
+    }
+  }
+
+  let queryAlbum: Album | null = storedAlbum;
+  if (!queryAlbum || queryAlbum.artworkSource === 'seed') {
+    const { album: fetched } = await getItunesAlbumById(collectionId, country, false);
+    queryAlbum = fetched
+      ? storedAlbum
+        ? {
+            ...storedAlbum,
+            itunesArtistId: fetched.itunesArtistId || storedAlbum.itunesArtistId,
+            title: fetched.title || storedAlbum.title,
+            normalizedTitle: fetched.normalizedTitle || storedAlbum.normalizedTitle,
+            artistName: fetched.artistName || storedAlbum.artistName,
+            normalizedArtistName: fetched.normalizedArtistName || storedAlbum.normalizedArtistName,
+            country: fetched.country,
+            storeUrl: fetched.storeUrl,
+            artworkUrl: fetched.artworkUrl || storedAlbum.artworkUrl,
+            artworkSource: fetched.artworkSource,
+            trackCount: fetched.trackCount,
+            explicitness: fetched.explicitness,
+          }
+        : fetched
+      : storedAlbum;
+  }
 
   if (!queryAlbum) throw new Error('Album not found');
   queryAlbum = await refreshSeedAlbum(queryAlbum, country);
+  let shouldPersistQueryAlbum = false;
 
   // Enrich query album if it has not been visually analyzed yet
   if (!isReliableVisualAnalysis(queryAlbum)) {
     queryAlbum = await enrichAlbumWithArtwork(queryAlbum);
-    await saveAlbumToDb(queryAlbum);
+    shouldPersistQueryAlbum = true;
   }
 
   // Verify visual indexing status (Section 4 & 24: Unindexed albums return not_indexed)
   const isIndexed = isReliableVisualAnalysis(queryAlbum);
 
   if (!isIndexed) {
+    if (shouldPersistQueryAlbum) {
+      const albumToPersist = queryAlbum;
+      after(() => saveAlbumToDb(albumToPersist));
+    }
     return {
       status: 'not_indexed',
       count: 0,
@@ -85,7 +117,11 @@ async function calculateRecommendations(
     Object.entries(ranked).map(([mode, results]) => [mode, results.map(publicResult)])
   ) as unknown as RecommendationTiers;
 
-  await saveSimilarityResultsToCache(queryAlbum, ranked, RECOMMENDATION_ALGORITHM_VERSION);
+  const albumToPersist = queryAlbum;
+  after(async () => {
+    if (shouldPersistQueryAlbum) await saveAlbumToDb(albumToPersist);
+    await saveSimilarityResultsToCache(albumToPersist, ranked, RECOMMENDATION_ALGORITHM_VERSION);
+  });
 
   return {
     status: 'indexed',
@@ -141,7 +177,7 @@ export async function GET(
       },
       {
         headers: {
-           'Cache-Control': 'private, no-store',
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
           'X-Articol-Cache': cacheStatus,
         },
       }

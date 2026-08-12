@@ -1,6 +1,6 @@
 import { Album, RecommendationTiers, SearchMode, SimilarityResult } from './types';
 import { SEED_ALBUMS, initSeedAlbums } from '../data/seedCatalog';
-import { calculatePaletteCompatibility, rankDistinctRecommendationTiers } from './visualEngine';
+import { calculatePaletteCompatibility, generateMatchExplanation, rankDistinctRecommendationTiers } from './visualEngine';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 import { hexToRgb, rgbToLab } from './colorUtils';
 import { isReliableVisualAnalysis } from './visualValidation';
@@ -355,6 +355,11 @@ export async function saveSimilarityResultsToCache(
   tiers: RecommendationTiers,
   scoringVersion: string,
 ): Promise<void> {
+  const candidateAlbums = Array.from(new Map(
+    Object.values(tiers)
+      .flat()
+      .map((result) => [result.album.itunesCollectionId, result.album] as const),
+  ).values());
   const rows = Object.entries(tiers).flatMap(([mode, results]) =>
     results.map((result) => ({
       // iTunes collection IDs are stable across seed and Supabase records.
@@ -381,10 +386,151 @@ export async function saveSimilarityResultsToCache(
     return;
   }
 
+  if (candidateAlbums.length > 0) {
+    const metadataRows = candidateAlbums.map((album) => ({
+      itunes_collection_id: album.itunesCollectionId,
+      itunes_artist_id: album.itunesArtistId,
+      title: album.title,
+      normalized_title: album.normalizedTitle,
+      artist_name: album.artistName,
+      normalized_artist_name: album.normalizedArtistName,
+      genre: album.genre,
+      styles: album.styles || [],
+      label: album.label,
+      release_date: album.releaseDate || null,
+      release_year: album.releaseYear,
+      country: album.country,
+      track_count: album.trackCount,
+      explicitness: album.explicitness,
+      artwork_url: album.artworkUrl,
+      artwork_source: album.artworkSource,
+      store_url: album.storeUrl,
+    }));
+    const { error: albumError } = await supabase
+      .from('albums')
+      .upsert(metadataRows, { onConflict: 'itunes_collection_id' });
+    if (albumError) {
+      console.warn('Supabase recommendation candidate metadata save failed:', albumError);
+    }
+  }
+
   const { error } = await supabase
     .from('album_similarity_cache')
     .upsert(rows, { onConflict: 'source_album_id,candidate_album_id,mode,scoring_version' });
   if (error) console.error('Supabase similarity cache save failed:', error);
+}
+
+const CACHEABLE_SEARCH_MODES: SearchMode[] = ['art_style', 'balanced', 'music_relation'];
+
+function numericScore(value: unknown, fallback: number = 0): number {
+  const score = Number(value);
+  return Number.isFinite(score) ? score : fallback;
+}
+
+function nullableNumericScore(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const score = Number(value);
+  return Number.isFinite(score) ? score : null;
+}
+
+export async function getSimilarityResultsFromCache(
+  queryAlbum: Album,
+  scoringVersion: string,
+  limit: number = 18,
+): Promise<RecommendationTiers | null> {
+  const supabase = await getSupabaseClient();
+  if (!supabase) return null;
+
+  try {
+    const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
+    const { data: cacheRows, error: cacheError } = await supabase
+      .from('album_similarity_cache')
+      .select('candidate_album_id,mode,visual_score,visual_confidence,music_score,music_confidence,final_score,final_confidence,component_scores,calculated_at')
+      .eq('source_album_id', queryAlbum.itunesCollectionId)
+      .eq('scoring_version', scoringVersion)
+      .gte('calculated_at', cutoff)
+      .order('final_score', { ascending: false })
+      .limit(Math.max(3, limit * CACHEABLE_SEARCH_MODES.length));
+
+    if (cacheError) throw cacheError;
+    if (!cacheRows?.length) return null;
+
+    const candidateIds = Array.from(new Set(
+      cacheRows.map((row: any) => Number(row.candidate_album_id)).filter(Number.isFinite),
+    ));
+    if (candidateIds.length === 0) return null;
+
+    const { data: albumRows, error: albumError } = await supabase
+      .from('albums')
+      .select('*')
+      .in('itunes_collection_id', candidateIds);
+    if (albumError) throw albumError;
+
+    const albumsById = new Map<number, Album>();
+    for (const row of albumRows || []) {
+      try {
+        const album = mapSupabaseAlbumRow(row);
+        albumsById.set(album.itunesCollectionId, album);
+      } catch (error) {
+        console.warn('Skipping malformed cached recommendation album:', error);
+      }
+    }
+    if (candidateIds.some((id) => !albumsById.has(id))) return null;
+
+    const tiers: RecommendationTiers = {
+      art_style: [],
+      balanced: [],
+      music_relation: [],
+    };
+
+    for (const row of cacheRows) {
+      const mode = row.mode as SearchMode;
+      if (!CACHEABLE_SEARCH_MODES.includes(mode) || tiers[mode].length >= limit) continue;
+      const album = albumsById.get(Number(row.candidate_album_id));
+      if (!album) return null;
+
+      const visualScore = nullableNumericScore(row.visual_score);
+      const musicScore = nullableNumericScore(row.music_score);
+      const explanation = generateMatchExplanation(
+        queryAlbum,
+        album,
+        visualScore || 0,
+        musicScore || 0,
+        mode,
+      );
+      const queryPalette = queryAlbum.dominantPalette?.map((color) => color.hex) || [];
+      const candidatePalette = album.dominantPalette?.map((color) => color.hex) || [];
+
+      tiers[mode].push({
+        album,
+        finalScore: numericScore(row.final_score),
+        finalConfidence: numericScore(row.final_confidence),
+        visualScore,
+        visualConfidence: numericScore(row.visual_confidence),
+        musicScore,
+        musicConfidence: numericScore(row.music_confidence),
+        componentScores: parseJson(row.component_scores, {
+          embedding: null,
+          color: null,
+          layout: null,
+          typography: null,
+          complexity: null,
+          medium: null,
+        }),
+        matchReasons: explanation.reasons,
+        explanation: explanation.explanation,
+        sharedAttributes: explanation.sharedAttrs,
+        paletteComparison: queryPalette.length && candidatePalette.length
+          ? { query: queryPalette, candidate: candidatePalette }
+          : undefined,
+      });
+    }
+
+    return CACHEABLE_SEARCH_MODES.every((mode) => tiers[mode].length > 0) ? tiers : null;
+  } catch (error) {
+    console.warn('Supabase similarity cache read failed; recalculating:', error);
+    return null;
+  }
 }
 
 export async function getSimilarAlbumsFromDb(
