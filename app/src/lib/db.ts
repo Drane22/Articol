@@ -1,9 +1,8 @@
 import { Album, RecommendationTiers, SearchMode, SimilarityResult } from './types';
 import { SEED_ALBUMS, initSeedAlbums } from '../data/seedCatalog';
-import { calculatePaletteCompatibility, generateMatchExplanation, rankDistinctRecommendationTiers } from './visualEngine';
+import { generateMatchExplanation, rankDistinctRecommendationTiers } from './visualEngine';
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 import { hexToRgb, rgbToLab } from './colorUtils';
-import { isReliableVisualAnalysis } from './visualValidation';
 import { MAX_PALETTE_COLORS } from './palette';
 
 // The process-local map is a fast fallback and a write-through view of the catalog.
@@ -180,6 +179,84 @@ async function fetchRemoteVisualCandidates(queryAlbum: Album, limit: number): Pr
   });
 }
 
+function mapRemoteAlbumRows(rows: any[] | null | undefined, source: string): Album[] {
+  return (rows || []).flatMap((row: any) => {
+    try {
+      return [mapSupabaseAlbumRow(row)];
+    } catch (error) {
+      console.warn(`Skipping malformed Supabase ${source} candidate:`, error);
+      return [];
+    }
+  });
+}
+
+async function fetchRemoteMetadataCandidates(queryAlbum: Album, limit: number): Promise<Album[]> {
+  const supabase = await getSupabaseClient();
+  if (!supabase) return [];
+
+  const perQueryLimit = Math.min(60, Math.max(20, Math.ceil(limit / 4)));
+  const queries: Array<{ source: string; request: PromiseLike<any> }> = [];
+  const genre = queryAlbum.genre.trim();
+  if (genre) {
+    queries.push({
+      source: 'genre',
+      request: supabase
+        .from('albums')
+        .select('*')
+        .neq('itunes_collection_id', queryAlbum.itunesCollectionId)
+        .ilike('genre', `%${genre}%`)
+        .order('updated_at', { ascending: false })
+        .limit(perQueryLimit),
+    });
+  }
+
+  if (queryAlbum.releaseYear > 0) {
+    queries.push({
+      source: 'release-era',
+      request: supabase
+        .from('albums')
+        .select('*')
+        .neq('itunes_collection_id', queryAlbum.itunesCollectionId)
+        .gte('release_year', queryAlbum.releaseYear - 15)
+        .lte('release_year', queryAlbum.releaseYear + 15)
+        .order('updated_at', { ascending: false })
+        .limit(perQueryLimit),
+    });
+  }
+
+  if (queries.length === 0) return [];
+  const settled = await Promise.allSettled(queries.map(({ request }) => request));
+  const candidates = new Map<number, Album>();
+  settled.forEach((result, index) => {
+    const source = queries[index].source;
+    if (result.status === 'rejected') {
+      console.warn(`Supabase ${source} candidate query failed:`, result.reason);
+      return;
+    }
+    if (result.value.error) {
+      console.warn(`Supabase ${source} candidate query failed:`, result.value.error);
+      return;
+    }
+    for (const album of mapRemoteAlbumRows(result.value.data, source)) {
+      candidates.set(album.itunesCollectionId, album);
+    }
+  });
+  return Array.from(candidates.values());
+}
+
+async function fetchRemoteRecentCandidates(queryAlbum: Album, limit: number): Promise<Album[]> {
+  const supabase = await getSupabaseClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('albums')
+    .select('*')
+    .neq('itunes_collection_id', queryAlbum.itunesCollectionId)
+    .order('updated_at', { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 200));
+  if (error) throw error;
+  return mapRemoteAlbumRows(data, 'recent');
+}
+
 export async function getAllCatalogAlbums(): Promise<Album[]> {
   await ensureSeedsLoaded();
   const cached = catalogCache.get('catalog');
@@ -206,41 +283,46 @@ export async function getAllCatalogAlbums(): Promise<Album[]> {
 }
 
 export async function getCatalogCandidates(queryAlbum: Album, limit: number = 200): Promise<Album[]> {
-  const catalog = await getAllCatalogAlbums();
-  try {
-    const visualCandidates = await fetchRemoteVisualCandidates(queryAlbum, limit);
-    const queryGenre = queryAlbum.genre.toLowerCase();
-    const queryYear = queryAlbum.releaseYear || 0;
-    const metadataCandidates = catalog
-      .filter((album) => {
-        if (album.itunesCollectionId === queryAlbum.itunesCollectionId) return false;
-        const sameGenre = queryGenre && album.genre.toLowerCase().includes(queryGenre);
-        const nearbyEra = queryYear > 0 && album.releaseYear > 0 && Math.abs(album.releaseYear - queryYear) <= 15;
-        return sameGenre || nearbyEra;
-      })
-      .slice(0, limit);
-    const paletteCandidates = isReliableVisualAnalysis(queryAlbum)
-      ? catalog
-        .filter((album) => album.itunesCollectionId !== queryAlbum.itunesCollectionId && isReliableVisualAnalysis(album))
-        .map((album) => ({ album, compatibility: calculatePaletteCompatibility(queryAlbum, album) }))
-        .filter((entry) => entry.compatibility >= 0.30)
-        .sort((left, right) => right.compatibility - left.compatibility)
-        .slice(0, Math.min(limit, 160))
-        .map((entry) => entry.album)
-      : [];
-    const candidates = new Map<number, Album>();
-    for (const album of visualCandidates) candidates.set(album.itunesCollectionId, album);
-    for (const album of paletteCandidates) candidates.set(album.itunesCollectionId, album);
-    for (const album of metadataCandidates) candidates.set(album.itunesCollectionId, album);
-    if (candidates.size === 0) {
-      for (const album of catalog.slice(0, limit)) candidates.set(album.itunesCollectionId, album);
-    }
-    return Array.from(candidates.values());
-  } catch (error) {
-    // The SQL function is optional until the Supabase migration is applied.
-    console.warn('Supabase vector candidate query unavailable; using catalog rows:', error);
-    return catalog;
+  const boundedLimit = Math.min(Math.max(limit, 1), 200);
+  const [visualResult, metadataResult] = await Promise.allSettled([
+    fetchRemoteVisualCandidates(queryAlbum, Math.min(boundedLimit, 160)),
+    fetchRemoteMetadataCandidates(queryAlbum, boundedLimit),
+  ]);
+
+  const visualCandidates = visualResult.status === 'fulfilled' ? visualResult.value : [];
+  const metadataCandidates = metadataResult.status === 'fulfilled' ? metadataResult.value : [];
+  if (visualResult.status === 'rejected') {
+    console.warn('Supabase vector candidate query unavailable:', visualResult.reason);
   }
+  if (metadataResult.status === 'rejected') {
+    console.warn('Supabase metadata candidate query unavailable:', metadataResult.reason);
+  }
+
+  const candidates = new Map<number, Album>();
+  for (const album of visualCandidates) candidates.set(album.itunesCollectionId, album);
+  for (const album of metadataCandidates) candidates.set(album.itunesCollectionId, album);
+
+  if (candidates.size === 0) {
+    try {
+      for (const album of await fetchRemoteRecentCandidates(queryAlbum, boundedLimit)) {
+        candidates.set(album.itunesCollectionId, album);
+      }
+    } catch (error) {
+      console.warn('Supabase bounded candidate fallback unavailable:', error);
+    }
+  }
+
+  if (candidates.size < boundedLimit) {
+    await ensureSeedsLoaded();
+    for (const album of memoryStore.values()) {
+      if (album.itunesCollectionId !== queryAlbum.itunesCollectionId) {
+        candidates.set(album.itunesCollectionId, album);
+      }
+      if (candidates.size >= boundedLimit) break;
+    }
+  }
+
+  return Array.from(candidates.values()).slice(0, boundedLimit);
 }
 
 export async function getAlbumFromDb(collectionId: number): Promise<Album | null> {
