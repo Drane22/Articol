@@ -12,6 +12,8 @@ let seedLoadPromise: Promise<void> | null = null;
 
 const catalogCache = new BoundedTtlCache<Album[]>({ maxEntries: 1, ttlMs: 1000 * 30 });
 const catalogRequests = new InflightRequests<Album[]>();
+const albumLookupCache = new BoundedTtlCache<Album>({ maxEntries: 512, ttlMs: 1000 * 60 * 5 });
+const albumLookupRequests = new InflightRequests<Album | null>();
 const supabaseClients = new Map<string, Promise<any>>();
 
 async function ensureSeedsLoaded(): Promise<void> {
@@ -242,8 +244,40 @@ export async function getCatalogCandidates(queryAlbum: Album, limit: number = 20
 }
 
 export async function getAlbumFromDb(collectionId: number): Promise<Album | null> {
-  const catalog = await getAllCatalogAlbums();
-  return catalog.find((album) => album.itunesCollectionId === collectionId) || null;
+  if (!Number.isFinite(collectionId)) return null;
+
+  const cacheKey = String(collectionId);
+  const cached = albumLookupCache.get(cacheKey);
+  if (cached) return cached;
+
+  return albumLookupRequests.run(cacheKey, async () => {
+    const secondCached = albumLookupCache.get(cacheKey);
+    if (secondCached) return secondCached;
+
+    const supabase = await getSupabaseClient();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('albums')
+          .select('*')
+          .eq('itunes_collection_id', collectionId)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (data) {
+          const album = mapSupabaseAlbumRow(data);
+          memoryStore.set(collectionId, album);
+          albumLookupCache.set(cacheKey, album);
+          return album;
+        }
+      } catch (error) {
+        console.warn(`Supabase album ${collectionId} read failed; using local fallback:`, error);
+      }
+    }
+
+    await ensureSeedsLoaded();
+    return memoryStore.get(collectionId) || null;
+  });
 }
 
 export async function saveAlbumToDb(album: Album): Promise<void> {
@@ -257,7 +291,10 @@ export async function saveAlbumsToDb(albums: Album[]): Promise<void> {
   );
   if (uniqueAlbums.length === 0) return;
 
-  for (const album of uniqueAlbums) memoryStore.set(album.itunesCollectionId, album);
+  for (const album of uniqueAlbums) {
+    memoryStore.set(album.itunesCollectionId, album);
+    albumLookupCache.set(String(album.itunesCollectionId), album);
+  }
   catalogCache.delete('catalog');
 
   const supabase = await getSupabaseClient(true);
