@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { X, Sparkles, Palette } from 'lucide-react';
 import { SimilarityResult, Album, SearchMode } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
+import { DialogFrame } from './DialogFrame';
 
 interface WhyMatchModalProps {
   queryAlbum: Album;
@@ -57,61 +58,10 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
     ? `This relationship is anchored by ${reasonDetails.join(' and ') || 'a shared musical thread'}${sharedAttributeValues.length ? `, with ${sharedAttributeValues.join(' and ').toLowerCase()} keeping it grounded in the catalogue.` : '.'}`
     : `${visualOpeners[primaryCategory || ''] || 'The visual connection starts with'} ${reasonDetails.join(' and ') || 'a shared visual language'}${sharedAttributeValues.length ? `; ${sharedAttributeValues.join(' and ').toLowerCase()} give the resemblance its shape.` : '.'}`;
 
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const onCloseRef = useRef(onClose);
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseRef.current();
-      if (event.key !== 'Tab') return;
-
-      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ) || []);
-      if (focusable.length === 0) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = originalOverflow;
-      previousFocusRef.current?.focus?.();
-    };
-  }, []);
-
   return (
-    <div
-      className="share-dialog-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="why-match-title"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onCloseRef.current();
-      }}
-    >
-      <div ref={dialogRef} className="share-dialog-panel why-match-dialog">
-        <div className="why-match-dialog__scroll">
-          <div className="why-match-dialog__content">
+    <DialogFrame ariaLabelledBy="why-match-title" onClose={onClose} panelClassName="why-match-dialog">
+      {({ closeButtonRef, requestClose }) => (
+        <div className="why-match-dialog__content">
         
         <header className="why-match-dialog__header">
           <div className="min-w-0">
@@ -125,7 +75,7 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             ref={closeButtonRef}
             className="icon-button icon-button--quiet why-match-dialog__close"
             aria-label="Close modal"
@@ -228,9 +178,8 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           </div>
         </section>
 
-          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </DialogFrame>
   );
 };
