@@ -537,8 +537,10 @@ export async function getSimilarityResultsFromCache(
     if (cacheError) throw cacheError;
     if (!cacheRows?.length) return null;
 
-    const candidateIds = Array.from(new Set(
-      cacheRows.map((row: any) => Number(row.candidate_album_id)).filter(Number.isFinite),
+    const candidateIds: number[] = Array.from(new Set<number>(
+      cacheRows
+        .map((row: any) => Number(row.candidate_album_id))
+        .filter((id: number) => Number.isFinite(id)),
     ));
     if (candidateIds.length === 0) return null;
 
