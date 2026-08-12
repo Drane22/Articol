@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, Sparkles, Palette } from 'lucide-react';
+import { X, Sparkles, Palette, ArrowRight, Waves } from 'lucide-react';
 import { SimilarityResult, Album, SearchMode } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
 import { DialogFrame } from './DialogFrame';
@@ -54,9 +54,21 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
     music: 'The catalogue connection starts with:',
   };
   const reasonDetails = reasonLabels.map((label) => label.toLowerCase());
-  const reasonSentence = isMusicRelation
-    ? `This relationship is anchored by ${reasonDetails.join(' and ') || 'a shared musical thread'}${sharedAttributeValues.length ? `, with ${sharedAttributeValues.join(' and ').toLowerCase()} keeping it grounded in the catalogue.` : '.'}`
-    : `${visualOpeners[primaryCategory || ''] || 'The visual connection starts with'} ${reasonDetails.join(' and ') || 'a shared visual language'}${sharedAttributeValues.length ? `; ${sharedAttributeValues.join(' and ').toLowerCase()} give the resemblance its shape.` : '.'}`;
+  const storyOpening = isMusicRelation
+    ? 'Different sleeves, one musical orbit.'
+    : palettePct !== null && palettePct >= 82
+      ? 'These covers found each other across the room.'
+      : palettePct !== null && palettePct >= 68
+        ? 'Not twins—more like visual pen pals.'
+        : 'The connection lives in the details.';
+  const storyBridge = isMusicRelation
+    ? `${reasonDetails.join(' and ') || 'a shared musical thread'} pull both records into the same listening path.`
+    : `${visualOpeners[primaryCategory || ''] || 'The visual connection starts with'} ${reasonDetails.join(' and ') || 'a shared visual language'}.`;
+  const storyPayoff = sharedAttributeValues.length
+    ? `${sharedAttributeValues.join(' and ')} supply the final bit of chemistry.`
+    : isMusicRelation
+      ? 'The evidence stays musical; the artwork is here for context.'
+      : 'The resemblance is measured in the artwork, not borrowed from music metadata.';
 
   return (
     <DialogFrame ariaLabelledBy="why-match-title" onClose={onClose} panelClassName="why-match-dialog">
@@ -131,15 +143,33 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
           </div>
         </section>
 
-        <section className="why-match-explanation text-sm text-[var(--text-primary)] leading-relaxed" aria-label="Match explanation">
-          <div className="why-match-explanation__lead">
-            <Sparkles className="h-3.5 w-3.5 theme-warning" aria-hidden="true" />
-            <strong>{explanationLead}</strong>
-          </div>
+        <section className="why-match-story" aria-label="Match story">
           <p className="sr-only">{result.explanation}</p>
-          <span className="text-xs text-[var(--text-muted)] block font-sans">
-            {explanationBody}
-          </span>
+          <div className="why-match-story__signal">
+            <span className="why-match-story__icon" aria-hidden="true">
+              <Waves className="h-4 w-4" strokeWidth={1.5} />
+            </span>
+            <div>
+              <span className="eyebrow-label">The match story</span>
+              <strong>{storyOpening}</strong>
+            </div>
+          </div>
+          <div className="why-match-story__chapters">
+            <div>
+              <span>01 · First impression</span>
+              <p>{storyBridge}</p>
+            </div>
+            <ArrowRight className="why-match-story__arrow" aria-hidden="true" strokeWidth={1.25} />
+            <div>
+              <span>02 · The chemistry</span>
+              <p>{storyPayoff}</p>
+            </div>
+          </div>
+          <div className="why-match-story__verdict">
+            <Sparkles className="h-3.5 w-3.5 theme-warning" aria-hidden="true" />
+            <span>{explanationLead}</span>
+            <small>{explanationBody}</small>
+          </div>
         </section>
 
         <section className="why-match-evidence" aria-label="Visual evidence">
@@ -172,10 +202,6 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
               ))}
             </div>
           )}
-          <div className="why-match-evidence__reason">
-            <span>Why this match</span>
-            <p>{reasonSentence}</p>
-          </div>
         </section>
 
         </div>
