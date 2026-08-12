@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       { results: albums, scope },
       {
         headers: {
-          'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
         },
       }
     );

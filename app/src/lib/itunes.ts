@@ -49,7 +49,11 @@ function buildAlbumSeed(rawItem: any): string {
 // Normalise a raw iTunes collection result into an Album object.
 // Uses seed-based feature generation (fast, no image download).
 // ─────────────────────────────────────────────────────────────
-export async function normalizeItunesAlbum(rawItem: any, country: string = 'PH'): Promise<Album> {
+export async function normalizeItunesAlbum(
+  rawItem: any,
+  country: string = 'PH',
+  includeVisualFallback: boolean = true,
+): Promise<Album> {
   const storefront = normalizeStorefront(country);
   const collectionId = rawItem.collectionId;
   const title = rawItem.collectionName || 'Untitled Album';
@@ -60,8 +64,9 @@ export async function normalizeItunesAlbum(rawItem: any, country: string = 'PH')
   const releaseDateStr = rawItem.releaseDate || '';
   const releaseYear = releaseDateStr ? new Date(releaseDateStr).getFullYear() : 2020;
 
-  const seed = buildAlbumSeed(rawItem);
-  const { palette, features, embedding } = await extractVisualFeaturesFromImage(null, seed);
+  const visualFallback = includeVisualFallback
+    ? await extractVisualFeaturesFromImage(null, buildAlbumSeed(rawItem))
+    : null;
 
   const normalizedPrice = rawItem.collectionPrice == null ? Number.NaN : Number(rawItem.collectionPrice);
 
@@ -87,12 +92,12 @@ export async function normalizeItunesAlbum(rawItem: any, country: string = 'PH')
     artworkSource: 'itunes',
     storeUrl: rawItem.collectionViewUrl || '',
     copyright: rawItem.copyright,
-    dominantPalette: palette,
-    visualFeatures: features,
-    embedding,
-    embeddingModel: 'seed-fallback',
-    embeddingVersion: 'fallback-v1',
-    visualAnalysisStatus: 'fallback',
+    dominantPalette: visualFallback?.palette || [],
+    visualFeatures: visualFallback?.features || {} as Album['visualFeatures'],
+    embedding: visualFallback?.embedding,
+    embeddingModel: visualFallback ? 'seed-fallback' : undefined,
+    embeddingVersion: visualFallback ? 'fallback-v1' : undefined,
+    visualAnalysisStatus: visualFallback ? 'fallback' : 'pending',
   } as Album;
 }
 
@@ -254,7 +259,9 @@ export async function searchItunesAlbums(
     const seenIdentities = new Set<string>();
     for (const item of results) {
       if (item.collectionId && item.collectionName) {
-        const alb = await normalizeItunesAlbum(item, country);
+        // Search cards need metadata, not a generated 512-value descriptor.
+        // Real visual evidence is extracted only after the album is opened.
+        const alb = await normalizeItunesAlbum(item, country, false);
         const identity = `${normalizeAlbumIdentityTitle(alb.normalizedTitle)}|${alb.normalizedArtistName}`;
         if (!seenIdentities.has(identity)) {
           seenIdentities.add(identity);

@@ -66,7 +66,6 @@ export default function HomePage() {
     setSearchError(null);
     fetch(`/api/search?q=${encodeURIComponent(requestQuery)}&country=${country}&limit=50&scope=${searchScope}`, {
       signal: controller.signal,
-      cache: 'no-store',
     })
       .then(async (res) => {
         const data = await res.json();

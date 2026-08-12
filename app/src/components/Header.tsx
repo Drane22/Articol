@@ -105,7 +105,6 @@ export const Header: React.FC<HeaderProps> = ({ country, onCountryChange }) => {
       setSearchError(null);
       fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}&country=${selectedCountry}&limit=8&scope=${searchScope}`, {
         signal: controller.signal,
-        cache: 'no-store',
       })
         .then(async (response) => {
           const data = await response.json();
