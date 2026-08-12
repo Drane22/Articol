@@ -17,7 +17,7 @@ export async function GET(
   }
 
   try {
-    const { album: queryAlbum } = await getItunesAlbumById(collectionId, country);
+    const { album: queryAlbum } = await getItunesAlbumById(collectionId, country, false);
     if (!queryAlbum) {
       return NextResponse.json({ error: 'Album not found' }, { status: 404 });
     }

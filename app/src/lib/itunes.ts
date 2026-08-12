@@ -7,6 +7,7 @@ import { getStorefront, normalizeStorefront } from './storefronts';
 const ITUNES_BASE_URL = 'https://itunes.apple.com';
 const CACHE_TTL_MS = 1000 * 60 * 5; // Keep metadata fresh while deduplicating bursts.
 const apiCache = new BoundedTtlCache<any>({ maxEntries: 128, ttlMs: CACHE_TTL_MS });
+const apiRequests = new InflightRequests<any>();
 const artworkCache = new BoundedTtlCache<ArtworkAnalysis>({
   maxEntries: 256,
   ttlMs: 1000 * 60 * 60 * 24,
@@ -194,7 +195,7 @@ export async function findItunesAlbumExact(
 export async function refreshSeedAlbum(album: Album, country: string = 'PH'): Promise<Album> {
   if (album.artworkSource !== 'seed') return album;
 
-  const byId = await getItunesAlbumById(album.itunesCollectionId, country);
+  const byId = await getItunesAlbumById(album.itunesCollectionId, country, false);
   if (
     byId.album?.artworkUrl &&
     isSameAlbumIdentity(album, byId.album)
@@ -284,61 +285,70 @@ export async function searchItunesAlbums(
 export async function getItunesAlbumById(
   collectionId: number | string,
   country: string = 'PH',
+  includeTracks: boolean = true,
 ): Promise<{ album: Album | null; tracks: AlbumTrack[] }> {
   country = normalizeStorefront(country);
-  const cacheKey = `lookup-${collectionId}-${country}`;
+  const cacheKey = `lookup-${collectionId}-${country}-${includeTracks ? 'tracks' : 'metadata'}`;
   const cached = apiCache.get(cacheKey);
   if (cached) return cached;
 
-  const fetchLookup = async (storefront: string) => {
-    const url = `${ITUNES_BASE_URL}/lookup?id=${collectionId}&entity=song&country=${storefront}`;
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Articol/1.0' },
-      next: { revalidate: 300 },
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.results || [];
-  };
+  return apiRequests.run(cacheKey, async () => {
+    const secondCached = apiCache.get(cacheKey);
+    if (secondCached) return secondCached;
 
-  try {
-    let results: any[] | null = null;
-    let resolvedStorefront = country;
-    const storefronts = Array.from(new Set([country, 'US', 'GB', 'JP']));
+    const fetchLookup = async (storefront: string) => {
+      const entity = includeTracks ? '&entity=song' : '';
+      const url = `${ITUNES_BASE_URL}/lookup?id=${collectionId}${entity}&country=${storefront}`;
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'Articol/1.0' },
+        next: { revalidate: 300 },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.results || [];
+    };
 
-    for (const sf of storefronts) {
-      results = await fetchLookup(sf);
-      if (results && results.length > 0) {
-        resolvedStorefront = sf;
-        break;
+    try {
+      let results: any[] | null = null;
+      let resolvedStorefront = country;
+      const storefronts = Array.from(new Set([country, 'US', 'GB', 'JP']));
+
+      for (const sf of storefronts) {
+        results = await fetchLookup(sf);
+        if (results && results.length > 0) {
+          resolvedStorefront = sf;
+          break;
+        }
       }
-    }
 
-    if (!results || results.length === 0) {
+      if (!results || results.length === 0) {
+        return { album: null, tracks: [] };
+      }
+
+      const collectionRaw =
+        results.find((r: any) => r.wrapperType === 'collection') || results[0];
+      const trackRaws = includeTracks
+        ? results.filter((r: any) => r.wrapperType === 'track')
+        : [];
+
+      const album = await normalizeItunesAlbum(collectionRaw, resolvedStorefront, false);
+
+      const tracks: AlbumTrack[] = trackRaws.map((t: any) => ({
+        trackId: t.trackId,
+        trackName: t.trackName || 'Untitled Track',
+        trackNumber: t.trackNumber || 1,
+        durationMs: t.trackTimeMillis || 180000,
+        previewUrl: t.previewUrl || '',
+      }));
+
+      if (includeTracks) album.tracks = tracks;
+
+      const resultData = { album, tracks };
+      apiCache.set(cacheKey, resultData);
+      return resultData;
+    } catch (error) {
+      console.error('iTunes Lookup API failed:', error);
       return { album: null, tracks: [] };
     }
-
-    const collectionRaw =
-      results.find((r: any) => r.wrapperType === 'collection') || results[0];
-    const trackRaws = results.filter((r: any) => r.wrapperType === 'track');
-
-    const album = await normalizeItunesAlbum(collectionRaw, resolvedStorefront);
-
-    const tracks: AlbumTrack[] = trackRaws.map((t: any) => ({
-      trackId: t.trackId,
-      trackName: t.trackName || 'Untitled Track',
-      trackNumber: t.trackNumber || 1,
-      durationMs: t.trackTimeMillis || 180000,
-      previewUrl: t.previewUrl || '',
-    }));
-
-    album.tracks = tracks;
-
-    const resultData = { album, tracks };
-    apiCache.set(cacheKey, resultData);
-    return resultData;
-  } catch (error) {
-    console.error('iTunes Lookup API failed:', error);
-    return { album: null, tracks: [] };
-  }
+  });
 }

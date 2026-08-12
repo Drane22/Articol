@@ -22,7 +22,7 @@ export async function POST(
   }
 
   try {
-    const { album } = await getItunesAlbumById(collectionId);
+    const { album } = await getItunesAlbumById(collectionId, 'PH', false);
     if (!album) {
       return NextResponse.json({ error: 'Album not found on iTunes' }, { status: 404 });
     }

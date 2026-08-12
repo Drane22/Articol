@@ -70,7 +70,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
     const controller = new AbortController();
     setIsLoadingAlbum(true);
     setAlbum(null);
-    fetch(`/api/albums/${id}?country=${country}`, { signal: controller.signal, cache: 'no-store' })
+    fetch(`/api/albums/${id}?country=${country}`, { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         if (data.album) {
@@ -89,7 +89,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
 
   // Fetch recommendation tiers or handle unindexed/low-confidence album state
   useEffect(() => {
-    if (!album || !ready) return;
+    if (!ready) return;
 
     const controller = new AbortController();
     setIsLoadingRecs(true);
@@ -133,6 +133,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
         setRecommendationTiers(data.tiers);
         if (data.queryAlbum) {
           setAlbum(current => current ? { ...current, ...data.queryAlbum, tracks: current.tracks } : data.queryAlbum);
+          setIsLoadingAlbum(false);
         }
 
         const hasEligibleTier = Object.values(data.tiers as RecommendationTiers).some((tier) => tier.length > 0);
@@ -152,7 +153,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
 
     void loadRecommendations();
     return () => controller.abort();
-  }, [album?.itunesCollectionId, country, id, ready, recommendationRetry]);
+  }, [country, id, ready, recommendationRetry]);
 
   const recommendations = recommendationTiers[mode];
   const recommendationHeading = mode === 'music_relation' ? 'Musically Related Albums' : 'More Like This Cover';

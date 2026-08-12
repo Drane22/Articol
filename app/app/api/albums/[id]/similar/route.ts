@@ -38,7 +38,7 @@ async function calculateRecommendations(
 ): Promise<RecommendationPayload> {
   // Check indexed database catalog first
   const storedAlbum = await getAlbumFromDb(collectionId);
-  const { album: fetched } = await getItunesAlbumById(collectionId, country);
+  const { album: fetched } = await getItunesAlbumById(collectionId, country, false);
   let queryAlbum: Album | null = fetched
     ? storedAlbum
       ? {

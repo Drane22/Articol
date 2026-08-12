@@ -31,7 +31,7 @@ export async function getShareAlbumData(id: string, country: string): Promise<Sh
 
   try {
     if (Number.isFinite(collectionId)) {
-      const liveResult = await getItunesAlbumById(collectionId, country);
+      const liveResult = await getItunesAlbumById(collectionId, country, false);
       liveAlbum = liveResult.album;
     }
   } catch {
