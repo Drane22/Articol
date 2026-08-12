@@ -1,194 +1,298 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Check, Copy, ExternalLink, Share2, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Check, Copy, Download, ExternalLink, Image as ImageIcon, Share2, X } from 'lucide-react';
+import { DialogFrame } from '@/components/DialogFrame';
+import {
+  getAlbumShareFilename,
+  isShareCancellation,
+  supportsNativeFileShare,
+} from '@/lib/share';
 import { Album } from '@/lib/types';
-import { formatStorePrice, getStorefront } from '@/lib/storefronts';
+import { getStorefront } from '@/lib/storefronts';
 
 interface ShareCardModalProps {
   album: Album;
   shareUrl: string;
-  shareImageUrl: string;
+  portraitImageUrl: string;
   copied: boolean;
   onCopyLink: () => Promise<boolean>;
   onClose: () => void;
 }
 
+type ShareAction = 'idle' | 'sharing';
+type AssetState = 'loading' | 'ready' | 'error';
+
+interface ShareStatus {
+  message: string;
+  tone: 'success' | 'error';
+}
+
+async function fetchPortraitFile(url: string, filename: string, signal?: AbortSignal): Promise<File> {
+  const response = await fetch(url, { cache: 'no-store', signal });
+  if (!response.ok) throw new Error(`Portrait card request failed (${response.status})`);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type || 'image/png' });
+}
+
+function downloadFile(file: File) {
+  const objectUrl = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = file.name;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
 export function ShareCardModal({
   album,
   shareUrl,
-  shareImageUrl,
+  portraitImageUrl,
   copied,
   onCopyLink,
   onClose,
 }: ShareCardModalProps) {
-  const [isSharing, setIsSharing] = useState(false);
-  const [shareError, setShareError] = useState(false);
+  const [action, setAction] = useState<ShareAction>('idle');
+  const [assetState, setAssetState] = useState<AssetState>('loading');
+  const [portraitFile, setPortraitFile] = useState<File | null>(null);
+  const [status, setStatus] = useState<ShareStatus | null>(null);
   const [previewError, setPreviewError] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const onCloseRef = useRef(onClose);
-  const closeTimerRef = useRef<number | null>(null);
   const storefront = getStorefront(album.country);
-  const formattedPrice = formatStorePrice(album.price, album.currency, album.country);
+  const filename = getAlbumShareFilename(album.title, album.artistName);
+  const isBusy = action !== 'idle';
 
   useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
+    const controller = new AbortController();
+    setAssetState('loading');
+    setPortraitFile(null);
+    fetchPortraitFile(portraitImageUrl, filename, controller.signal)
+      .then((file) => {
+        setPortraitFile(file);
+        setAssetState('ready');
+      })
+      .catch((error) => {
+        if ((error as DOMException)?.name === 'AbortError') return;
+        setAssetState('error');
+        setStatus({
+          tone: 'error',
+          message: 'The portrait card could not be prepared. You can still copy and share the album link.',
+        });
+      });
 
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    return () => controller.abort();
+  }, [filename, portraitImageUrl]);
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseRef.current();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = originalOverflow;
-      previousFocusRef.current?.focus?.();
-    };
-  }, []);
-
-  useEffect(() => () => {
-    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
-  }, []);
-
-  const requestClose = () => {
-    if (isClosing) return;
-    setIsClosing(true);
-    closeTimerRef.current = window.setTimeout(() => onCloseRef.current(), 160);
-  };
-
-  const handleNativeShare = async () => {
-    if (typeof navigator === 'undefined' || !navigator.share) {
-      const copiedFallback = await onCopyLink();
-      setShareError(!copiedFallback);
+  const handleSharePortrait = async () => {
+    if (isBusy || !portraitFile) {
+      if (assetState === 'loading') {
+        setStatus({ tone: 'error', message: 'The portrait card is still being prepared. Try again in a moment.' });
+      }
       return;
     }
+    setAction('sharing');
+    setStatus(null);
 
-    setIsSharing(true);
-    setShareError(false);
     try {
-      await navigator.share({
-        title: `${album.title} — ${album.artistName}`,
-        text: `Explore ${album.title} by ${album.artistName} on Articol.`,
-        url: shareUrl,
+      if (supportsNativeFileShare(navigator, [portraitFile])) {
+        try {
+          await navigator.share({
+            files: [portraitFile],
+            title: `${album.title} — ${album.artistName}`,
+            text: `Artwork card for ${album.title} by ${album.artistName}, discovered on Articol.`,
+          });
+        } catch (error) {
+          if (isShareCancellation(error)) return;
+          downloadFile(portraitFile);
+          setStatus({
+            tone: 'success',
+            message: 'The share sheet was unavailable, so the card was downloaded for Photos or Gallery.',
+          });
+        }
+      } else {
+        downloadFile(portraitFile);
+        setStatus({
+          tone: 'success',
+          message: 'Portrait card downloaded. Post it from Photos or Gallery on Instagram or another app.',
+        });
+      }
+    } catch {
+      setStatus({
+        tone: 'error',
+        message: 'The portrait card could not be prepared. You can still copy and share the album link.',
       });
-    } catch (error) {
-      if ((error as DOMException)?.name !== 'AbortError') setShareError(true);
     } finally {
-      setIsSharing(false);
+      setAction('idle');
     }
+  };
+
+  const handleDownload = async () => {
+    if (isBusy || !portraitFile) return;
+    setStatus(null);
+    downloadFile(portraitFile);
+    setStatus({ tone: 'success', message: 'Portrait card downloaded to this device.' });
   };
 
   const handleCopyLink = async () => {
     const copiedLink = await onCopyLink();
-    setShareError(!copiedLink);
+    setStatus(copiedLink ? null : { tone: 'error', message: 'The link could not be copied on this browser.' });
   };
 
   return (
-    <div
-      className={`share-dialog-backdrop${isClosing ? ' is-closing' : ''}`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="share-card-title"
-      aria-describedby="share-card-description"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) requestClose();
-      }}
+    <DialogFrame
+      ariaLabelledBy="share-card-title"
+      ariaDescribedBy="share-card-description"
+      onClose={onClose}
+      panelClassName="share-studio"
     >
-      <section className={`share-dialog-panel${isClosing ? ' is-closing' : ''}`}>
-        <div className="flex items-start justify-between gap-4 border-b border-[var(--border-color)] px-4 py-4 sm:px-6">
-          <div>
-            <p className="eyebrow-label">Share card</p>
-            <h2 id="share-card-title" className="mt-1 font-serif text-2xl text-[var(--text-primary)]">Share this artwork</h2>
-            <p id="share-card-description" className="mt-1 text-xs text-[var(--text-muted)]">The preview below is the image social platforms will receive.</p>
-          </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={requestClose}
-            className="icon-button icon-button--quiet shrink-0"
-            aria-label="Close share card"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="max-h-[calc(100dvh-5rem)] overflow-y-auto p-4 sm:p-6">
-          <div className="share-preview-shell">
-            {previewError ? (
-              <div className="share-preview-fallback">
-                <p className="eyebrow-label">Preview unavailable</p>
-                <p className="mt-2 max-w-xs text-sm text-[var(--text-muted)]">The link is still ready to share. Open the page to view the artwork.</p>
-              </div>
-            ) : (
-              <img
-                src={shareImageUrl}
-                alt={`Share preview for ${album.title} by ${album.artistName}`}
-                className="share-preview-image"
-                onError={() => setPreviewError(true)}
-              />
-            )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border-color)] bg-[var(--accent-soft)]/45 px-4 py-3">
+      {({ closeButtonRef, requestClose }) => (
+        <>
+          <header className="share-studio__header">
             <div className="min-w-0">
-              <p className="eyebrow-label">Extracted palette</p>
-              <div className="mt-2 flex items-center gap-1.5" aria-label="Extracted cover palette">
-                {(album.dominantPalette?.length ? album.dominantPalette : []).slice(0, 5).map((color, index) => (
-                  <span
-                    key={`${color.hex}-${index}`}
-                    className="h-6 w-6 rounded-full border theme-swatch-border shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]"
-                    style={{ backgroundColor: color.hex }}
-                    title={color.hex}
-                  />
-                ))}
-                {!album.dominantPalette?.length && <span className="text-xs text-[var(--text-muted)]">Palette not indexed yet</span>}
+              <p className="eyebrow-label">Share studio</p>
+              <h2 id="share-card-title" className="share-studio__title">Publish this artwork</h2>
+              <p id="share-card-description" className="share-studio__description">
+                A portrait image for social posts, plus a polished album link for everywhere else.
+              </p>
+            </div>
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={requestClose}
+              className="icon-button icon-button--quiet shrink-0"
+              aria-label="Close Share Studio"
+            >
+              <X className="h-5 w-5" strokeWidth={1.5} />
+            </button>
+          </header>
+
+          <div className="share-studio__layout">
+            <section className="share-studio__preview-column" aria-label="Portrait share-card preview">
+              <div className="share-studio__preview-bezel">
+                <div className="share-preview-shell share-preview-shell--portrait">
+                  {previewError ? (
+                    <div className="share-preview-fallback">
+                      <ImageIcon className="h-7 w-7" strokeWidth={1.4} aria-hidden="true" />
+                      <p className="eyebrow-label mt-4">Preview unavailable</p>
+                      <p className="mt-2 max-w-xs text-sm text-[var(--text-muted)]">
+                        The album link remains ready to share.
+                      </p>
+                    </div>
+                  ) : (
+                    <img
+                      src={portraitImageUrl}
+                      alt={`Portrait share card for ${album.title} by ${album.artistName}`}
+                      className="share-preview-image"
+                      onError={() => setPreviewError(true)}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="text-right text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
-              <span>{storefront.label}</span>
-              <span className="mx-1.5 opacity-50">·</span>
-              <span>{album.releaseYear}</span>
-              {formattedPrice && <span className="ml-2 text-[var(--text-primary)]">{formattedPrice}</span>}
-            </div>
-          </div>
+              <div className="share-studio__preview-caption">
+                <span>Post-ready portrait</span>
+                <span>1080 × 1350 · PNG</span>
+              </div>
+            </section>
 
-          <p className="mt-3 truncate text-[11px] text-[var(--text-muted)]" title={shareUrl}>{shareUrl}</p>
+            <aside className="share-studio__tools" aria-label="Sharing formats and actions">
+              <div className="share-format-card share-format-card--featured">
+                <span className="share-format-card__icon" aria-hidden="true">
+                  <ImageIcon className="h-4 w-4" strokeWidth={1.5} />
+                </span>
+                <div>
+                  <strong>Instagram-ready image</strong>
+                  <span>4:5 portrait · safe for feeds and other image-first platforms</span>
+                </div>
+              </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => void handleNativeShare()}
-              disabled={isSharing}
-              className="premium-button premium-button--primary"
-            >
-              <Share2 className="h-4 w-4" />
-              <span>{isSharing ? 'Opening share…' : 'Share card'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleCopyLink()}
-              className="premium-button premium-button--secondary"
-            >
-              {copied ? <Check className="h-4 w-4 theme-success" /> : <Copy className="h-4 w-4" />}
-              <span>{copied ? 'Link copied' : 'Copy link'}</span>
-            </button>
+              <div className="share-format-card">
+                <span className="share-format-card__icon" aria-hidden="true">
+                  <ExternalLink className="h-4 w-4" strokeWidth={1.5} />
+                </span>
+                <div>
+                  <strong>Social-link preview</strong>
+                  <span>1200 × 630 · used automatically when this album link is posted</span>
+                </div>
+              </div>
+
+              <div className="share-studio__metadata">
+                <div>
+                  <p className="eyebrow-label">Artwork palette</p>
+                  <div className="share-studio__swatches" aria-label="Extracted cover palette">
+                    {(album.dominantPalette || []).slice(0, 5).map((color, index) => (
+                      <span
+                        key={`${color.hex}-${index}`}
+                        style={{ backgroundColor: color.hex }}
+                        title={color.hex}
+                      />
+                    ))}
+                    {!album.dominantPalette?.length && <small>Neutral fallback</small>}
+                  </div>
+                </div>
+                <p className="share-studio__archive-line">
+                  {storefront.label}<span aria-hidden="true">·</span>{album.releaseYear || 'Year unavailable'}
+                </p>
+              </div>
+
+              <div className="share-studio__actions">
+                <button
+                  type="button"
+                  onClick={() => void handleSharePortrait()}
+                  disabled={isBusy || assetState !== 'ready'}
+                  className="premium-button premium-button--primary share-studio__primary-action"
+                >
+                  <span>{assetState === 'loading' ? 'Preparing image…' : action === 'sharing' ? 'Opening share sheet…' : 'Share portrait card'}</span>
+                  <span className="premium-button__island" aria-hidden="true">
+                    <Share2 className="h-4 w-4" strokeWidth={1.5} />
+                  </span>
+                </button>
+                <div className="share-studio__secondary-actions">
+                  <button
+                    type="button"
+                    onClick={() => void handleDownload()}
+                    disabled={isBusy || assetState !== 'ready'}
+                    className="premium-button premium-button--secondary"
+                  >
+                    <Download className="h-4 w-4" strokeWidth={1.5} />
+                    <span>Download image</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyLink()}
+                    className="premium-button premium-button--secondary"
+                  >
+                    {copied
+                      ? <Check className="h-4 w-4 theme-success" strokeWidth={1.5} />
+                      : <Copy className="h-4 w-4" strokeWidth={1.5} />}
+                    <span>{copied ? 'Link copied' : 'Copy album link'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {status && (
+                <p
+                  className={`share-studio__status share-studio__status--${status.tone}`}
+                  role={status.tone === 'error' ? 'alert' : 'status'}
+                  aria-live="polite"
+                >
+                  {status.message}
+                </p>
+              )}
+
+              <a
+                href={shareUrl}
+                className="share-studio__open-link"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open shared album page <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </a>
+            </aside>
           </div>
-          {shareError && <p className="mt-3 text-center text-xs theme-danger" role="alert">Sharing was unavailable. You can copy the link instead.</p>}
-          <a href={shareUrl} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-1 text-[11px] text-[var(--text-muted)] transition-colors duration-200 hover:text-[var(--text-primary)]" target="_blank" rel="noopener noreferrer">
-            Open shared page <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
-      </section>
-    </div>
+        </>
+      )}
+    </DialogFrame>
   );
 }

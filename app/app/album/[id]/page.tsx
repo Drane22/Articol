@@ -14,8 +14,8 @@ import { CoverArtwork } from '@/components/CoverArtwork';
 import { RecommendationLoading } from '@/components/RecommendationLoading';
 import { ShareCardModal } from '@/components/ShareCardModal';
 import { useCountry } from '@/components/CountryProvider';
-import { formatStorePrice, getStorefront } from '@/lib/storefronts';
-import { getAbsoluteUrl, getAlbumShareImagePath, getAlbumSharePath } from '@/lib/share';
+import { getStorefront } from '@/lib/storefronts';
+import { getAbsoluteUrl, getAlbumPortraitShareImagePath, getAlbumSharePath } from '@/lib/share';
 
 const EMPTY_TIERS: RecommendationTiers = {
   art_style: [],
@@ -184,9 +184,9 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   };
 
   const sharePath = getAlbumSharePath(id, country);
-  const shareImagePath = getAlbumShareImagePath(id, country);
+  const portraitImagePath = getAlbumPortraitShareImagePath(id, country);
   const shareUrl = shareOrigin ? getAbsoluteUrl(sharePath, shareOrigin) : sharePath;
-  const shareImageUrl = shareOrigin ? getAbsoluteUrl(shareImagePath, shareOrigin) : shareImagePath;
+  const portraitImageUrl = shareOrigin ? getAbsoluteUrl(portraitImagePath, shareOrigin) : portraitImagePath;
 
   const handleShare = () => {
     setIsShareOpen(true);
@@ -244,7 +244,6 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const palette = album?.dominantPalette?.slice(0, 3).map((color) => color.hex) || ['#1a1a1a'];
   const ambientBackground = `radial-gradient(ellipse at 18% 0%, ${palette[0]} 0%, transparent 52%), radial-gradient(ellipse at 82% 12%, ${palette[1] || palette[0]} 0%, transparent 48%), radial-gradient(ellipse at 50% 24%, ${palette[2] || palette[0]} 0%, transparent 60%)`;
   const albumStorefront = getStorefront(album?.country);
-  const formattedStorePrice = formatStorePrice(album?.price, album?.currency, album?.country);
 
   if (isLoadingAlbum) {
     return (
@@ -383,12 +382,6 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                 <span className="text-[var(--text-muted)] block">Country Store</span>
                 <span className="font-semibold text-[var(--text-primary)]">{albumStorefront.label} ({album.country})</span>
               </div>
-              {formattedStorePrice ? (
-                <div>
-                  <span className="text-[var(--text-muted)] block">Store Price</span>
-                  <span className="font-semibold text-[var(--text-primary)]">{formattedStorePrice}</span>
-                </div>
-              ) : null}
             </div>
 
             {/* Action Buttons */}
@@ -575,7 +568,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
           <ShareCardModal
             album={album}
             shareUrl={shareUrl}
-            shareImageUrl={shareImageUrl}
+            portraitImageUrl={portraitImageUrl}
             copied={copiedShare}
             onCopyLink={handleCopyShare}
             onClose={() => setIsShareOpen(false)}
