@@ -1,5 +1,6 @@
 import { ColorProfile, DominantColor, VisualFeatures } from './types';
 import { hexToRgb, rgbToHex, rgbToLab } from './colorUtils';
+import { MAX_PALETTE_COLORS } from './palette';
 
 // ─────────────────────────────────────────────────────────────
 // Seeded PRNG (Mulberry32) — produces repeatable per-album values
@@ -368,10 +369,12 @@ async function extractFromBuffer(
       lightnessSpread: r2(Math.sqrt(lightnessVariance)),
     };
 
-    // Top 5 palette
+    // Preserve up to ten meaningful buckets for richer palette inspection.
+    // The descriptor above intentionally keeps its established top-five input
+    // so its dimensions and embedding version remain compatible.
     const sortedBuckets = Object.values(colorBuckets)
       .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .slice(0, MAX_PALETTE_COLORS);
 
     const palette: DominantColor[] = sortedBuckets.map(c => ({
       hex: rgbToHex(c.r, c.g, c.b),

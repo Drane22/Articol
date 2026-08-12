@@ -4,6 +4,7 @@ import { calculatePaletteCompatibility, rankDistinctRecommendationTiers } from '
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 import { hexToRgb, rgbToLab } from './colorUtils';
 import { isReliableVisualAnalysis } from './visualValidation';
+import { MAX_PALETTE_COLORS } from './palette';
 
 // The process-local map is a fast fallback and a write-through view of the catalog.
 const memoryStore = new Map<number, Album>();
@@ -47,7 +48,7 @@ function normalizePalette(value: unknown): Album['dominantPalette'] {
     if (!entry?.hex || typeof entry.hex !== 'string' || !/^#[0-9a-f]{6}$/i.test(entry.hex)) return [];
     const lab = rgbToLab(...hexToRgb(entry.hex));
     return [{ hex: entry.hex, lab, weight: Number(entry.weight) || 0 }];
-  });
+  }).slice(0, MAX_PALETTE_COLORS);
 }
 
 export function mapSupabaseAlbumRow(data: any): Album {

@@ -5,6 +5,7 @@ import { X, Sparkles, Palette, ArrowRight, Waves } from 'lucide-react';
 import { SimilarityResult, Album, SearchMode } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
 import { DialogFrame } from './DialogFrame';
+import { PaletteDepth } from './PaletteDepth';
 
 interface WhyMatchModalProps {
   queryAlbum: Album;
@@ -178,22 +179,8 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             <span>Visual evidence</span>
           </div>
           <div className="why-match-evidence__palettes">
-            <div className="why-match-evidence__palette-row">
-              <span>Query</span>
-              <div className="why-match-evidence__swatches">
-                {queryAlbum.dominantPalette.slice(0, 5).map((p, idx) => (
-                  <span key={idx} style={{ backgroundColor: p.hex }} title={p.hex} />
-                ))}
-              </div>
-            </div>
-            <div className="why-match-evidence__palette-row">
-              <span>Candidate</span>
-              <div className="why-match-evidence__swatches">
-                {candidate.dominantPalette.slice(0, 5).map((p, idx) => (
-                  <span key={idx} style={{ backgroundColor: p.hex }} title={p.hex} />
-                ))}
-              </div>
-            </div>
+            <PaletteDepth label="Query spectrum" palette={queryAlbum.dominantPalette} />
+            <PaletteDepth label="Candidate spectrum" palette={candidate.dominantPalette} />
           </div>
           {result.sharedAttributes.length > 0 && (
             <div className="why-match-evidence__qualities">
