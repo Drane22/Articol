@@ -616,6 +616,7 @@
 
 .palette-depth__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
@@ -638,10 +639,67 @@
   font-size: 1rem;
 }
 
+.palette-depth__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.palette-depth__switch-label {
+  color: var(--text-muted);
+  font: 600 0.58rem/1 var(--font-mono), monospace;
+  letter-spacing: 0.04em;
+}
+
+.palette-depth__switch {
+  position: relative;
+  display: inline-flex;
+  width: 2rem;
+  height: 1.15rem;
+  padding: 0.15rem;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 20%, var(--bg-card));
+  cursor: pointer;
+  transition: background 360ms var(--motion-enter), border-color 360ms var(--motion-enter);
+}
+
+.palette-depth__switch.is-expanded {
+  border-color: color-mix(in srgb, var(--accent-info) 72%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-info) 40%, var(--bg-card));
+}
+
+.palette-depth__switch:focus-visible {
+  outline: 2px solid var(--accent-info);
+  outline-offset: 3px;
+}
+
+.palette-depth__switch-knob {
+  display: block;
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 999px;
+  background: var(--text-primary);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--bg-page) 45%, transparent);
+  transform: translateX(0);
+  transition: transform 360ms var(--motion-enter), background 360ms var(--motion-enter);
+}
+
+.palette-depth__switch.is-expanded .palette-depth__switch-knob {
+  background: var(--bg-page);
+  transform: translateX(0.82rem);
+}
+
 .palette-depth__rail {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 0.22rem;
+}
+
+.palette-depth__rail[data-slots="5"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .palette-depth__rail span {

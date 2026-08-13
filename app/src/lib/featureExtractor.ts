@@ -186,7 +186,8 @@ export function buildVisualDescriptor(
 ): number[] {
   const vector: number[] = spatialColorGrid.map(value => Math.max(-1, Math.min(1, value)));
 
-  for (const color of palette.slice(0, 5)) {
+  // Include the complete extracted spectrum before the final 512-D projection.
+  for (const color of palette.slice(0, MAX_PALETTE_COLORS)) {
     const [r, g, b] = hexToRgb(color.hex);
     vector.push(
       r / 127.5 - 1,
@@ -369,9 +370,8 @@ async function extractFromBuffer(
       lightnessSpread: r2(Math.sqrt(lightnessVariance)),
     };
 
-    // Preserve up to ten meaningful buckets for richer palette inspection.
-    // The descriptor above intentionally keeps its established top-five input
-    // so its dimensions and embedding version remain compatible.
+    // Preserve up to ten meaningful buckets for richer palette inspection and
+    // feed the same ten-color spectrum into the descriptor above.
     const sortedBuckets = Object.values(colorBuckets)
       .sort((a, b) => b.count - a.count)
       .slice(0, MAX_PALETTE_COLORS);

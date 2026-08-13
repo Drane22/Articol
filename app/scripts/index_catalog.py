@@ -108,9 +108,16 @@ def extract_visual_descriptors(file_path: Path) -> Tuple[List[float], List[Dict[
 
     # Dominant palette
     palette = [
-        {"hex": "#d02020", "lab": [50.0, 65.0, 45.0], "weight": 0.45},
-        {"hex": "#202020", "lab": [12.0, 0.0, 0.0], "weight": 0.35},
-        {"hex": "#e0e0e0", "lab": [90.0, 0.0, 0.0], "weight": 0.20},
+        {"hex": "#d02020", "lab": [50.0, 65.0, 45.0], "weight": 0.28},
+        {"hex": "#202020", "lab": [12.0, 0.0, 0.0], "weight": 0.22},
+        {"hex": "#e0e0e0", "lab": [90.0, 0.0, 0.0], "weight": 0.14},
+        {"hex": "#c98d63", "lab": [61.0, 25.0, 35.0], "weight": 0.09},
+        {"hex": "#536f8a", "lab": [44.0, -4.0, -19.0], "weight": 0.07},
+        {"hex": "#e7c85a", "lab": [79.0, 4.0, 60.0], "weight": 0.06},
+        {"hex": "#6e4c85", "lab": [36.0, 32.0, -31.0], "weight": 0.05},
+        {"hex": "#4e9b72", "lab": [57.0, -39.0, 20.0], "weight": 0.04},
+        {"hex": "#ef9eae", "lab": [72.0, 31.0, 7.0], "weight": 0.03},
+        {"hex": "#b87532", "lab": [53.0, 26.0, 51.0], "weight": 0.02},
     ]
 
     # Visual features
@@ -225,8 +232,8 @@ def process_album(collection_id: int, keep_debug_images: bool = False) -> bool:
             "visual_features": features,
             "perceptual_hash": phash,
             "embedding_model": "clip-vit-base-patch32",
-            "embedding_version": "v1",
-            "feature_extraction_version": "v1",
+            "embedding_version": "visual-grid-v4-palette10",
+            "feature_extraction_version": "visual-grid-v4-palette10",
             "scoring_version": "v1",
             "artwork_checksum": checksum,
             "visual_analysis_status": "indexed",

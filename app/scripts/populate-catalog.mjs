@@ -6,13 +6,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ALGORITHM_VERSION = 'articol-v6-verified-visual-v3';
+const ALGORITHM_VERSION = 'articol-v7-verified-visual-palette10';
 const DEFAULT_COUNTRY = 'PH';
 const DEFAULT_BASE_URL = 'http://localhost:3000';
 const DEFAULT_DISCOVERY_DELAY_MS = 3500;
 const DEFAULT_REQUEST_DELAY_MS = 250;
 const REQUEST_TIMEOUT_MS = 90_000;
-const MAX_ALBUM_TARGET = 2500;
+const MAX_ALBUM_TARGET = 7000;
 const MAX_CACHE_TARGET = 10_000;
 const DISCOVERY_BUFFER = 1.3;
 const DISCOVERY_PAGE_SIZE = 200;
@@ -25,6 +25,8 @@ const DISCOVERY_TERMS = [
   'reggae', 'blues', 'ambient', 'soundtrack', 'world music', 'latin',
   'k-pop', 'gospel', 'opera', 'experimental', 'singer songwriter', 'lo-fi',
   'house', 'techno', 'disco', 'funk', 'grunge', 'hardcore',
+  'death metal', 'trap', 'bedroom pop', 'afrobeat', 'shoegaze', 'drum and bass',
+  'dance', 'new age', 'bluegrass', 'post-rock',
 ];
 
 class HttpError extends Error {
@@ -92,7 +94,7 @@ async function loadEnvFile(filePath) {
 
 function buildOptions(args) {
   const npmOption = (key) => process.env[`npm_config_${key.replaceAll('-', '_')}`];
-  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? 2000, 1, MAX_ALBUM_TARGET);
+  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? 7000, 1, MAX_ALBUM_TARGET);
   const targetCache = numberOption(args, 'target-cache', npmOption('target-cache') ?? 5000, 1, MAX_CACHE_TARGET);
   const country = String(args.country || npmOption('country') || DEFAULT_COUNTRY).toUpperCase();
   const baseUrl = String(args['base-url'] || npmOption('base-url') || process.env.ARTICOL_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
@@ -135,8 +137,8 @@ function isReliableAlbum(album) {
   return Boolean(
     album &&
     album.visualAnalysisStatus === 'analyzed' &&
-    album.embeddingVersion === 'visual-grid-v3' &&
-    album.featureExtractionVersion === 'visual-grid-v3' &&
+    album.embeddingVersion === 'visual-grid-v4-palette10' &&
+    album.featureExtractionVersion === 'visual-grid-v4-palette10' &&
     typeof album.perceptualHash === 'string' &&
     album.perceptualHash.length > 0 &&
     hasReliableStoredEmbedding(album.embedding) &&
@@ -334,8 +336,8 @@ async function getReliableAlbumIds(config) {
     const params = new URLSearchParams({
       select: 'itunes_collection_id,embedding,dominant_palette,visual_features',
       visual_analysis_status: 'eq.analyzed',
-      embedding_version: 'eq.visual-grid-v3',
-      feature_extraction_version: 'eq.visual-grid-v3',
+      embedding_version: 'eq.visual-grid-v4-palette10',
+      feature_extraction_version: 'eq.visual-grid-v4-palette10',
       perceptual_hash: 'not.is.null',
       embedding: 'not.is.null',
       limit: String(CACHE_PAGE_SIZE),

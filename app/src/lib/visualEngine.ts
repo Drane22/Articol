@@ -11,7 +11,7 @@ import { calculateColorSimilarity } from './colorUtils';
 import { isReliableVisualAnalysis } from './visualValidation';
 
 export const MIN_RECOMMENDATION_CONFIDENCE = 0.30;
-export const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v6-verified-visual-v3';
+export const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v7-verified-visual-palette10';
 export const RECOMMENDATION_ELIGIBILITY_VERSION = 'verified-visual-v3';
 export const MIN_ART_STYLE_PALETTE_COMPATIBILITY = 0.60;
 export const MIN_BALANCED_PALETTE_COMPATIBILITY = 0.48;

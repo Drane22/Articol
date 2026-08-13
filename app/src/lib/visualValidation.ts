@@ -1,6 +1,6 @@
 import { Album } from './types';
 
-export const VERIFIED_VISUAL_ANALYSIS_VERSION = 'visual-grid-v3';
+export const VERIFIED_VISUAL_ANALYSIS_VERSION = 'visual-grid-v4-palette10';
 
 function isUnitInterval(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;

@@ -1,4 +1,5 @@
 import { DominantColor } from './types';
+import { MAX_PALETTE_COLORS } from './palette';
 
 // Convert HEX string to RGB [r, g, b]
 export function hexToRgb(hex: string): [number, number, number] {
@@ -202,7 +203,7 @@ export function calculatePaletteDistance(palette1: DominantColor[], palette2: Do
 function calculateRankDistance(
   palette1: WeightedPaletteColor[],
   palette2: WeightedPaletteColor[],
-  rankCount: number = 3,
+  rankCount: number = MAX_PALETTE_COLORS,
 ): number {
   const ranked1 = [...palette1].sort((a, b) => b.weight - a.weight).slice(0, rankCount);
   const ranked2 = [...palette2].sort((a, b) => b.weight - a.weight).slice(0, rankCount);

@@ -92,7 +92,7 @@ AS $$
   FROM albums AS a
   WHERE a.embedding IS NOT NULL
     AND a.visual_analysis_status = 'analyzed'
-    AND a.embedding_version = 'visual-grid-v3'
+    AND a.embedding_version = 'visual-grid-v4-palette10'
     AND (exclude_collection_id IS NULL OR a.itunes_collection_id <> exclude_collection_id)
   ORDER BY a.embedding <=> query_embedding
   LIMIT LEAST(GREATEST(match_count, 1), 250);

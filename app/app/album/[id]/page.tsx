@@ -17,7 +17,7 @@ import { PaletteDepth } from '@/components/PaletteDepth';
 import { useCountry } from '@/components/CountryProvider';
 import { getStorefront } from '@/lib/storefronts';
 import { getAbsoluteUrl, getAlbumPortraitShareImagePath, getAlbumSharePath } from '@/lib/share';
-import { limitPalette } from '@/lib/palette';
+import { DEFAULT_PALETTE_DISPLAY_LIMIT, limitPalette, type PaletteDisplayLimit } from '@/lib/palette';
 
 const EMPTY_TIERS: RecommendationTiers = {
   art_style: [],
@@ -54,10 +54,15 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const [copiedShare, setCopiedShare] = useState(false);
   const [copiedPalette, setCopiedPalette] = useState(false);
   const [paletteCopyError, setPaletteCopyError] = useState(false);
+  const [paletteDisplayLimit, setPaletteDisplayLimit] = useState<PaletteDisplayLimit>(DEFAULT_PALETTE_DISPLAY_LIMIT);
 
   useEffect(() => {
     setShareOrigin(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    setPaletteDisplayLimit(DEFAULT_PALETTE_DISPLAY_LIMIT);
+  }, [id]);
 
   // Fetch selected album detail
   useEffect(() => {
@@ -326,10 +331,16 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             {/* Extracted palette — up to ten meaningful colors */}
             {album.dominantPalette && album.dominantPalette.length > 0 && (
               <div className="space-y-1.5">
-                <PaletteDepth label="Extracted palette depth" palette={album.dominantPalette} className="palette-depth--album" />
+                <PaletteDepth
+                  label="Extracted palette depth"
+                  palette={album.dominantPalette}
+                  displayLimit={paletteDisplayLimit}
+                  onDisplayLimitChange={setPaletteDisplayLimit}
+                  className="palette-depth--album"
+                />
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-color)]/70 bg-[var(--bg-card)]/60 px-3 py-2.5">
                   <div className="flex flex-wrap items-center gap-2">
-                  {limitPalette(album.dominantPalette).map((p, idx) => (
+                  {limitPalette(album.dominantPalette, paletteDisplayLimit).map((p, idx) => (
                     <div key={idx} className="flex items-center space-x-1">
                       <button
                         type="button"
@@ -347,7 +358,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                   <button
                     type="button"
-                    onClick={() => void handleCopyPalette(limitPalette(album.dominantPalette).map((p) => p.hex).join(', '))}
+                    onClick={() => void handleCopyPalette(limitPalette(album.dominantPalette, paletteDisplayLimit).map((p) => p.hex).join(', '))}
                     className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[var(--border-color)] px-3 text-[11px] font-mono text-[var(--text-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
                   >
                     {copiedPalette ? <Check className="h-3 w-3 theme-success" /> : <Copy className="h-3 w-3" />}
