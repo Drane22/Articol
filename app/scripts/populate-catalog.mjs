@@ -27,6 +27,18 @@ const DISCOVERY_TERMS = [
   'house', 'techno', 'disco', 'funk', 'grunge', 'hardcore',
   'death metal', 'trap', 'bedroom pop', 'afrobeat', 'shoegaze', 'drum and bass',
   'dance', 'new age', 'bluegrass', 'post-rock',
+  // Additional long-tail terms keep discovery useful after the broad genres
+  // saturate the iTunes relevance window. They are intentionally distinct so
+  // a resumed checkpoint can collect new IDs without replaying old searches.
+  'alternative rock', 'indie rock', 'hard rock', 'folk rock', 'pop rock',
+  'post punk', 'emo', 'metalcore', 'black metal', 'heavy metal',
+  'progressive metal', 'deathcore', 'j-pop', 'mandopop', 'c-pop',
+  'afro pop', 'reggaeton', 'salsa', 'bossa nova', 'americana',
+  'country pop', 'blues rock', 'dubstep', 'trance', 'synth pop',
+  'synthwave', 'future bass', 'garage rock', 'math rock', 'noise rock',
+  'dream pop', 'chillwave', 'post hardcore', 'ska', 'ska punk',
+  'musical theatre', 'film score', 'christian rock', 'spoken word',
+  'acoustic', 'piano', 'guitar', 'live album', 'remix',
 ];
 
 class HttpError extends Error {
