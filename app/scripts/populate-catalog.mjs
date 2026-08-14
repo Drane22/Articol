@@ -13,6 +13,8 @@ const DEFAULT_DISCOVERY_DELAY_MS = 3500;
 const DEFAULT_REQUEST_DELAY_MS = 250;
 const REQUEST_TIMEOUT_MS = 90_000;
 const MAX_ALBUM_TARGET = 9000;
+const DEFAULT_GENERAL_ALBUM_TARGET = 7000;
+const DEFAULT_OPM_ALBUM_TARGET = 2000;
 const MAX_CACHE_TARGET = 10_000;
 const DEFAULT_CANDIDATE_POOL_LIMIT = 500;
 const DISCOVERY_BUFFER = 1.3;
@@ -47,8 +49,6 @@ const GENERAL_DISCOVERY_TERMS = [
   'musical theatre', 'film score', 'christian rock', 'spoken word',
   'acoustic', 'piano', 'guitar', 'live album', 'remix',
 ];
-
-const DISCOVERY_TERMS = [...GENERAL_DISCOVERY_TERMS];
 
 class HttpError extends Error {
   constructor(message, status) {
@@ -116,7 +116,20 @@ async function loadEnvFile(filePath) {
 function buildOptions(args) {
   const npmOption = (key) => process.env[`npm_config_${key.replaceAll('-', '_')}`];
   const opmOnly = args['opm-only'] === true || String(npmOption('opm-only')).toLowerCase() === 'true';
-  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? 9000, 1, MAX_ALBUM_TARGET);
+  const hasExplicitTotal = args['target-albums'] !== undefined || npmOption('target-albums') !== undefined;
+  const requestedTotal = numberOption(args, 'target-albums', npmOption('target-albums') ?? MAX_ALBUM_TARGET, 1, MAX_ALBUM_TARGET);
+  const targetOpm = opmOnly
+    ? requestedTotal
+    : numberOption(args, 'opm-albums', npmOption('opm-albums') ?? DEFAULT_OPM_ALBUM_TARGET, 0, MAX_ALBUM_TARGET);
+  const targetGeneral = opmOnly
+    ? 0
+    : (hasExplicitTotal
+      ? Math.max(0, requestedTotal - targetOpm)
+      : numberOption(args, 'general-albums', npmOption('general-albums') ?? DEFAULT_GENERAL_ALBUM_TARGET, 0, MAX_ALBUM_TARGET));
+  const targetAlbums = targetGeneral + targetOpm;
+  if (targetAlbums < 1 || targetAlbums > MAX_ALBUM_TARGET) {
+    throw new Error(`Combined general and OPM targets must total between 1 and ${MAX_ALBUM_TARGET} albums.`);
+  }
   const targetCache = numberOption(args, 'target-cache', npmOption('target-cache') ?? 5000, 1, MAX_CACHE_TARGET);
   const candidatePoolLimit = numberOption(args, 'candidate-pool-limit', npmOption('candidate-pool-limit') ?? DEFAULT_CANDIDATE_POOL_LIMIT, 50, 500);
   const country = String(args.country || npmOption('country') || DEFAULT_COUNTRY).toUpperCase();
@@ -128,10 +141,11 @@ function buildOptions(args) {
 
   return {
     targetAlbums,
+    targetGeneral,
+    targetOpm,
     targetCache,
     candidatePoolLimit,
-    discoveryScope: opmOnly ? 'opm' : 'general',
-    discoveryTerms: opmOnly ? OPM_DISCOVERY_TERMS : DISCOVERY_TERMS,
+    discoveryScope: opmOnly ? 'opm' : 'hybrid',
     country,
     baseUrl,
     statePath,
@@ -245,11 +259,19 @@ function defaultState(options) {
     version: 1,
     country: options.country,
     targetAlbums: options.targetAlbums,
+    targetGeneral: options.targetGeneral,
+    targetOpm: options.targetOpm,
     targetCache: options.targetCache,
     discoveryScope: options.discoveryScope,
     discoveryIndex: 0,
+    generalDiscoveryIndex: 0,
+    opmDiscoveryIndex: 0,
     discoveredIds: [],
+    discoveredGeneralIds: [],
+    discoveredOpmIds: [],
     indexedIds: [],
+    indexedGeneralIds: [],
+    indexedOpmIds: [],
     failedIds: [],
     attempts: {},
     cacheSourceIds: [],
@@ -262,19 +284,24 @@ function defaultState(options) {
 
 function normalizeState(state, options) {
   if (!state || state.version !== 1) return defaultState(options);
-  // Checkpoints created before scoped discovery was introduced are general
-  // catalog runs. Treat the missing field as general so a rebuild can resume
-  // the existing indexed set instead of forcing a costly rediscovery.
+  // Older checkpoints predate quota-aware discovery. Require --reset for
+  // those runs so a stale single-pool state cannot satisfy either quota.
   const checkpointScope = state.discoveryScope || 'general';
-  if (state.country !== options.country || state.targetAlbums !== options.targetAlbums || state.targetCache !== options.targetCache || checkpointScope !== options.discoveryScope) {
+  if (state.country !== options.country || state.targetAlbums !== options.targetAlbums || state.targetGeneral !== options.targetGeneral || state.targetOpm !== options.targetOpm || state.targetCache !== options.targetCache || checkpointScope !== options.discoveryScope) {
     throw new Error(`Checkpoint ${options.statePath} belongs to different targets/country. Use --reset to start a new run.`);
   }
   return {
     ...defaultState(options),
     ...state,
     discoveryScope: checkpointScope,
+    targetGeneral: Number.isFinite(Number(state.targetGeneral)) ? Number(state.targetGeneral) : options.targetGeneral,
+    targetOpm: Number.isFinite(Number(state.targetOpm)) ? Number(state.targetOpm) : options.targetOpm,
     discoveredIds: Array.from(new Set((state.discoveredIds || []).map(Number).filter(Number.isFinite))),
+    discoveredGeneralIds: Array.from(new Set((state.discoveredGeneralIds || []).map(Number).filter(Number.isFinite))),
+    discoveredOpmIds: Array.from(new Set((state.discoveredOpmIds || []).map(Number).filter(Number.isFinite))),
     indexedIds: Array.from(new Set((state.indexedIds || []).map(Number).filter(Number.isFinite))),
+    indexedGeneralIds: Array.from(new Set((state.indexedGeneralIds || []).map(Number).filter(Number.isFinite))),
+    indexedOpmIds: Array.from(new Set((state.indexedOpmIds || []).map(Number).filter(Number.isFinite))),
     failedIds: Array.from(new Set((state.failedIds || []).map(Number).filter(Number.isFinite))),
     cacheSourceIds: Array.from(new Set((state.cacheSourceIds || []).map(Number).filter(Number.isFinite))),
     similarityFailedIds: Array.from(new Set((state.similarityFailedIds || []).map(Number).filter(Number.isFinite))),
@@ -425,17 +452,28 @@ async function getCacheStats(config, reliableIds) {
   return { count, sourceIds };
 }
 
-async function discoverAlbums(options, state) {
-  const discoveryTarget = Math.min(
-    Math.ceil(options.targetAlbums * DISCOVERY_BUFFER),
-    Math.max(options.targetAlbums + 100, options.discoveryScope === 'opm' ? 2300 : 3500),
-  );
-  const discovered = new Set(state.discoveredIds);
-  console.log(`Discovering at least ${discoveryTarget} candidate IDs across ${options.discoveryTerms.length} ${options.discoveryScope} terms...`);
+function discoveryTarget(target, minimumFloor = 0) {
+  if (target <= 0) return 0;
+  return Math.min(Math.ceil(target * DISCOVERY_BUFFER), Math.max(target + 100, minimumFloor));
+}
 
-  for (let index = state.discoveryIndex; index < options.discoveryTerms.length && discovered.size < discoveryTarget; index += 1) {
+async function discoverPool(options, state, {
+  label,
+  terms,
+  target,
+  indexKey,
+  idsKey,
+  excludedIds = new Set(),
+  minimumFloor = 0,
+}) {
+  const targetWithBuffer = discoveryTarget(target, minimumFloor);
+  const discovered = new Set(state[idsKey] || []);
+  if (target <= 0) return discovered;
+
+  console.log(`Discovering ${targetWithBuffer} ${label} candidate IDs across ${terms.length} terms...`);
+  for (let index = Number(state[indexKey] || 0); index < terms.length && discovered.size < targetWithBuffer; index += 1) {
     throwIfInterrupted();
-    const term = options.discoveryTerms[index];
+    const term = terms[index];
     const params = new URLSearchParams({
       term,
       country: options.country,
@@ -448,44 +486,86 @@ async function discoverAlbums(options, state) {
       throwIfInterrupted();
       for (const row of Array.isArray(body?.results) ? body.results : []) {
         const id = Number(row.collectionId);
-        if (Number.isFinite(id)) discovered.add(id);
+        if (Number.isFinite(id) && !excludedIds.has(id)) discovered.add(id);
       }
-      console.log(`  ${term}: ${discovered.size}/${discoveryTarget} candidate IDs`);
+      console.log(`  ${term}: ${discovered.size}/${targetWithBuffer} ${label} IDs`);
     } catch (error) {
       console.warn(`  Search failed for ${term}; continuing: ${error.message}`);
     }
-    state.discoveryIndex = index + 1;
-    state.discoveredIds = Array.from(discovered);
+    state[indexKey] = index + 1;
+    state[idsKey] = Array.from(discovered);
+    state.discoveredIds = Array.from(new Set([
+      ...(state.discoveredOpmIds || []),
+      ...(state.discoveredGeneralIds || []),
+    ]));
     state.phase = 'discover';
     await writeState(options, state);
-    if (discovered.size < discoveryTarget) await sleep(options.discoveryDelayMs);
+    if (discovered.size < targetWithBuffer) await sleep(options.discoveryDelayMs);
   }
 
-  if (discovered.size < options.targetAlbums) {
-    throw new Error(`Only discovered ${discovered.size} candidate IDs; need ${options.targetAlbums}. Add more discovery terms before running again.`);
+  if (discovered.size < target) {
+    throw new Error(`Only discovered ${discovered.size} ${label} candidates; need ${target}. Add more discovery terms before running again.`);
   }
+  return discovered;
+}
+
+async function discoverAlbums(options, state) {
+  const opmIds = await discoverPool(options, state, {
+    label: 'OPM',
+    terms: OPM_DISCOVERY_TERMS,
+    target: options.targetOpm,
+    indexKey: 'opmDiscoveryIndex',
+    idsKey: 'discoveredOpmIds',
+    minimumFloor: options.targetOpm > 0 ? 2300 : 0,
+  });
+  await discoverPool(options, state, {
+    label: 'general',
+    terms: GENERAL_DISCOVERY_TERMS,
+    target: options.targetGeneral,
+    indexKey: 'generalDiscoveryIndex',
+    idsKey: 'discoveredGeneralIds',
+    excludedIds: opmIds,
+    minimumFloor: options.targetGeneral > 0 ? 3500 : 0,
+  });
+  state.discoveredIds = Array.from(new Set([
+    ...(state.discoveredOpmIds || []),
+    ...(state.discoveredGeneralIds || []),
+  ]));
+  await writeState(options, state);
 }
 
 async function indexAlbums(options, state, config) {
   const remoteIds = await getReliableAlbumIds(config);
+  const opmDiscovered = new Set(state.discoveredOpmIds || []);
+  const generalDiscovered = new Set(state.discoveredGeneralIds || []);
   // The database is authoritative. Checkpoint IDs can outlive a dropped or
-  // rebuilt albums table and must never inflate the reliable count.
-  const indexed = new Set(remoteIds);
+  // rebuilt albums table and must never inflate either quota.
+  const indexedOpm = new Set([...remoteIds].filter((id) => opmDiscovered.has(id)));
+  const indexedGeneral = new Set([...remoteIds].filter((id) => generalDiscovered.has(id) && !opmDiscovered.has(id)));
   const failed = new Set(state.failedIds);
-  state.indexedIds = Array.from(indexed);
+  const syncIndexedState = () => {
+    state.indexedOpmIds = Array.from(indexedOpm);
+    state.indexedGeneralIds = Array.from(indexedGeneral);
+    state.indexedIds = Array.from(new Set([...indexedOpm, ...indexedGeneral]));
+  };
+  syncIndexedState();
   state.phase = 'index';
   await writeState(options, state);
 
-  if (indexed.size >= options.targetAlbums) {
-    console.log(`Reliable albums already available: ${indexed.size}/${options.targetAlbums}`);
-    return indexed;
+  const hasAllQuotas = () => indexedOpm.size >= options.targetOpm && indexedGeneral.size >= options.targetGeneral;
+  if (hasAllQuotas()) {
+    console.log(`Reliable albums already available: ${indexedGeneral.size}/${options.targetGeneral} general + ${indexedOpm.size}/${options.targetOpm} OPM.`);
+    return new Set([...indexedOpm, ...indexedGeneral]);
   }
 
-  console.log(`Indexing reliable albums: ${indexed.size}/${options.targetAlbums}`);
-  for (const id of state.discoveredIds) {
+  console.log(`Indexing reliable albums: ${indexedGeneral.size}/${options.targetGeneral} general + ${indexedOpm.size}/${options.targetOpm} OPM.`);
+  for (const id of [...opmDiscovered, ...generalDiscovered]) {
     throwIfInterrupted();
-    if (indexed.size >= options.targetAlbums) break;
-    if (indexed.has(id) || failed.has(id)) continue;
+    const isOpm = opmDiscovered.has(id);
+    const indexedPool = isOpm ? indexedOpm : indexedGeneral;
+    const targetPool = isOpm ? options.targetOpm : options.targetGeneral;
+    if (hasAllQuotas()) break;
+    if (indexedPool.size >= targetPool || failed.has(id)) continue;
 
     const attempts = Number(state.attempts[id] || 0);
     if (attempts >= 3) {
@@ -501,9 +581,9 @@ async function indexAlbums(options, state, config) {
       if (!isReliableAlbum(body?.album)) {
         throw new Error('Index route returned a fallback or incomplete visual analysis');
       }
-      indexed.add(id);
-      state.indexedIds = Array.from(indexed);
-      console.log(`  indexed ${id}: ${indexed.size}/${options.targetAlbums}`);
+      indexedPool.add(id);
+      syncIndexedState();
+      console.log(`  indexed ${id}: ${isOpm ? 'OPM' : 'general'} ${indexedPool.size}/${targetPool}`);
     } catch (error) {
       if (error instanceof HttpError && error.status === 401) {
         throw new Error('The local indexing route rejected INDEXING_SECRET. Check .env.local and restart Next.js.');
@@ -517,11 +597,15 @@ async function indexAlbums(options, state, config) {
   }
 
   const finalIds = await getReliableAlbumIds(config);
-  if (finalIds.size < options.targetAlbums) {
-    console.warn(`Indexed ${finalIds.size} reliable albums; target is ${options.targetAlbums}. Continuing with the reliable set so similarity-cache requests can run.`);
+  const finalOpm = new Set([...finalIds].filter((id) => opmDiscovered.has(id)));
+  const finalGeneral = new Set([...finalIds].filter((id) => generalDiscovered.has(id) && !opmDiscovered.has(id)));
+  state.indexedOpmIds = Array.from(finalOpm);
+  state.indexedGeneralIds = Array.from(finalGeneral);
+  state.indexedIds = Array.from(new Set([...finalOpm, ...finalGeneral]));
+  if (finalOpm.size < options.targetOpm || finalGeneral.size < options.targetGeneral) {
+    console.warn(`Indexed ${finalGeneral.size}/${options.targetGeneral} general and ${finalOpm.size}/${options.targetOpm} OPM albums; continuing with the reliable set so similarity-cache requests can run.`);
   }
-  state.indexedIds = Array.from(finalIds);
-  return finalIds;
+  return new Set([...finalOpm, ...finalGeneral]);
 }
 
 async function populateSimilarityCache(options, state, config, reliableIds) {
@@ -575,6 +659,18 @@ async function populateSimilarityCache(options, state, config, reliableIds) {
   return cacheCount;
 }
 
+function getScopedReliableIds(allReliableIds, state) {
+  const opmIds = new Set(state.discoveredOpmIds || []);
+  const generalIds = new Set(state.discoveredGeneralIds || []);
+  return new Set([...allReliableIds].filter((id) => opmIds.has(id) || generalIds.has(id)));
+}
+
+function getQuotaCounts(reliableIds, state) {
+  const opmIds = new Set(state.discoveredOpmIds || []);
+  const opm = [...reliableIds].filter((id) => opmIds.has(id)).length;
+  return { opm, general: reliableIds.size - opm };
+}
+
 async function clearSimilarityCache(config) {
   const params = new URLSearchParams({ select: 'source_album_id', source_album_id: 'gt.0' });
   const { response } = await supabaseDelete(config, `/rest/v1/album_similarity_cache?${params}`);
@@ -607,9 +703,10 @@ async function main() {
   try {
     await discoverAlbums(options, state);
     const reliableIds = await indexAlbums(options, state, config);
+    const quotaCounts = getQuotaCounts(reliableIds, state);
     if (options.rebuildSimilarity && !state.similarityRebuildPrepared) {
-      if (reliableIds.size < options.targetAlbums) {
-        throw new Error(`Refusing to clear similarity cache: only ${reliableIds.size}/${options.targetAlbums} reliable albums are available.`);
+      if (quotaCounts.general < options.targetGeneral || quotaCounts.opm < options.targetOpm) {
+        throw new Error(`Refusing to clear similarity cache: only ${quotaCounts.general}/${options.targetGeneral} general and ${quotaCounts.opm}/${options.targetOpm} OPM reliable albums are available.`);
       }
       await clearSimilarityCache(config);
       state.cacheSourceIds = [];
@@ -618,18 +715,19 @@ async function main() {
       await writeState(options, state);
     }
     const cacheCount = await populateSimilarityCache(options, state, config, reliableIds);
-    const finalReliableIds = await getReliableAlbumIds(config);
-    if (finalReliableIds.size < options.targetAlbums || (options.rebuildSimilarity ? state.cacheSourceIds.length < finalReliableIds.size : cacheCount < options.targetCache)) {
+    const finalReliableIds = getScopedReliableIds(await getReliableAlbumIds(config), state);
+    const finalQuotaCounts = getQuotaCounts(finalReliableIds, state);
+    if (finalQuotaCounts.general < options.targetGeneral || finalQuotaCounts.opm < options.targetOpm || (options.rebuildSimilarity ? state.cacheSourceIds.length < finalReliableIds.size : cacheCount < options.targetCache)) {
       const missingAlbums = Math.max(0, options.targetAlbums - finalReliableIds.size);
       const missingCacheRows = Math.max(0, options.targetCache - cacheCount);
       throw new Error(
-        `Population incomplete: ${finalReliableIds.size}/${options.targetAlbums} reliable albums and ` +
+        `Population incomplete: ${finalQuotaCounts.general}/${options.targetGeneral} general, ${finalQuotaCounts.opm}/${options.targetOpm} OPM reliable albums and ` +
         `${cacheCount} similarity-cache rows from ${state.cacheSourceIds.length}/${finalReliableIds.size} sources. ` +
         `${missingAlbums} albums and ${missingCacheRows} cache rows remain; rerun with the checkpoint.`,
       );
     }
     completed = true;
-    console.log(`Completed table-only population: ${finalReliableIds.size} reliable albums and ${cacheCount} similarity-cache rows.`);
+    console.log(`Completed table-only population: ${finalQuotaCounts.general} general + ${finalQuotaCounts.opm} OPM reliable albums and ${cacheCount} similarity-cache rows.`);
   } finally {
     await releaseLock(options);
     if (completed) await fs.rm(options.statePath, { force: true });
