@@ -12,7 +12,7 @@ const DEFAULT_BASE_URL = 'http://localhost:3000';
 const DEFAULT_DISCOVERY_DELAY_MS = 3500;
 const DEFAULT_REQUEST_DELAY_MS = 250;
 const REQUEST_TIMEOUT_MS = 90_000;
-const MAX_ALBUM_TARGET = 7000;
+const MAX_ALBUM_TARGET = 9000;
 const MAX_CACHE_TARGET = 10_000;
 const DEFAULT_CANDIDATE_POOL_LIMIT = 500;
 const DISCOVERY_BUFFER = 1.3;
@@ -116,7 +116,7 @@ async function loadEnvFile(filePath) {
 function buildOptions(args) {
   const npmOption = (key) => process.env[`npm_config_${key.replaceAll('-', '_')}`];
   const opmOnly = args['opm-only'] === true || String(npmOption('opm-only')).toLowerCase() === 'true';
-  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? (opmOnly ? 2000 : 7000), 1, MAX_ALBUM_TARGET);
+  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? 9000, 1, MAX_ALBUM_TARGET);
   const targetCache = numberOption(args, 'target-cache', npmOption('target-cache') ?? 5000, 1, MAX_CACHE_TARGET);
   const candidatePoolLimit = numberOption(args, 'candidate-pool-limit', npmOption('candidate-pool-limit') ?? DEFAULT_CANDIDATE_POOL_LIMIT, 50, 500);
   const country = String(args.country || npmOption('country') || DEFAULT_COUNTRY).toUpperCase();
