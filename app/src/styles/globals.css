@@ -1495,6 +1495,7 @@
 .curated-collection-card__eyebrow { position: relative; padding-left: 1.1rem; }
 .curated-collection-card__title { position: relative; font-family: var(--font-serif, Georgia, serif); font-size: 1.12rem; letter-spacing: -0.02em; }
 .curated-collection-card__description { position: relative; max-width: 18rem; color: var(--text-muted); font-size: 0.72rem; line-height: 1.45; }
+.curated-collection-card__signals { position: relative; color: color-mix(in srgb, var(--collection-accent) 72%, var(--text-primary)); font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.56rem; letter-spacing: 0.04em; line-height: 1.35; text-transform: uppercase; }
 
 @media (min-width: 768px) {
   .curated-collection-card { flex-basis: 15rem; }

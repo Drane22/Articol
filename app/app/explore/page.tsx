@@ -85,7 +85,7 @@ export default function ExplorePage() {
       <section className="curated-collections" aria-labelledby="curated-collections-title">
         <div className="curated-collections__heading">
           <div>
-            <span className="curated-collections__eyebrow">Visual index / 09 lenses</span>
+            <span className="curated-collections__eyebrow">Visual index / {String(CURATED_VISUAL_COLLECTIONS.length).padStart(2, '0')} lenses</span>
             <h2 id="curated-collections-title">Curated Visual Collections</h2>
           </div>
           <span className="curated-collections__hint">Swipe to browse</span>
@@ -105,6 +105,7 @@ export default function ExplorePage() {
                 <span className="curated-collection-card__eyebrow">{collection.eyebrow}</span>
                 <span className="curated-collection-card__title">{collection.label}</span>
                 <span className="curated-collection-card__description">{collection.description}</span>
+                <span className="curated-collection-card__signals">{collection.signals}</span>
               </button>
             );
           })}

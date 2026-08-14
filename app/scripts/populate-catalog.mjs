@@ -116,7 +116,7 @@ async function loadEnvFile(filePath) {
 function buildOptions(args) {
   const npmOption = (key) => process.env[`npm_config_${key.replaceAll('-', '_')}`];
   const opmOnly = args['opm-only'] === true || String(npmOption('opm-only')).toLowerCase() === 'true';
-  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? (opmOnly ? 5000 : 7000), 1, MAX_ALBUM_TARGET);
+  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? (opmOnly ? 2000 : 7000), 1, MAX_ALBUM_TARGET);
   const targetCache = numberOption(args, 'target-cache', npmOption('target-cache') ?? 5000, 1, MAX_CACHE_TARGET);
   const candidatePoolLimit = numberOption(args, 'candidate-pool-limit', npmOption('candidate-pool-limit') ?? DEFAULT_CANDIDATE_POOL_LIMIT, 50, 500);
   const country = String(args.country || npmOption('country') || DEFAULT_COUNTRY).toUpperCase();
@@ -427,7 +427,7 @@ async function getCacheStats(config, reliableIds) {
 async function discoverAlbums(options, state) {
   const discoveryTarget = Math.min(
     Math.ceil(options.targetAlbums * DISCOVERY_BUFFER),
-    Math.max(options.targetAlbums + 100, options.discoveryScope === 'opm' ? 5200 : 3500),
+    Math.max(options.targetAlbums + 100, options.discoveryScope === 'opm' ? 2300 : 3500),
   );
   const discovered = new Set(state.discoveredIds);
   console.log(`Discovering at least ${discoveryTarget} candidate IDs across ${options.discoveryTerms.length} ${options.discoveryScope} terms...`);
