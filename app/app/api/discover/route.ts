@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllCatalogAlbums, saveAlbumsToDb } from '@/lib/db';
-import { getColorCategory, matchesColorFilter } from '@/lib/colorUtils';
+import { matchesColorFilter } from '@/lib/colorUtils';
 import { enrichAlbumWithArtwork } from '@/lib/itunes';
 import { Album } from '@/lib/types';
 import { isReliableVisualAnalysis } from '@/lib/visualValidation';
+import { getCuratedVisualCollection, rankCuratedVisualAlbums } from '@/lib/curatedCollections';
 
 async function getFeaturedSpotlightAlbums(): Promise<Album[]> {
   const catalogAlbums = await getAllCatalogAlbums();
@@ -43,42 +44,11 @@ export async function GET(request: NextRequest) {
 
   let albums = await getAllCatalogAlbums();
 
-  // 1. Predefined Collections Filter
-  if (collection) {
-    switch (collection.toLowerCase()) {
-      case 'quiet minimalism':
-        albums = albums.filter(a => a.visualFeatures.minimalismScore > 0.6 || a.visualFeatures.textRatio < 0.1);
-        break;
-      case 'red and black':
-        albums = albums.filter(a => {
-          const hexes = a.dominantPalette.map(p => p.hex.toLowerCase());
-          return hexes.some(h => getColorCategory(h) === 'red') && hexes.some(h => getColorCategory(h) === 'black' || getColorCategory(h) === 'monochrome');
-        });
-        break;
-      case 'dreamlike portraits':
-        albums = albums.filter(a => a.visualFeatures.portraitProb > 0.6);
-        break;
-      case 'hand-drawn worlds':
-        albums = albums.filter(a => a.visualFeatures.illustrationProb > 0.6);
-        break;
-      case 'brutalist type':
-        albums = albums.filter(a => a.visualFeatures.textRatio > 0.2 || (a.visualFeatures.monochromeScore > 0.7 && a.visualFeatures.textRatio > 0.15));
-        break;
-      case 'analog grain':
-        albums = albums.filter(a => a.visualFeatures.photographyProb > 0.6 && a.visualFeatures.edgeDensity > 0.35);
-        break;
-      case 'soft pastels':
-        albums = albums.filter(a => a.visualFeatures.saturation > 0.25 && a.visualFeatures.luminance > 0.6);
-        break;
-      case 'dark monochrome':
-        albums = albums.filter(a => a.visualFeatures.monochromeScore > 0.6 || a.visualFeatures.luminance < 0.3);
-        break;
-      case 'maximalist collage':
-        albums = albums.filter(a => a.visualFeatures.collageProb > 0.6 || a.visualFeatures.visualEntropy > 0.7);
-        break;
-      default:
-        break;
-    }
+  // 1. Curated collections use the same strict, scored visual vocabulary in
+  // the API and the Explore UI. Unknown values intentionally fall through.
+  const curatedCollection = getCuratedVisualCollection(collection);
+  if (curatedCollection) {
+    albums = rankCuratedVisualAlbums(albums, curatedCollection);
   }
 
   // 2. Color spectrum filter

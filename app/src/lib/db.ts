@@ -179,7 +179,7 @@ async function fetchRemoteVisualCandidates(queryAlbum: Album, limit: number): Pr
   const { data, error } = await supabase.rpc('match_album_candidates', {
     query_embedding: queryAlbum.embedding,
     exclude_collection_id: queryAlbum.itunesCollectionId,
-    match_count: Math.min(Math.max(limit, 50), 250),
+    match_count: Math.min(Math.max(limit, 50), 500),
   });
   if (error) throw error;
 
@@ -208,7 +208,7 @@ async function fetchRemoteMetadataCandidates(queryAlbum: Album, limit: number): 
   const supabase = await getSupabaseClient();
   if (!supabase) return [];
 
-  const perQueryLimit = Math.min(60, Math.max(20, Math.ceil(limit / 4)));
+  const perQueryLimit = Math.min(125, Math.max(20, Math.ceil(limit / 4)));
   const queries: Array<{ source: string; request: PromiseLike<any> }> = [];
   const genre = queryAlbum.genre.trim();
   if (genre) {
@@ -296,10 +296,10 @@ export async function getAllCatalogAlbums(): Promise<Album[]> {
   });
 }
 
-export async function getCatalogCandidates(queryAlbum: Album, limit: number = 200): Promise<Album[]> {
-  const boundedLimit = Math.min(Math.max(limit, 1), 200);
+export async function getCatalogCandidates(queryAlbum: Album, limit: number = 500): Promise<Album[]> {
+  const boundedLimit = Math.min(Math.max(limit, 1), 500);
   const [visualResult, metadataResult] = await Promise.allSettled([
-    fetchRemoteVisualCandidates(queryAlbum, Math.min(boundedLimit, 160)),
+    fetchRemoteVisualCandidates(queryAlbum, Math.min(boundedLimit, 400)),
     fetchRemoteMetadataCandidates(queryAlbum, boundedLimit),
   ]);
 

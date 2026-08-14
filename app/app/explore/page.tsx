@@ -6,18 +6,7 @@ import { AlbumCard } from '@/components/AlbumCard';
 import { ColorSpectrumSlider } from '@/components/ColorSpectrumSlider';
 import { Album } from '@/lib/types';
 import { useCountry } from '@/components/CountryProvider';
-
-const PREDEFINED_COLLECTIONS = [
-  'Quiet Minimalism',
-  'Red and Black',
-  'Dreamlike Portraits',
-  'Hand-Drawn Worlds',
-  'Brutalist Type',
-  'Analog Grain',
-  'Soft Pastels',
-  'Dark Monochrome',
-  'Maximalist Collage',
-];
+import { CURATED_VISUAL_COLLECTIONS } from '@/lib/curatedCollections';
 
 const VISUAL_TAGS = ['Minimal', 'Portrait', 'Illustrated', 'Abstract', 'Monochrome', 'Warm', 'Cool'];
 const DECADES = ['1960', '1970', '1980', '1990', '2000', '2010', '2020'];
@@ -91,32 +80,36 @@ export default function ExplorePage() {
         </p>
       </div>
 
-      {/* Predefined Collections Scrollable Bar */}
-      <div className="space-y-2">
-        <span className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-wider block">
-          Curated Visual Collections
-        </span>
-        <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
-          {PREDEFINED_COLLECTIONS.map((coll, idx) => {
-            const isSelected = activeCollection === coll;
+      {/* Curated collections: editorial cards keep the original collection
+          prefixes while making each visual lens easier to scan and select. */}
+      <section className="curated-collections" aria-labelledby="curated-collections-title">
+        <div className="curated-collections__heading">
+          <div>
+            <span className="curated-collections__eyebrow">Visual index / 09 lenses</span>
+            <h2 id="curated-collections-title">Curated Visual Collections</h2>
+          </div>
+          <span className="curated-collections__hint">Swipe to browse</span>
+        </div>
+        <div className="curated-collections__rail">
+          {CURATED_VISUAL_COLLECTIONS.map((collection) => {
+            const isSelected = activeCollection === collection.id;
             return (
               <button
-                key={idx}
+                key={collection.id}
                 onClick={() => {
-                  setActiveCollection(isSelected ? null : coll);
+                  setActiveCollection(isSelected ? null : collection.id);
                 }}
-                className={`flex min-h-11 flex-shrink-0 items-center rounded-full border px-4 py-2 text-xs transition-[border-color,background-color,color,transform] duration-200 ${
-                  isSelected
-                    ? 'bg-[var(--accent-editorial)] text-[var(--bg-canvas)] font-semibold shadow-md border-[var(--text-primary)]'
-                    : 'border-[var(--border-color)] bg-[var(--bg-card)] hover:border-[var(--text-muted)] text-[var(--text-primary)]'
-                }`}
+                className={`curated-collection-card${isSelected ? ' is-active' : ''}`}
+                style={{ '--collection-accent': collection.accent } as React.CSSProperties}
               >
-                {coll}
+                <span className="curated-collection-card__eyebrow">{collection.eyebrow}</span>
+                <span className="curated-collection-card__title">{collection.label}</span>
+                <span className="curated-collection-card__description">{collection.description}</span>
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
       {/* Color Spectrum Slider */}
       <ColorSpectrumSlider
@@ -181,7 +174,7 @@ export default function ExplorePage() {
       <section className="space-y-4">
         <div className="flex justify-between items-center text-xs font-mono text-[var(--text-muted)]">
           <span>Displaying {albums.length} catalog covers</span>
-          {activeCollection && <span className="font-semibold theme-warning">Collection: {activeCollection}</span>}
+          {activeCollection && <span className="font-semibold theme-warning">Collection: {CURATED_VISUAL_COLLECTIONS.find((collection) => collection.id === activeCollection)?.label}</span>}
         </div>
 
         {isLoading ? (

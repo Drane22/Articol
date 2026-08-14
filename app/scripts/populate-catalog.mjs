@@ -14,12 +14,19 @@ const DEFAULT_REQUEST_DELAY_MS = 250;
 const REQUEST_TIMEOUT_MS = 90_000;
 const MAX_ALBUM_TARGET = 7000;
 const MAX_CACHE_TARGET = 10_000;
+const DEFAULT_CANDIDATE_POOL_LIMIT = 500;
 const DISCOVERY_BUFFER = 1.3;
 const DISCOVERY_PAGE_SIZE = 200;
 const CACHE_PAGE_SIZE = 1000;
 let interrupted = false;
 
-const DISCOVERY_TERMS = [
+const OPM_DISCOVERY_TERMS = [
+  'opm', 'filipino music', 'pinoy music', 'tagalog music', 'philippine music',
+  ...'abcdefghijklmnopqrstuvwxyz'.split('').map((letter) => `opm ${letter}`),
+  ...'abcdefghijklmnopqrstuvwxyz'.split('').map((letter) => `filipino ${letter}`),
+];
+
+const GENERAL_DISCOVERY_TERMS = [
   'rock', 'pop', 'hip hop', 'jazz', 'classical', 'electronic', 'r&b',
   'soul', 'metal', 'punk', 'indie', 'alternative', 'folk', 'country',
   'reggae', 'blues', 'ambient', 'soundtrack', 'world music', 'latin',
@@ -40,6 +47,8 @@ const DISCOVERY_TERMS = [
   'musical theatre', 'film score', 'christian rock', 'spoken word',
   'acoustic', 'piano', 'guitar', 'live album', 'remix',
 ];
+
+const DISCOVERY_TERMS = [...GENERAL_DISCOVERY_TERMS];
 
 class HttpError extends Error {
   constructor(message, status) {
@@ -106,8 +115,10 @@ async function loadEnvFile(filePath) {
 
 function buildOptions(args) {
   const npmOption = (key) => process.env[`npm_config_${key.replaceAll('-', '_')}`];
-  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? 7000, 1, MAX_ALBUM_TARGET);
+  const opmOnly = args['opm-only'] === true || String(npmOption('opm-only')).toLowerCase() === 'true';
+  const targetAlbums = numberOption(args, 'target-albums', npmOption('target-albums') ?? (opmOnly ? 5000 : 7000), 1, MAX_ALBUM_TARGET);
   const targetCache = numberOption(args, 'target-cache', npmOption('target-cache') ?? 5000, 1, MAX_CACHE_TARGET);
+  const candidatePoolLimit = numberOption(args, 'candidate-pool-limit', npmOption('candidate-pool-limit') ?? DEFAULT_CANDIDATE_POOL_LIMIT, 50, 500);
   const country = String(args.country || npmOption('country') || DEFAULT_COUNTRY).toUpperCase();
   const baseUrl = String(args['base-url'] || npmOption('base-url') || process.env.ARTICOL_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
   const statePath = path.resolve(
@@ -117,6 +128,9 @@ function buildOptions(args) {
   return {
     targetAlbums,
     targetCache,
+    candidatePoolLimit,
+    discoveryScope: opmOnly ? 'opm' : 'general',
+    discoveryTerms: opmOnly ? OPM_DISCOVERY_TERMS : DISCOVERY_TERMS,
     country,
     baseUrl,
     statePath,
@@ -124,6 +138,7 @@ function buildOptions(args) {
     discoveryDelayMs: numberOption(args, 'discovery-delay-ms', DEFAULT_DISCOVERY_DELAY_MS, 3000, 60_000),
     requestDelayMs: numberOption(args, 'request-delay-ms', DEFAULT_REQUEST_DELAY_MS, 0, 10_000),
     reset: args.reset === true || String(npmOption('reset')).toLowerCase() === 'true',
+    rebuildSimilarity: args['rebuild-similarity'] === true || String(npmOption('rebuild-similarity')).toLowerCase() === 'true',
   };
 }
 
@@ -230,12 +245,15 @@ function defaultState(options) {
     country: options.country,
     targetAlbums: options.targetAlbums,
     targetCache: options.targetCache,
+    discoveryScope: options.discoveryScope,
     discoveryIndex: 0,
     discoveredIds: [],
     indexedIds: [],
     failedIds: [],
     attempts: {},
     cacheSourceIds: [],
+    similarityFailedIds: [],
+    similarityRebuildPrepared: false,
     phase: 'discover',
     updatedAt: new Date().toISOString(),
   };
@@ -243,16 +261,23 @@ function defaultState(options) {
 
 function normalizeState(state, options) {
   if (!state || state.version !== 1) return defaultState(options);
-  if (state.country !== options.country || state.targetAlbums !== options.targetAlbums || state.targetCache !== options.targetCache) {
+  // Checkpoints created before scoped discovery was introduced are general
+  // catalog runs. Treat the missing field as general so a rebuild can resume
+  // the existing indexed set instead of forcing a costly rediscovery.
+  const checkpointScope = state.discoveryScope || 'general';
+  if (state.country !== options.country || state.targetAlbums !== options.targetAlbums || state.targetCache !== options.targetCache || checkpointScope !== options.discoveryScope) {
     throw new Error(`Checkpoint ${options.statePath} belongs to different targets/country. Use --reset to start a new run.`);
   }
   return {
     ...defaultState(options),
     ...state,
+    discoveryScope: checkpointScope,
     discoveredIds: Array.from(new Set((state.discoveredIds || []).map(Number).filter(Number.isFinite))),
     indexedIds: Array.from(new Set((state.indexedIds || []).map(Number).filter(Number.isFinite))),
     failedIds: Array.from(new Set((state.failedIds || []).map(Number).filter(Number.isFinite))),
     cacheSourceIds: Array.from(new Set((state.cacheSourceIds || []).map(Number).filter(Number.isFinite))),
+    similarityFailedIds: Array.from(new Set((state.similarityFailedIds || []).map(Number).filter(Number.isFinite))),
+    similarityRebuildPrepared: state.similarityRebuildPrepared === true,
     attempts: state.attempts && typeof state.attempts === 'object' ? state.attempts : {},
   };
 }
@@ -402,14 +427,14 @@ async function getCacheStats(config, reliableIds) {
 async function discoverAlbums(options, state) {
   const discoveryTarget = Math.min(
     Math.ceil(options.targetAlbums * DISCOVERY_BUFFER),
-    Math.max(options.targetAlbums + 100, 3500),
+    Math.max(options.targetAlbums + 100, options.discoveryScope === 'opm' ? 5200 : 3500),
   );
   const discovered = new Set(state.discoveredIds);
-  console.log(`Discovering at least ${discoveryTarget} candidate IDs across ${DISCOVERY_TERMS.length} genre terms...`);
+  console.log(`Discovering at least ${discoveryTarget} candidate IDs across ${options.discoveryTerms.length} ${options.discoveryScope} terms...`);
 
-  for (let index = state.discoveryIndex; index < DISCOVERY_TERMS.length && discovered.size < discoveryTarget; index += 1) {
+  for (let index = state.discoveryIndex; index < options.discoveryTerms.length && discovered.size < discoveryTarget; index += 1) {
     throwIfInterrupted();
-    const term = DISCOVERY_TERMS[index];
+    const term = options.discoveryTerms[index];
     const params = new URLSearchParams({
       term,
       country: options.country,
@@ -502,25 +527,28 @@ async function populateSimilarityCache(options, state, config, reliableIds) {
   let cacheStats = await getCacheStats(config, reliableIds);
   let cacheCount = cacheStats.count;
   console.log(`Similarity cache rows: ${cacheCount}/${options.targetCache}`);
-  if (cacheCount >= options.targetCache) return cacheCount;
+  if (cacheCount >= options.targetCache && !options.rebuildSimilarity) return cacheCount;
 
   const completedSources = cacheStats.sourceIds;
+  const failedSources = new Set(state.similarityFailedIds || []);
   state.phase = 'similarity';
   await writeState(options, state);
 
   for (const id of reliableIds) {
     throwIfInterrupted();
-    if (cacheCount >= options.targetCache) break;
+    if (!options.rebuildSimilarity && cacheCount >= options.targetCache) break;
     if (completedSources.has(id)) continue;
     try {
-      const { body } = await apiRequest(options, `/api/albums/${id}/similar?country=${options.country}&limit=18`);
+      const { body } = await apiRequest(options, `/api/albums/${id}/similar?country=${options.country}&limit=18&pool=${options.candidatePoolLimit}&rebuild=1`);
       throwIfInterrupted();
       if (body?.status !== 'indexed') {
         console.warn(`  similarity skipped ${id}: source is not indexed`);
         continue;
       }
       completedSources.add(id);
+      failedSources.delete(id);
       state.cacheSourceIds = Array.from(completedSources);
+      state.similarityFailedIds = Array.from(failedSources);
       const tierCount = ['art_style', 'balanced', 'music_relation']
         .map((mode) => Array.isArray(body?.tiers?.[mode]) ? body.tiers[mode].length : 0)
         .reduce((sum, count) => sum + count, 0);
@@ -532,16 +560,31 @@ async function populateSimilarityCache(options, state, config, reliableIds) {
         throw new Error('The local indexing route rejected INDEXING_SECRET. Check .env.local and restart Next.js.');
       }
       console.warn(`  similarity failed for ${id}; continuing: ${error.message}`);
+      failedSources.add(id);
+      state.similarityFailedIds = Array.from(failedSources);
     }
     await writeState(options, state);
     await sleep(options.requestDelayMs);
   }
 
   cacheCount = (await getCacheStats(config, reliableIds)).count;
-  if (cacheCount < options.targetCache) {
-    throw new Error(`Generated ${cacheCount} similarity-cache rows; need ${options.targetCache}. Rerun to continue from the checkpoint.`);
+  if (cacheCount < options.targetCache && completedSources.size < reliableIds.size) {
+    throw new Error(`Generated ${cacheCount} similarity-cache rows from ${completedSources.size}/${reliableIds.size} sources; rerun to continue with the checkpoint.`);
   }
   return cacheCount;
+}
+
+async function clearSimilarityCache(config) {
+  const params = new URLSearchParams({ select: 'source_album_id', source_album_id: 'gt.0' });
+  const { response } = await supabaseDelete(config, `/rest/v1/album_similarity_cache?${params}`);
+  if (!response.ok) throw new Error(`Could not clear album_similarity_cache: HTTP ${response.status}`);
+  console.log('Cleared album_similarity_cache for full regeneration.');
+}
+
+async function supabaseDelete(config, route) {
+  const headers = new Headers({ apikey: config.key, Authorization: `Bearer ${config.key}`, Prefer: 'return=minimal' });
+  const response = await fetch(`${config.url}${route}`, { method: 'DELETE', headers });
+  return { response };
 }
 
 async function main() {
@@ -563,14 +606,24 @@ async function main() {
   try {
     await discoverAlbums(options, state);
     const reliableIds = await indexAlbums(options, state, config);
+    if (options.rebuildSimilarity && !state.similarityRebuildPrepared) {
+      if (reliableIds.size < options.targetAlbums) {
+        throw new Error(`Refusing to clear similarity cache: only ${reliableIds.size}/${options.targetAlbums} reliable albums are available.`);
+      }
+      await clearSimilarityCache(config);
+      state.cacheSourceIds = [];
+      state.similarityFailedIds = [];
+      state.similarityRebuildPrepared = true;
+      await writeState(options, state);
+    }
     const cacheCount = await populateSimilarityCache(options, state, config, reliableIds);
     const finalReliableIds = await getReliableAlbumIds(config);
-    if (finalReliableIds.size < options.targetAlbums || cacheCount < options.targetCache) {
+    if (finalReliableIds.size < options.targetAlbums || (options.rebuildSimilarity ? state.cacheSourceIds.length < finalReliableIds.size : cacheCount < options.targetCache)) {
       const missingAlbums = Math.max(0, options.targetAlbums - finalReliableIds.size);
       const missingCacheRows = Math.max(0, options.targetCache - cacheCount);
       throw new Error(
         `Population incomplete: ${finalReliableIds.size}/${options.targetAlbums} reliable albums and ` +
-        `${cacheCount}/${options.targetCache} similarity-cache rows. ` +
+        `${cacheCount} similarity-cache rows from ${state.cacheSourceIds.length}/${finalReliableIds.size} sources. ` +
         `${missingAlbums} albums and ${missingCacheRows} cache rows remain; rerun with the checkpoint.`,
       );
     }

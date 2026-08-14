@@ -45,7 +45,8 @@ export async function getSimilarArtistsFromLastFm(artistName: string): Promise<S
 // Internal uncached pool generation
 async function buildCandidatePool(
   queryAlbum: Album,
-  country: string = 'PH'
+  country: string = 'PH',
+  poolLimit: number = 500,
 ): Promise<{ candidates: Album[]; lastFmScores: Record<number, number> }> {
   const candidatesMap = new Map<number, Album>();
   const lastFmScores: Record<number, number> = {};
@@ -61,7 +62,7 @@ async function buildCandidatePool(
 
   // 1. Include the current Supabase-first catalog.
   try {
-    const catalogAlbums = await getCatalogCandidates(queryAlbum, 200);
+    const catalogAlbums = await getCatalogCandidates(queryAlbum, poolLimit);
     for (const alb of catalogAlbums) {
       addCandidate(alb, 0);
     }
@@ -114,14 +115,16 @@ async function buildCandidatePool(
 // Public candidate pool generator with TTL caching & request deduplication
 export async function generateCandidatePool(
   queryAlbum: Album,
-  country: string = 'PH'
+  country: string = 'PH',
+  poolLimit: number = 500,
 ): Promise<{ candidates: Album[]; lastFmScores: Record<number, number> }> {
-  const cacheKey = `pool-${queryAlbum.itunesCollectionId}-${country}`;
+  const boundedPoolLimit = Math.min(Math.max(poolLimit, 50), 500);
+  const cacheKey = `pool-${queryAlbum.itunesCollectionId}-${country}-${boundedPoolLimit}`;
   const cached = candidatePoolCache.get(cacheKey);
   if (cached) return cached;
 
   return inflightPoolRequests.run(cacheKey, async () => {
-    const pool = await buildCandidatePool(queryAlbum, country);
+    const pool = await buildCandidatePool(queryAlbum, country, boundedPoolLimit);
     candidatePoolCache.set(cacheKey, pool);
     return pool;
   });

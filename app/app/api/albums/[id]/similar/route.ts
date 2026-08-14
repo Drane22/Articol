@@ -34,11 +34,13 @@ function publicResult(result: SimilarityResult): SimilarityResult {
 async function calculateRecommendations(
   collectionId: number,
   country: string,
-  limit: number
+  limit: number,
+  poolLimit: number,
+  forceRebuild: boolean,
 ): Promise<RecommendationPayload> {
   const storedAlbum = await getAlbumFromDb(collectionId);
 
-  if (storedAlbum && isReliableVisualAnalysis(storedAlbum)) {
+  if (!forceRebuild && storedAlbum && isReliableVisualAnalysis(storedAlbum)) {
     const cached = await getSimilarityResultsFromCache(
       storedAlbum,
       RECOMMENDATION_ALGORITHM_VERSION,
@@ -108,7 +110,7 @@ async function calculateRecommendations(
   }
 
   // Retrieve candidate pool (No runtime image downloads or Sharp model inference!)
-  const { candidates, lastFmScores } = await generateCandidatePool(queryAlbum, country);
+  const { candidates, lastFmScores } = await generateCandidatePool(queryAlbum, country, poolLimit);
 
   // Compute confidence-weighted visual & mode similarity ranking
   const ranked = rankDistinctRecommendationTiers(queryAlbum, candidates, lastFmScores, limit);
@@ -118,10 +120,17 @@ async function calculateRecommendations(
   ) as unknown as RecommendationTiers;
 
   const albumToPersist = queryAlbum;
-  after(async () => {
+  if (forceRebuild) {
+    // Rebuild workers need a durable write before they advance their
+    // checkpoint. Normal interactive requests keep the non-blocking path.
     if (shouldPersistQueryAlbum) await saveAlbumToDb(albumToPersist);
     await saveSimilarityResultsToCache(albumToPersist, ranked, RECOMMENDATION_ALGORITHM_VERSION);
-  });
+  } else {
+    after(async () => {
+      if (shouldPersistQueryAlbum) await saveAlbumToDb(albumToPersist);
+      await saveSimilarityResultsToCache(albumToPersist, ranked, RECOMMENDATION_ALGORITHM_VERSION);
+    });
+  }
 
   return {
     status: 'indexed',
@@ -144,19 +153,22 @@ export async function GET(
     : 'art_style';
   const requestedLimit = Number.parseInt(request.nextUrl.searchParams.get('limit') || '18', 10);
   const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 18, 18));
+  const requestedPoolLimit = Number.parseInt(request.nextUrl.searchParams.get('pool') || '500', 10);
+  const poolLimit = Math.max(50, Math.min(Number.isFinite(requestedPoolLimit) ? requestedPoolLimit : 500, 500));
+  const forceRebuild = request.nextUrl.searchParams.get('rebuild') === '1';
   const country = normalizeStorefront(request.nextUrl.searchParams.get('country'));
 
   if (!Number.isFinite(collectionId)) {
     return NextResponse.json({ error: 'Invalid collection ID' }, { status: 400 });
   }
 
-  const cacheKey = `${RECOMMENDATION_ALGORITHM_VERSION}:${collectionId}:${country}:${limit}`;
+  const cacheKey = `${RECOMMENDATION_ALGORITHM_VERSION}:${collectionId}:${country}:${limit}:${poolLimit}:${forceRebuild ? 'rebuild' : 'cached'}`;
 
   try {
     let payload = responseCache.get(cacheKey);
     const cacheStatus = payload ? 'HIT' : 'MISS';
     if (!payload) {
-      payload = await inflight.run(cacheKey, () => calculateRecommendations(collectionId, country, limit));
+      payload = await inflight.run(cacheKey, () => calculateRecommendations(collectionId, country, limit, poolLimit, forceRebuild));
       responseCache.set(cacheKey, payload);
     }
 
