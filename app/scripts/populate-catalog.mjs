@@ -24,6 +24,10 @@ let interrupted = false;
 
 const OPM_DISCOVERY_TERMS = [
   'opm', 'filipino music', 'pinoy music', 'tagalog music', 'philippine music',
+  'pinoy pop', 'filipino pop', 'tagalog pop', 'opm rock', 'pinoy rock',
+  'opm ballad', 'tagalog ballad', 'manila sound', 'kundiman', 'p-pop',
+  'filipino indie', 'pinoy indie', 'philippine rock', 'philippine jazz',
+  'visayan music', 'cebuano music', 'ilocano music', 'filipino folk',
   ...'abcdefghijklmnopqrstuvwxyz'.split('').map((letter) => `opm ${letter}`),
   ...'abcdefghijklmnopqrstuvwxyz'.split('').map((letter) => `filipino ${letter}`),
 ];
