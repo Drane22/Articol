@@ -121,8 +121,9 @@ function buildOptions(args) {
   const candidatePoolLimit = numberOption(args, 'candidate-pool-limit', npmOption('candidate-pool-limit') ?? DEFAULT_CANDIDATE_POOL_LIMIT, 50, 500);
   const country = String(args.country || npmOption('country') || DEFAULT_COUNTRY).toUpperCase();
   const baseUrl = String(args['base-url'] || npmOption('base-url') || process.env.ARTICOL_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
+  const defaultStatePath = path.join(os.tmpdir(), `articol-catalog-populate-${opmOnly ? 'opm-' : ''}${country}.json`);
   const statePath = path.resolve(
-    String(args['state-path'] || npmOption('state-path') || process.env.ARTICOL_POPULATE_STATE || path.join(os.tmpdir(), `articol-catalog-populate-${country}.json`)),
+    String(args['state-path'] || npmOption('state-path') || process.env.ARTICOL_POPULATE_STATE || defaultStatePath),
   );
 
   return {
