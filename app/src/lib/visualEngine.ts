@@ -39,7 +39,7 @@ function hasReleaseYear(album: Album): boolean {
 }
 
 function hasGenre(album: Album): boolean {
-  return Boolean(album.genre?.trim());
+  return typeof album.genre === 'string' && Boolean(album.genre.trim());
 }
 
 function hasFiniteVisualValues(album: Album, keys: Array<keyof Album['visualFeatures']>): boolean {
@@ -505,7 +505,8 @@ function buildMusicMeasurements(
 
   const genreTokens = (genre: string, styles: string[] = []) =>
     new Set(
-      [genre, ...styles]
+      [typeof genre === 'string' ? genre : '', ...(Array.isArray(styles) ? styles : [])]
+        .filter((value): value is string => typeof value === 'string')
         .join(' ')
         .toLowerCase()
         .split(/[^a-z0-9]+/)

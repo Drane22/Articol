@@ -42,6 +42,20 @@ function parseEmbedding(value: unknown): number[] | undefined {
   return embedding.length > 0 && embedding.every(Number.isFinite) ? embedding : undefined;
 }
 
+function parseStringArray(value: unknown): string[] {
+  const parsed = parseJson<unknown>(value, []);
+  return Array.isArray(parsed)
+    ? parsed.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    : [];
+}
+
+function parseVisualFeatures(value: unknown): Album['visualFeatures'] {
+  const parsed = parseJson<unknown>(value, {});
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? parsed as Album['visualFeatures']
+    : {} as Album['visualFeatures'];
+}
+
 function normalizePalette(value: unknown): Album['dominantPalette'] {
   const palette = parseJson<unknown[]>(value, []);
   if (!Array.isArray(palette)) return [];
@@ -56,8 +70,8 @@ export function mapSupabaseAlbumRow(data: any): Album {
   const collectionId = Number(data?.itunes_collection_id);
   if (!Number.isFinite(collectionId)) throw new Error('Supabase album row has no valid collection ID');
 
-  const title = data.title || 'Untitled Album';
-  const artistName = data.artist_name || 'Unknown Artist';
+  const title = String(data.title || 'Untitled Album');
+  const artistName = String(data.artist_name || 'Unknown Artist');
 
   const embeddingModel = data.embedding_model || undefined;
   const embeddingVersion = data.embedding_version || undefined;
@@ -69,12 +83,12 @@ export function mapSupabaseAlbumRow(data: any): Album {
     itunesCollectionId: collectionId,
     itunesArtistId: data.itunes_artist_id == null ? undefined : Number(data.itunes_artist_id),
     title,
-    normalizedTitle: data.normalized_title || title.toLowerCase().trim(),
+    normalizedTitle: String(data.normalized_title || title.toLowerCase().trim()),
     artistName,
-    normalizedArtistName: data.normalized_artist_name || artistName.toLowerCase().trim(),
-    genre: data.genre || 'Music',
-    styles: parseJson<string[]>(data.styles, []),
-    label: data.label || undefined,
+    normalizedArtistName: String(data.normalized_artist_name || artistName.toLowerCase().trim()),
+    genre: String(data.genre || 'Music'),
+    styles: parseStringArray(data.styles),
+    label: data.label == null ? undefined : String(data.label),
     releaseDate: data.release_date || '',
     releaseYear: Number(data.release_year) || 0,
     country: data.country || 'PH',
@@ -82,11 +96,11 @@ export function mapSupabaseAlbumRow(data: any): Album {
     explicitness: data.explicitness || 'notExplicit',
     price: data.price == null ? undefined : Number(data.price),
     currency: data.currency || undefined,
-    artworkUrl: data.artwork_url || '',
-    artworkSource: data.artwork_source || 'itunes',
-    storeUrl: data.store_url || '',
+    artworkUrl: String(data.artwork_url || ''),
+    artworkSource: String(data.artwork_source || 'itunes'),
+    storeUrl: String(data.store_url || ''),
     dominantPalette: normalizePalette(data.dominant_palette),
-    visualFeatures: parseJson<Album['visualFeatures']>(data.visual_features, {} as Album['visualFeatures']),
+    visualFeatures: parseVisualFeatures(data.visual_features),
     perceptualHash: data.perceptual_hash || undefined,
     embedding: parseEmbedding(data.embedding),
     embeddingModel,
