@@ -637,15 +637,21 @@ async function populateSimilarityCache(options, state, config, reliableIds) {
         console.warn(`  similarity skipped ${id}: source is not indexed`);
         continue;
       }
-      completedSources.add(id);
-      failedSources.delete(id);
-      state.cacheSourceIds = Array.from(completedSources);
-      state.similarityFailedIds = Array.from(failedSources);
       const tierCount = ['art_style', 'balanced', 'music_relation']
         .map((mode) => Array.isArray(body?.tiers?.[mode]) ? body.tiers[mode].length : 0)
         .reduce((sum, count) => sum + count, 0);
       cacheStats = await getCacheStats(config, reliableIds);
       cacheCount = cacheStats.count;
+      // The API can still return 200 when Supabase rejects the background
+      // upsert. Only checkpoint this source after a persisted cache row is
+      // visible through the service-role read path.
+      if (!cacheStats.sourceIds.has(id)) {
+        throw new Error('Similarity response returned, but no cache rows were persisted for this source');
+      }
+      completedSources.add(id);
+      failedSources.delete(id);
+      state.cacheSourceIds = Array.from(completedSources);
+      state.similarityFailedIds = Array.from(failedSources);
       console.log(`  cached ${id}: ${tierCount} candidate rows; table total ${cacheCount}/${options.targetCache}`);
     } catch (error) {
       if (error instanceof HttpError && error.status === 401) {
