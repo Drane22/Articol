@@ -120,6 +120,8 @@ async function loadEnvFile(filePath) {
 function buildOptions(args) {
   const npmOption = (key) => process.env[`npm_config_${key.replaceAll('-', '_')}`];
   const opmOnly = args['opm-only'] === true || String(npmOption('opm-only')).toLowerCase() === 'true';
+  const similarityOnly = args['similarity-only'] === true || String(npmOption('similarity-only')).toLowerCase() === 'true';
+  if (similarityOnly && opmOnly) throw new Error('Use either --similarity-only or --opm-only, not both.');
   const hasExplicitTotal = args['target-albums'] !== undefined || npmOption('target-albums') !== undefined;
   const requestedTotal = numberOption(args, 'target-albums', npmOption('target-albums') ?? MAX_ALBUM_TARGET, 1, MAX_ALBUM_TARGET);
   const targetOpm = opmOnly
@@ -138,7 +140,7 @@ function buildOptions(args) {
   const candidatePoolLimit = numberOption(args, 'candidate-pool-limit', npmOption('candidate-pool-limit') ?? DEFAULT_CANDIDATE_POOL_LIMIT, 50, 500);
   const country = String(args.country || npmOption('country') || DEFAULT_COUNTRY).toUpperCase();
   const baseUrl = String(args['base-url'] || npmOption('base-url') || process.env.ARTICOL_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
-  const defaultStatePath = path.join(os.tmpdir(), `articol-catalog-populate-${opmOnly ? 'opm-' : ''}${country}.json`);
+  const defaultStatePath = path.join(os.tmpdir(), `articol-catalog-populate-${similarityOnly ? 'similarity-' : opmOnly ? 'opm-' : ''}${country}.json`);
   const statePath = path.resolve(
     String(args['state-path'] || npmOption('state-path') || process.env.ARTICOL_POPULATE_STATE || defaultStatePath),
   );
@@ -149,7 +151,7 @@ function buildOptions(args) {
     targetOpm,
     targetCache,
     candidatePoolLimit,
-    discoveryScope: opmOnly ? 'opm' : 'hybrid',
+    discoveryScope: similarityOnly ? 'similarity-only' : opmOnly ? 'opm' : 'hybrid',
     country,
     baseUrl,
     statePath,
@@ -158,6 +160,7 @@ function buildOptions(args) {
     requestDelayMs: numberOption(args, 'request-delay-ms', DEFAULT_REQUEST_DELAY_MS, 0, 10_000),
     reset: args.reset === true || String(npmOption('reset')).toLowerCase() === 'true',
     rebuildSimilarity: args['rebuild-similarity'] === true || String(npmOption('rebuild-similarity')).toLowerCase() === 'true',
+    similarityOnly,
   };
 }
 
@@ -705,11 +708,25 @@ async function main() {
 
   await acquireLock(options);
   try {
-    await discoverAlbums(options, state);
-    const reliableIds = await indexAlbums(options, state, config);
-    const quotaCounts = getQuotaCounts(reliableIds, state);
+    let reliableIds;
+    if (options.similarityOnly) {
+      reliableIds = await getReliableAlbumIds(config);
+      if (reliableIds.size === 0) {
+        throw new Error('No reliable analyzed albums are available. Run the indexing population first.');
+      }
+      state.phase = 'similarity';
+      state.indexedIds = Array.from(reliableIds);
+      state.indexedGeneralIds = [];
+      state.indexedOpmIds = [];
+      await writeState(options, state);
+      console.log(`Similarity-only mode: using ${reliableIds.size} reliable albums already in Supabase.`);
+    } else {
+      await discoverAlbums(options, state);
+      reliableIds = await indexAlbums(options, state, config);
+    }
+    const quotaCounts = options.similarityOnly ? { general: reliableIds.size, opm: 0 } : getQuotaCounts(reliableIds, state);
     if (options.rebuildSimilarity && !state.similarityRebuildPrepared) {
-      if (quotaCounts.general < options.targetGeneral || quotaCounts.opm < options.targetOpm) {
+      if (!options.similarityOnly && (quotaCounts.general < options.targetGeneral || quotaCounts.opm < options.targetOpm)) {
         throw new Error(`Refusing to clear similarity cache: only ${quotaCounts.general}/${options.targetGeneral} general and ${quotaCounts.opm}/${options.targetOpm} OPM reliable albums are available.`);
       }
       await clearSimilarityCache(config);
@@ -719,19 +736,27 @@ async function main() {
       await writeState(options, state);
     }
     const cacheCount = await populateSimilarityCache(options, state, config, reliableIds);
-    const finalReliableIds = getScopedReliableIds(await getReliableAlbumIds(config), state);
-    const finalQuotaCounts = getQuotaCounts(finalReliableIds, state);
-    if (finalQuotaCounts.general < options.targetGeneral || finalQuotaCounts.opm < options.targetOpm || (options.rebuildSimilarity ? state.cacheSourceIds.length < finalReliableIds.size : cacheCount < options.targetCache)) {
-      const missingAlbums = Math.max(0, options.targetAlbums - finalReliableIds.size);
+    const finalReliableIds = options.similarityOnly
+      ? await getReliableAlbumIds(config)
+      : getScopedReliableIds(await getReliableAlbumIds(config), state);
+    const finalQuotaCounts = options.similarityOnly
+      ? { general: finalReliableIds.size, opm: 0 }
+      : getQuotaCounts(finalReliableIds, state);
+    const quotasIncomplete = !options.similarityOnly && (finalQuotaCounts.general < options.targetGeneral || finalQuotaCounts.opm < options.targetOpm);
+    if (quotasIncomplete || (options.rebuildSimilarity ? state.cacheSourceIds.length < finalReliableIds.size : cacheCount < options.targetCache)) {
+      const missingAlbums = options.similarityOnly ? 0 : Math.max(0, options.targetAlbums - finalReliableIds.size);
       const missingCacheRows = Math.max(0, options.targetCache - cacheCount);
       throw new Error(
-        `Population incomplete: ${finalQuotaCounts.general}/${options.targetGeneral} general, ${finalQuotaCounts.opm}/${options.targetOpm} OPM reliable albums and ` +
+        `${options.similarityOnly ? 'Similarity-only run incomplete: ' : 'Population incomplete: '}` +
+        `${options.similarityOnly ? `${finalReliableIds.size} reliable albums` : `${finalQuotaCounts.general}/${options.targetGeneral} general, ${finalQuotaCounts.opm}/${options.targetOpm} OPM reliable albums`} and ` +
         `${cacheCount} similarity-cache rows from ${state.cacheSourceIds.length}/${finalReliableIds.size} sources. ` +
         `${missingAlbums} albums and ${missingCacheRows} cache rows remain; rerun with the checkpoint.`,
       );
     }
     completed = true;
-    console.log(`Completed table-only population: ${finalQuotaCounts.general} general + ${finalQuotaCounts.opm} OPM reliable albums and ${cacheCount} similarity-cache rows.`);
+    console.log(options.similarityOnly
+      ? `Completed similarity-only population: ${finalReliableIds.size} reliable albums and ${cacheCount} similarity-cache rows.`
+      : `Completed table-only population: ${finalQuotaCounts.general} general + ${finalQuotaCounts.opm} OPM reliable albums and ${cacheCount} similarity-cache rows.`);
   } finally {
     await releaseLock(options);
     if (completed) await fs.rm(options.statePath, { force: true });

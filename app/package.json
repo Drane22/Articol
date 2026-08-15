@@ -11,6 +11,7 @@
     "catalog:populate": "node scripts/populate-catalog.mjs",
     "catalog:populate:opm": "node scripts/populate-catalog.mjs --opm-only --target-albums=9000",
     "catalog:rebuild": "node scripts/populate-catalog.mjs --rebuild-similarity",
+    "catalog:cache": "node scripts/populate-catalog.mjs --similarity-only --rebuild-similarity",
     "cleanup:artwork": "node scripts/cleanup-artwork.mjs",
     "prepare:git": "npm run cleanup:artwork"
   },
