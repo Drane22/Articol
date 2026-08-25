@@ -70,6 +70,16 @@ async function buildCandidatePool(
     console.warn('Catalog inclusion failed:', e);
   }
 
+  // A full catalog pool already contains every candidate this request can
+  // rank. Live iTunes results have no verified visual analysis, so waiting for
+  // them cannot improve Art Style or Balanced and only delays the response.
+  if (candidatesMap.size >= poolLimit) {
+    return {
+      candidates: Array.from(candidatesMap.values()).slice(0, poolLimit),
+      lastFmScores,
+    };
+  }
+
   // 2. Search for albums sharing the same genre (expanded to 30 limit)
   try {
     const genreAlbums = await searchItunesAlbums(queryAlbum.genre, country, 30);
@@ -107,7 +117,7 @@ async function buildCandidatePool(
   }
 
   return {
-    candidates: Array.from(candidatesMap.values()),
+    candidates: Array.from(candidatesMap.values()).slice(0, poolLimit),
     lastFmScores,
   };
 }
