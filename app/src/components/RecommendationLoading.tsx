@@ -2,33 +2,42 @@
 
 import { useEffect, useState } from 'react';
 
-const STAGES = [
-  'Finding related music',
-  'Comparing artwork',
-  'Curating the strongest matches',
+const LOADING_PROMPTS = [
+  'Pretending this is a very serious music investigation.',
+  'Making guesses with suspicious confidence.',
+  'Comparing covers like this is a peer-reviewed discipline.',
+  'Asking the algorithm to explain its taste.',
+  'Sorting vibes into categories that definitely exist.',
+  'Checking whether these covers have chemistry or just good lighting.',
+  'Doing the math. The vibes remain unverified.',
+  'Looking for a match with plausible deniability.',
+  'Curating a shortlist. Please act surprised when it gets weird.',
 ];
 
+const LOADING_PROMPT_INTERVAL = 3000;
+
 export function RecommendationLoading() {
-  const [stage, setStage] = useState(0);
+  const [promptIndex, setPromptIndex] = useState(0);
 
   useEffect(() => {
-    const first = window.setTimeout(() => setStage(1), 900);
-    const second = window.setTimeout(() => setStage(2), 2200);
-    return () => {
-      window.clearTimeout(first);
-      window.clearTimeout(second);
-    };
+    const interval = window.setInterval(() => {
+      setPromptIndex((current) => (current + 1) % LOADING_PROMPTS.length);
+    }, LOADING_PROMPT_INTERVAL);
+
+    return () => window.clearInterval(interval);
   }, []);
 
+  const prompt = LOADING_PROMPTS[promptIndex];
+
   return (
-    <div className="recommendation-loading" role="status" aria-live="polite" aria-label={STAGES[stage]}>
+    <div className="recommendation-loading" role="status" aria-live="polite" aria-atomic="true" aria-label={prompt}>
       <div className="recommendation-loading__status">
         <div className="recommendation-loading__record" aria-hidden="true">
           <span className="recommendation-loading__groove" />
           <span className="recommendation-loading__label" />
         </div>
         <div>
-          <p className="text-sm font-serif text-[var(--text-primary)]">{STAGES[stage]}</p>
+          <p key={prompt} className="recommendation-loading__message text-sm font-serif text-[var(--text-primary)]">{prompt}</p>
           <p className="mt-0.5 text-xs text-[var(--text-muted)]">One analysis prepares every recommendation tier.</p>
         </div>
       </div>

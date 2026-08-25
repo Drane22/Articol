@@ -197,12 +197,39 @@ export function ShareCardModal({
             </section>
 
             <aside className="share-studio__tools" aria-label="Sharing formats and actions">
+              <section className="share-format-panel" aria-labelledby="share-format-title">
+                <div className="share-format-panel__heading">
+                  <p id="share-format-title" className="eyebrow-label">Two ways to share</p>
+                  <span>One album, two useful outputs.</span>
+                </div>
+
+                <div className="share-format-panel__rows">
+                  <div className="share-format-row">
+                    <span className="share-format-row__kind">POST</span>
+                    <div className="share-format-row__copy">
+                      <strong>4:5 portrait</strong>
+                      <span>For sharing the artwork itself.</span>
+                    </div>
+                    <span className="share-format-row__badge">1080 × 1350</span>
+                  </div>
+
+                  <div className="share-format-row">
+                    <span className="share-format-row__kind">LINK</span>
+                    <div className="share-format-row__copy">
+                      <strong>Social preview</strong>
+                      <span>For album links. Applied automatically.</span>
+                    </div>
+                    <span className="share-format-row__badge">1200 × 630</span>
+                  </div>
+                </div>
+              </section>
+
               <div className="share-format-card share-format-card--featured">
                 <span className="share-format-card__icon" aria-hidden="true">
                   <ImageIcon className="h-4 w-4" strokeWidth={1.5} />
                 </span>
                 <div>
-                  <strong>Instagram-ready image</strong>
+                  <strong>4:5 portrait</strong>
                   <span>4:5 portrait · safe for feeds and other image-first platforms</span>
                 </div>
               </div>
