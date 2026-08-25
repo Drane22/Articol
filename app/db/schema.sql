@@ -98,6 +98,71 @@ AS $$
   LIMIT LEAST(GREATEST(match_count, 1), 500);
 $$;
 
+-- Palette-family retrieval supplements vector neighbors so visually accurate
+-- same-hue candidates are not lost before application-level ranking.
+CREATE OR REPLACE FUNCTION match_palette_candidates(
+  query_neutral_coverage DOUBLE PRECISION,
+  query_chromatic_coverage DOUBLE PRECISION,
+  query_dominant_hue DOUBLE PRECISION,
+  query_embedding VECTOR(512),
+  verified_embedding_version TEXT,
+  exclude_collection_id BIGINT DEFAULT NULL,
+  match_count INTEGER DEFAULT 400
+)
+RETURNS SETOF albums
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT a.*
+  FROM albums AS a
+  CROSS JOIN LATERAL (
+    SELECT
+      CASE
+        WHEN jsonb_typeof(a.visual_features #> '{colorProfile,neutralCoverage}') = 'number'
+          THEN (a.visual_features #>> '{colorProfile,neutralCoverage}')::DOUBLE PRECISION
+      END AS neutral_coverage,
+      CASE
+        WHEN jsonb_typeof(a.visual_features #> '{colorProfile,chromaticCoverage}') = 'number'
+          THEN (a.visual_features #>> '{colorProfile,chromaticCoverage}')::DOUBLE PRECISION
+      END AS chromatic_coverage,
+      CASE
+        WHEN jsonb_typeof(a.visual_features #> '{colorProfile,dominantHue}') = 'number'
+          THEN (a.visual_features #>> '{colorProfile,dominantHue}')::DOUBLE PRECISION
+      END AS dominant_hue
+  ) AS profile
+  WHERE a.embedding IS NOT NULL
+    AND a.visual_analysis_status = 'analyzed'
+    AND a.embedding_version = verified_embedding_version
+    AND profile.neutral_coverage IS NOT NULL
+    AND profile.chromatic_coverage IS NOT NULL
+    AND profile.dominant_hue IS NOT NULL
+    AND (exclude_collection_id IS NULL OR a.itunes_collection_id <> exclude_collection_id)
+    AND (
+      (
+        query_neutral_coverage >= 0.70
+        AND profile.neutral_coverage >= 0.70
+      )
+      OR
+      (
+        query_neutral_coverage < 0.70
+        AND query_chromatic_coverage >= 0.28
+        AND profile.neutral_coverage < 0.70
+        AND profile.chromatic_coverage >= 0.28
+        AND LEAST(
+          ABS(profile.dominant_hue - query_dominant_hue),
+          360 - ABS(profile.dominant_hue - query_dominant_hue)
+        ) <= 45
+      )
+    )
+  ORDER BY
+    CASE
+      WHEN query_embedding IS NOT NULL THEN a.embedding <=> query_embedding
+      ELSE 2
+    END,
+    a.itunes_collection_id
+  LIMIT LEAST(GREATEST(match_count, 1), 500);
+$$;
+
 -- Similarity Cache table for caching calculated similarity results per scoring version
 CREATE TABLE IF NOT EXISTS album_similarity_cache (
   source_album_id BIGINT NOT NULL,
@@ -118,6 +183,9 @@ CREATE TABLE IF NOT EXISTS album_similarity_cache (
 
 CREATE INDEX IF NOT EXISTS idx_similarity_cache_source_version_score
 ON album_similarity_cache(source_album_id, scoring_version, final_score DESC);
+
+CREATE INDEX IF NOT EXISTS idx_similarity_cache_source_version_mode_score
+ON album_similarity_cache(source_album_id, scoring_version, mode, final_score DESC);
 
 -- Safe for installations created before recommendation confidence was audited.
 ALTER TABLE album_similarity_cache ADD COLUMN IF NOT EXISTS music_confidence REAL;

@@ -549,17 +549,24 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
                 </p>
               </div>
             ) : (
-              <div className="recommendation-grid animate-fade-in">
-                {recommendations.map((rec) => (
-                  <AlbumCard
-                    key={rec.album.itunesCollectionId}
-                    album={rec.album}
-                    similarity={rec}
-                    mode={mode}
-                    onWhyMatchClick={setSelectedWhyMatch}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="recommendation-grid animate-fade-in">
+                  {recommendations.map((rec) => (
+                    <AlbumCard
+                      key={rec.album.itunesCollectionId}
+                      album={rec.album}
+                      similarity={rec}
+                      mode={mode}
+                      onWhyMatchClick={setSelectedWhyMatch}
+                    />
+                  ))}
+                </div>
+                {mode === 'art_style' && recommendations.length < 18 && (
+                  <p className="mt-5 text-center text-xs text-[var(--text-muted)]" role="status">
+                    Showing {recommendations.length} verified palette-compatible {recommendations.length === 1 ? 'match' : 'matches'}. No unrelated covers were added to fill the grid.
+                  </p>
+                )}
+              </>
             )}
           </section>
         )}

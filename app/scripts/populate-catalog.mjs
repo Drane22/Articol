@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ALGORITHM_VERSION = 'articol-v7-verified-visual-palette10';
+const ALGORITHM_VERSION = 'articol-v8-palette-aware-retrieval';
 const DEFAULT_COUNTRY = 'PH';
 const DEFAULT_BASE_URL = 'http://localhost:3000';
 const DEFAULT_DISCOVERY_DELAY_MS = 3500;
@@ -685,10 +685,13 @@ function getQuotaCounts(reliableIds, state) {
 }
 
 async function clearSimilarityCache(config) {
-  const params = new URLSearchParams({ select: 'source_album_id', source_album_id: 'gt.0' });
+  const params = new URLSearchParams({
+    source_album_id: 'gt.0',
+    scoring_version: `eq.${ALGORITHM_VERSION}`,
+  });
   const { response } = await supabaseDelete(config, `/rest/v1/album_similarity_cache?${params}`);
   if (!response.ok) throw new Error(`Could not clear album_similarity_cache: HTTP ${response.status}`);
-  console.log('Cleared album_similarity_cache for full regeneration.');
+  console.log(`Cleared ${ALGORITHM_VERSION} similarity rows for full regeneration.`);
 }
 
 async function supabaseDelete(config, route) {

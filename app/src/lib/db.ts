@@ -4,6 +4,7 @@ import { generateMatchExplanation, rankDistinctRecommendationTiers } from './vis
 import { BoundedTtlCache, InflightRequests } from './boundedCache';
 import { hexToRgb, rgbToLab } from './colorUtils';
 import { MAX_PALETTE_COLORS } from './palette';
+import { VERIFIED_VISUAL_ANALYSIS_VERSION } from './visualValidation';
 
 // The process-local map is a fast fallback and a write-through view of the catalog.
 const memoryStore = new Map<number, Album>();
@@ -193,6 +194,31 @@ async function fetchRemoteVisualCandidates(queryAlbum: Album, limit: number): Pr
   });
 }
 
+async function fetchRemotePaletteCandidates(queryAlbum: Album, limit: number): Promise<Album[]> {
+  const profile = queryAlbum.visualFeatures?.colorProfile;
+  if (
+    !profile ||
+    !Number.isFinite(profile.neutralCoverage) ||
+    !Number.isFinite(profile.chromaticCoverage) ||
+    !Number.isFinite(profile.dominantHue)
+  ) return [];
+
+  const supabase = await getSupabaseClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc('match_palette_candidates', {
+    query_neutral_coverage: profile.neutralCoverage,
+    query_chromatic_coverage: profile.chromaticCoverage,
+    query_dominant_hue: profile.dominantHue,
+    query_embedding: queryAlbum.embedding || null,
+    verified_embedding_version: VERIFIED_VISUAL_ANALYSIS_VERSION,
+    exclude_collection_id: queryAlbum.itunesCollectionId,
+    match_count: Math.min(Math.max(limit, 50), 500),
+  });
+  if (error) throw error;
+  return mapRemoteAlbumRows(data, 'palette');
+}
+
 function mapRemoteAlbumRows(rows: any[] | null | undefined, source: string): Album[] {
   return (rows || []).flatMap((row: any) => {
     try {
@@ -298,13 +324,18 @@ export async function getAllCatalogAlbums(): Promise<Album[]> {
 
 export async function getCatalogCandidates(queryAlbum: Album, limit: number = 500): Promise<Album[]> {
   const boundedLimit = Math.min(Math.max(limit, 1), 500);
-  const [visualResult, metadataResult] = await Promise.allSettled([
+  const [paletteResult, visualResult, metadataResult] = await Promise.allSettled([
+    fetchRemotePaletteCandidates(queryAlbum, Math.min(boundedLimit, 400)),
     fetchRemoteVisualCandidates(queryAlbum, Math.min(boundedLimit, 400)),
     fetchRemoteMetadataCandidates(queryAlbum, boundedLimit),
   ]);
 
+  const paletteCandidates = paletteResult.status === 'fulfilled' ? paletteResult.value : [];
   const visualCandidates = visualResult.status === 'fulfilled' ? visualResult.value : [];
   const metadataCandidates = metadataResult.status === 'fulfilled' ? metadataResult.value : [];
+  if (paletteResult.status === 'rejected') {
+    console.warn('Supabase palette candidate query unavailable:', paletteResult.reason);
+  }
   if (visualResult.status === 'rejected') {
     console.warn('Supabase vector candidate query unavailable:', visualResult.reason);
   }
@@ -313,6 +344,7 @@ export async function getCatalogCandidates(queryAlbum: Album, limit: number = 50
   }
 
   const candidates = new Map<number, Album>();
+  for (const album of paletteCandidates) candidates.set(album.itunesCollectionId, album);
   for (const album of visualCandidates) candidates.set(album.itunesCollectionId, album);
   for (const album of metadataCandidates) candidates.set(album.itunesCollectionId, album);
 
@@ -474,13 +506,23 @@ export async function saveSimilarityResultsToCache(
       calculated_at: new Date().toISOString(),
     }))
   );
-  if (rows.length === 0) return;
 
   const supabase = await getSupabaseClient(true);
   if (!supabase) {
     console.warn('Supabase similarity cache disabled: configure a server write key.');
     return;
   }
+
+  const { error: deleteError } = await supabase
+    .from('album_similarity_cache')
+    .delete()
+    .eq('source_album_id', queryAlbum.itunesCollectionId)
+    .eq('scoring_version', scoringVersion);
+  if (deleteError) {
+    console.error('Supabase stale similarity cache replacement failed:', deleteError);
+    return;
+  }
+  if (rows.length === 0) return;
 
   if (candidateAlbums.length > 0) {
     const metadataRows = candidateAlbums.map((album) => ({
@@ -538,17 +580,20 @@ export async function getSimilarityResultsFromCache(
   if (!supabase) return null;
 
   try {
-    const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
-    const { data: cacheRows, error: cacheError } = await supabase
-      .from('album_similarity_cache')
-      .select('candidate_album_id,mode,visual_score,visual_confidence,music_score,music_confidence,final_score,final_confidence,component_scores,calculated_at')
-      .eq('source_album_id', queryAlbum.itunesCollectionId)
-      .eq('scoring_version', scoringVersion)
-      .gte('calculated_at', cutoff)
-      .order('final_score', { ascending: false })
-      .limit(Math.max(3, limit * CACHEABLE_SEARCH_MODES.length));
+    const cacheRowsByMode = await Promise.all(CACHEABLE_SEARCH_MODES.map(async (mode) => {
+      const { data, error } = await supabase
+        .from('album_similarity_cache')
+        .select('candidate_album_id,mode,visual_score,visual_confidence,music_score,music_confidence,final_score,final_confidence,component_scores,calculated_at')
+        .eq('source_album_id', queryAlbum.itunesCollectionId)
+        .eq('scoring_version', scoringVersion)
+        .eq('mode', mode)
+        .order('final_score', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data || [];
+    }));
+    const cacheRows = cacheRowsByMode.flat();
 
-    if (cacheError) throw cacheError;
     if (!cacheRows?.length) return null;
 
     const candidateIds: number[] = Array.from(new Set<number>(
@@ -624,7 +669,7 @@ export async function getSimilarityResultsFromCache(
       });
     }
 
-    return CACHEABLE_SEARCH_MODES.every((mode) => tiers[mode].length > 0) ? tiers : null;
+    return CACHEABLE_SEARCH_MODES.some((mode) => tiers[mode].length > 0) ? tiers : null;
   } catch (error) {
     console.warn('Supabase similarity cache read failed; recalculating:', error);
     return null;

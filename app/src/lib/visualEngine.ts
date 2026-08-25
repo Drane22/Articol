@@ -11,12 +11,13 @@ import { calculateColorSimilarity } from './colorUtils';
 import { isReliableVisualAnalysis } from './visualValidation';
 
 export const MIN_RECOMMENDATION_CONFIDENCE = 0.30;
-export const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v7-verified-visual-palette10';
-export const RECOMMENDATION_ELIGIBILITY_VERSION = 'verified-visual-v3';
+export const RECOMMENDATION_ALGORITHM_VERSION = 'articol-v8-palette-aware-retrieval';
+export const RECOMMENDATION_ELIGIBILITY_VERSION = 'verified-visual-v4-palette-family';
 export const MIN_ART_STYLE_PALETTE_COMPATIBILITY = 0.60;
 export const MIN_BALANCED_PALETTE_COMPATIBILITY = 0.48;
 export const MIN_ART_STYLE_SCORE = 0.58;
 export const MIN_BALANCED_SCORE = 0.54;
+export const MAX_ART_STYLE_HUE_DISTANCE = 45;
 
 export function isRecommendationConfidenceEligible(confidence: number): boolean {
   return Number.isFinite(confidence) && confidence >= MIN_RECOMMENDATION_CONFIDENCE;
@@ -326,9 +327,29 @@ function calculateMediumSimilarity(albumA: Album, albumB: Album): number {
   ));
 }
 
+export function calculateCircularHueDistance(firstHue: number, secondHue: number): number {
+  if (!Number.isFinite(firstHue) || !Number.isFinite(secondHue)) return 180;
+  return Math.abs(((firstHue - secondHue + 540) % 360) - 180);
+}
+
 function circularHueSimilarity(firstHue: number, secondHue: number): number {
-  const difference = Math.abs(((firstHue - secondHue + 540) % 360) - 180);
-  return clamp01(1 - difference / 180);
+  return clamp01(1 - calculateCircularHueDistance(firstHue, secondHue) / 180);
+}
+
+export function isPaletteFamilyCompatible(albumA: Album, albumB: Album): boolean {
+  if (!hasColorProfile(albumA) || !hasColorProfile(albumB)) return false;
+
+  const first = albumA.visualFeatures.colorProfile!;
+  const second = albumB.visualFeatures.colorProfile!;
+  const bothNeutral = first.neutralCoverage >= 0.70 && second.neutralCoverage >= 0.70;
+  if (bothNeutral) return true;
+
+  const eitherNeutral = first.neutralCoverage >= 0.70 || second.neutralCoverage >= 0.70;
+  if (eitherNeutral) return false;
+
+  const bothChromatic = first.chromaticCoverage >= 0.28 && second.chromaticCoverage >= 0.28;
+  return bothChromatic &&
+    calculateCircularHueDistance(first.dominantHue, second.dominantHue) <= MAX_ART_STYLE_HUE_DISTANCE;
 }
 
 /**
@@ -752,6 +773,7 @@ export function rankSimilarAlbums(
 
     const passesVisualEligibility = mode === 'art_style'
       ? hasRequiredVisualEvidence &&
+        isPaletteFamilyCompatible(queryAlbum, candidate) &&
         (visual.palette ?? 0) >= MIN_ART_STYLE_PALETTE_COMPATIBILITY &&
         finalScore >= MIN_ART_STYLE_SCORE
       : mode === 'balanced'
