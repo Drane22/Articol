@@ -1,5 +1,5 @@
 import { normalizeStorefront } from './storefronts';
-import type { PaletteArtStyle } from './paletteArtwork';
+import type { PaletteArtInputColor, PaletteArtStyle } from './paletteArtwork';
 
 export const SHARE_IMAGE_SIZES = {
   landscape: { width: 1200, height: 630 },
@@ -28,7 +28,7 @@ export interface PortraitShareOptions {
     title: string;
     artistName: string;
     releaseYear?: number | string;
-    palette: string[];
+    palette: Array<string | PaletteArtInputColor>;
   };
 }
 
@@ -47,10 +47,29 @@ export function getAlbumPortraitShareImagePath(
       params.set('artist', options.album.artistName.trim().slice(0, 120));
       const releaseYear = String(options.album.releaseYear || '').trim();
       if (/^\d{4}$/.test(releaseYear)) params.set('year', releaseYear);
-      const palette = options.album.palette
-        .filter((color) => /^#[0-9a-f]{6}$/i.test(color))
+
+      const serializedColors = (options.album.palette || [])
+        .flatMap((entry) => {
+          if (typeof entry === 'string') {
+            const hex = entry.trim().toLowerCase();
+            return /^#[0-9a-f]{6}$/i.test(hex) ? [hex] : [];
+          }
+          if (entry && typeof entry === 'object' && typeof entry.hex === 'string') {
+            const hex = entry.hex.trim().toLowerCase();
+            if (!/^#[0-9a-f]{6}$/i.test(hex)) return [];
+            if (Number.isFinite(entry.weight) && (entry.weight as number) > 0) {
+              const roundedWeight = Math.round((entry.weight as number) * 1000) / 1000;
+              return [`${hex}:${roundedWeight}`];
+            }
+            return [hex];
+          }
+          return [];
+        })
         .slice(0, 10);
-      if (palette.length > 0) params.set('palette', palette.join(','));
+
+      if (serializedColors.length > 0) {
+        params.set('palette', serializedColors.join(','));
+      }
     }
   }
   return `/album/${encodeURIComponent(String(id))}/share-image?${params.toString()}`;

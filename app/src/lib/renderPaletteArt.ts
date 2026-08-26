@@ -1,13 +1,15 @@
 import React from 'react';
 import sharp from 'sharp';
 import { PaletteArtCanvas } from '@/components/PaletteArtCanvas';
-import type { PaletteArtStyle } from '@/lib/paletteArtwork';
+import type { PaletteArtInputColor, PaletteArtStyle } from '@/lib/paletteArtwork';
+import type { VisualFeatures } from '@/lib/types';
 
 interface RenderPaletteArtworkOptions {
-  colors: string[];
+  colors: Array<string | PaletteArtInputColor>;
   artStyle: PaletteArtStyle;
   seed: string;
   size?: number;
+  visualFeatures?: VisualFeatures | null;
 }
 
 const SVG_ATTRIBUTE_NAMES: Record<string, string> = {
@@ -59,8 +61,9 @@ export async function renderPaletteArtworkDataUrl({
   artStyle,
   seed,
   size = 900,
+  visualFeatures,
 }: RenderPaletteArtworkOptions): Promise<string> {
-  const svg = serializeSvgNode(React.createElement(PaletteArtCanvas, { colors, artStyle, seed, size }));
+  const svg = serializeSvgNode(React.createElement(PaletteArtCanvas, { colors, artStyle, seed, size, visualFeatures }));
   const png = await sharp(Buffer.from(svg, 'utf8'))
     .resize(size, size, { fit: 'contain' })
     .png()
