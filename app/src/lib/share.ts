@@ -1,4 +1,5 @@
 import { normalizeStorefront } from './storefronts';
+import type { PaletteArtStyle } from './paletteArtwork';
 
 export const SHARE_IMAGE_SIZES = {
   landscape: { width: 1200, height: 630 },
@@ -20,12 +21,26 @@ export function getAlbumShareImagePath(id: string | number, country = 'PH'): str
   return `/album/${encodeURIComponent(String(id))}/opengraph-image?country=${encodeURIComponent(storefront)}`;
 }
 
-export function getAlbumPortraitShareImagePath(id: string | number, country = 'PH'): string {
-  const storefront = normalizeStorefront(country);
-  return `/album/${encodeURIComponent(String(id))}/share-image?country=${encodeURIComponent(storefront)}`;
+export interface PortraitShareOptions {
+  variant?: 'cover' | 'palette';
+  style?: PaletteArtStyle;
 }
 
-export function getAlbumShareFilename(title: string, artistName: string): string {
+export function getAlbumPortraitShareImagePath(
+  id: string | number,
+  country = 'PH',
+  options?: PortraitShareOptions,
+): string {
+  const storefront = normalizeStorefront(country);
+  const params = new URLSearchParams({ country: storefront });
+  if (options?.variant === 'palette' && options.style) {
+    params.set('variant', 'palette');
+    params.set('style', options.style);
+  }
+  return `/album/${encodeURIComponent(String(id))}/share-image?${params.toString()}`;
+}
+
+export function getAlbumShareFilename(title: string, artistName: string, suffix?: string): string {
   const slug = `${artistName}-${title}`
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -34,7 +49,11 @@ export function getAlbumShareFilename(title: string, artistName: string): string
     .replace(/^-+|-+$/g, '')
     .slice(0, 72);
 
-  return `articol-${slug || 'album-artwork'}.png`;
+  const safeSuffix = suffix
+    ? `-${suffix.normalize('NFKD').replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}`
+    : '';
+
+  return `articol-${slug || 'album-artwork'}${safeSuffix}.png`;
 }
 
 export function supportsNativeFileShare(navigatorLike: FileShareNavigator, files: File[]): boolean {

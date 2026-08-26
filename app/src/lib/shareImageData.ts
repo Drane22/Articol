@@ -40,7 +40,7 @@ export async function getShareAlbumData(id: string, country: string): Promise<Sh
 
   const album = liveAlbum || storedAlbum;
   const palette = (storedAlbum?.dominantPalette || album?.dominantPalette || [])
-    .slice(0, 5)
+    .slice(0, 10)
     .map((color) => color.hex)
     .filter(Boolean);
 
