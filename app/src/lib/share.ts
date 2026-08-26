@@ -24,6 +24,12 @@ export function getAlbumShareImagePath(id: string | number, country = 'PH'): str
 export interface PortraitShareOptions {
   variant?: 'cover' | 'palette';
   style?: PaletteArtStyle;
+  album?: {
+    title: string;
+    artistName: string;
+    releaseYear?: number | string;
+    palette: string[];
+  };
 }
 
 export function getAlbumPortraitShareImagePath(
@@ -36,6 +42,16 @@ export function getAlbumPortraitShareImagePath(
   if (options?.variant === 'palette' && options.style) {
     params.set('variant', 'palette');
     params.set('style', options.style);
+    if (options.album) {
+      params.set('title', options.album.title.trim().slice(0, 120));
+      params.set('artist', options.album.artistName.trim().slice(0, 120));
+      const releaseYear = String(options.album.releaseYear || '').trim();
+      if (/^\d{4}$/.test(releaseYear)) params.set('year', releaseYear);
+      const palette = options.album.palette
+        .filter((color) => /^#[0-9a-f]{6}$/i.test(color))
+        .slice(0, 10);
+      if (palette.length > 0) params.set('palette', palette.join(','));
+    }
   }
   return `/album/${encodeURIComponent(String(id))}/share-image?${params.toString()}`;
 }

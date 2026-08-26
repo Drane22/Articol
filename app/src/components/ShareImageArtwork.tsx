@@ -1,14 +1,17 @@
 import React from 'react';
-import { PaletteArtCanvas } from '@/components/PaletteArtCanvas';
 import type { ShareAlbumData } from '@/lib/shareImageData';
-import { normalizePaletteArtColors, type PaletteArtStyle } from '@/lib/paletteArtwork';
+import {
+  getPaletteArtStyleLabel,
+  normalizePaletteArtColors,
+  type PaletteArtStyle,
+} from '@/lib/paletteArtwork';
 
 interface ShareImageArtworkProps {
   album: ShareAlbumData;
   format: 'landscape' | 'portrait';
   variant?: 'cover' | 'palette';
   paletteStyle?: PaletteArtStyle;
-  seed?: string;
+  paletteArtworkUrl?: string;
 }
 
 function truncate(value: string, limit: number): string {
@@ -74,11 +77,14 @@ export function ShareImageArtwork({
   format,
   variant = 'cover',
   paletteStyle,
-  seed = '',
+  paletteArtworkUrl,
 }: ShareImageArtworkProps) {
   const colors = normalizePaletteArtColors(album.palette);
   if (format === 'portrait') {
     const isPaletteArtwork = variant === 'palette' && Boolean(paletteStyle);
+    const artworkKind = isPaletteArtwork
+      ? `${getPaletteArtStyleLabel(paletteStyle!)} / palette edition`
+      : 'Original cover / portrait edition';
     return (
       <div
         style={{
@@ -100,18 +106,29 @@ export function ShareImageArtwork({
               boxShadow: 'inset 0 1px rgba(255,255,255,0.12)',
             }}
           >
-            {isPaletteArtwork ? (
-              <PaletteArtCanvas
-                colors={colors}
-                artStyle={paletteStyle!}
-                seed={seed || `${album.title}-${album.artistName}`}
+            {isPaletteArtwork && paletteArtworkUrl ? (
+              <img
+                src={paletteArtworkUrl}
+                alt=""
+                width="900"
+                height="900"
+                style={{ display: 'flex', width: 900, height: 900, objectFit: 'contain', borderRadius: 26 }}
               />
+            ) : isPaletteArtwork ? (
+              <div
+                style={{
+                  display: 'flex', width: 900, height: 900, alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 26, backgroundColor: '#111216', color: '#b6afa8', fontSize: 24,
+                }}
+              >
+                Generated artwork unavailable
+              </div>
             ) : (
               <Artwork album={album} colors={colors} size={900} radius={26} />
             )}
             <div style={{ display: 'flex', flex: 1, flexDirection: 'column', justifyContent: 'center', padding: '24px 12px 4px' }}>
-              <div style={{ display: 'flex', color: '#a39d97', fontSize: 15, letterSpacing: 4, textTransform: 'uppercase' }}>
-                articol / visual album discovery
+              <div style={{ display: 'flex', color: '#a39d97', fontSize: 15, letterSpacing: 3.2, textTransform: 'uppercase' }}>
+                {artworkKind}
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 15 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, paddingRight: 28 }}>
@@ -121,9 +138,11 @@ export function ShareImageArtwork({
                   <div style={{ display: 'flex', marginTop: 8, color: '#c2bbb4', fontSize: 24 }}>
                     {truncate(album.artistName, 36)}
                   </div>
-                  <div style={{ display: 'flex', marginTop: 12, color: '#8f8984', fontSize: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
-                    {album.country}{album.releaseYear ? ` / ${album.releaseYear}` : ''}
-                  </div>
+                  {album.releaseYear ? (
+                    <div style={{ display: 'flex', marginTop: 12, color: '#8f8984', fontSize: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
+                      Released {album.releaseYear}
+                    </div>
+                  ) : null}
                 </div>
                 <Palette colors={colors} size={28} />
               </div>

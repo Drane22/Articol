@@ -20,7 +20,6 @@ import {
   supportsNativeFileShare,
 } from '@/lib/share';
 import { Album } from '@/lib/types';
-import { getStorefront } from '@/lib/storefronts';
 import {
   DEFAULT_PALETTE_ART_STYLE,
   getPaletteArtStyleLabel,
@@ -122,11 +121,19 @@ export function ShareCardModal({
   const activeRequestId = useRef(0);
   const previewUrlRef = useRef<string | null>(null);
   const displayedAssetRef = useRef<DisplayedAsset | null>(null);
-  const storefront = getStorefront(album.country);
   const albumColors = normalizePaletteArtColors((album.dominantPalette || []).map((color) => color.hex));
   const requestedSelectionKey = selectionKey(requestedVariant, requestedStyle);
   const requestedAssetUrl = requestedVariant === 'palette'
-    ? getAlbumPortraitShareImagePath(album.id, album.country, { variant: 'palette', style: requestedStyle })
+    ? getAlbumPortraitShareImagePath(album.id, album.country, {
+      variant: 'palette',
+      style: requestedStyle,
+      album: {
+        title: album.title,
+        artistName: album.artistName,
+        releaseYear: album.releaseYear,
+        palette: albumColors,
+      },
+    })
     : portraitImageUrl;
   const requestedFilename = getAlbumShareFilename(
     album.title,
@@ -274,7 +281,6 @@ export function ShareCardModal({
   return (
     <DialogFrame
       ariaLabelledBy="share-card-title"
-      ariaDescribedBy="share-card-description"
       onClose={onClose}
       panelClassName="share-studio"
     >
@@ -282,18 +288,15 @@ export function ShareCardModal({
         <>
           <header className="share-studio__header">
             <div className="min-w-0">
-              <p className="eyebrow-label">Share studio</p>
-              <h2 id="share-card-title" className="share-studio__title">Publish this artwork</h2>
-              <p id="share-card-description" className="share-studio__description">
-                A portrait image for social posts, plus a polished album link for everywhere else.
-              </p>
+              <h2 id="share-card-title" className="share-studio__title">Share artwork</h2>
+              <p className="share-studio__description">{album.title} by {album.artistName}</p>
             </div>
             <button
               ref={closeButtonRef}
               type="button"
               onClick={requestClose}
               className="icon-button icon-button--quiet shrink-0"
-              aria-label="Close Share Studio"
+              aria-label="Close share artwork"
             >
               <X className="h-5 w-5" strokeWidth={1.5} />
             </button>
@@ -452,33 +455,6 @@ export function ShareCardModal({
                 )}
               </section>
 
-              <section className="share-format-panel" aria-labelledby="share-format-title">
-                <div className="share-format-panel__heading">
-                  <p id="share-format-title" className="eyebrow-label">Two ways to share</p>
-                  <span>One album, two useful outputs.</span>
-                </div>
-
-                <div className="share-format-panel__rows">
-                  <div className="share-format-row">
-                    <span className="share-format-row__kind">POST</span>
-                    <div className="share-format-row__copy">
-                      <strong>4:5 portrait</strong>
-                      <span>For sharing the artwork itself.</span>
-                    </div>
-                    <span className="share-format-row__badge">1080 x 1350</span>
-                  </div>
-
-                  <div className="share-format-row">
-                    <span className="share-format-row__kind">LINK</span>
-                    <div className="share-format-row__copy">
-                      <strong>Social preview</strong>
-                      <span>For album links. Applied automatically.</span>
-                    </div>
-                    <span className="share-format-row__badge">1200 x 630</span>
-                  </div>
-                </div>
-              </section>
-
               <div className="share-studio__metadata">
                 <div>
                   <p className="eyebrow-label">Artwork palette</p>
@@ -488,9 +464,9 @@ export function ShareCardModal({
                     ))}
                   </div>
                 </div>
-                <p className="share-studio__archive-line">
-                  {storefront.label}<span aria-hidden="true">/</span>{album.releaseYear || 'Year unavailable'}
-                </p>
+                {album.releaseYear ? (
+                  <p className="share-studio__archive-line">Released {album.releaseYear}</p>
+                ) : null}
               </div>
 
               <div className="share-studio__actions">

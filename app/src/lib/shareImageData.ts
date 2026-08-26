@@ -14,6 +14,34 @@ export interface ShareAlbumData {
 
 export const FALLBACK_SHARE_PALETTE = ['#171719', '#514748', '#8e7374', '#b99b82', '#dfd4c4'];
 
+function boundedParam(searchParams: URLSearchParams, key: string, limit: number): string {
+  return (searchParams.get(key) || '').trim().slice(0, limit);
+}
+
+export function getSuppliedPaletteShareAlbumData(
+  searchParams: URLSearchParams,
+  country: string,
+): ShareAlbumData | null {
+  const title = boundedParam(searchParams, 'title', 120);
+  const artistName = boundedParam(searchParams, 'artist', 120);
+  const palette = boundedParam(searchParams, 'palette', 160)
+    .split(',')
+    .map((color) => color.trim().toLowerCase())
+    .filter((color) => /^#[0-9a-f]{6}$/i.test(color))
+    .slice(0, 10);
+  if (!title || !artistName || palette.length === 0) return null;
+
+  const year = boundedParam(searchParams, 'year', 4);
+  return {
+    title,
+    artistName,
+    artworkUrl: '',
+    releaseYear: /^\d{4}$/.test(year) ? Number.parseInt(year, 10) : '',
+    country: normalizeStorefront(country),
+    palette,
+  };
+}
+
 function artworkUrlFor(album?: Album | null): string {
   return (album?.artworkUrl || '').replace(/\d+x\d+(bb)?\.(jpe?g|png|webp)/i, '1000x1000bb.$2');
 }
