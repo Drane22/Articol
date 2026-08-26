@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   Copy,
@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { DialogFrame } from '@/components/DialogFrame';
+import { PaletteArtCanvas } from '@/components/PaletteArtCanvas';
 import {
   getAlbumPortraitShareImagePath,
   getAlbumShareFilename,
@@ -21,10 +22,12 @@ import {
 } from '@/lib/share';
 import { Album } from '@/lib/types';
 import {
+  buildPaletteArtModel,
   DEFAULT_PALETTE_ART_STYLE,
   getPaletteArtStyleLabel,
-  normalizePaletteArtColors,
+  MAX_DISPLAY_ART_COLORS,
   PALETTE_ART_STYLES,
+  parsePaletteInputColors,
   type PaletteArtStyle,
 } from '@/lib/paletteArtwork';
 
@@ -61,10 +64,10 @@ interface RequestedAsset {
 
 const GENERATION_MESSAGES = [
   'Teaching these colors to cooperate.',
-  'Making beige feel emotionally significant.',
-  'Asking the palette to form a personality.',
-  'Rearranging colors with unjustified confidence.',
-  'Turning color theft into visual culture.',
+  'Measuring coverage and chroma across the palette.',
+  'Calibrating perceptual lightness and contrast.',
+  'Synthesizing generative geometry from cover data.',
+  'Rendering full-resolution 1080x1350 artwork.',
 ];
 
 function selectionKey(variant: PortraitVariant, style: PaletteArtStyle): string {
@@ -121,7 +124,15 @@ export function ShareCardModal({
   const activeRequestId = useRef(0);
   const previewUrlRef = useRef<string | null>(null);
   const displayedAssetRef = useRef<DisplayedAsset | null>(null);
-  const albumColors = normalizePaletteArtColors((album.dominantPalette || []).map((color) => color.hex));
+
+  const albumColors = useMemo(() => {
+    return parsePaletteInputColors(album.dominantPalette);
+  }, [album.dominantPalette]);
+
+  const activeModel = useMemo(() => {
+    return buildPaletteArtModel(albumColors, album.id || 'seed', requestedStyle, album.visualFeatures);
+  }, [albumColors, album.id, requestedStyle, album.visualFeatures]);
+
   const requestedSelectionKey = selectionKey(requestedVariant, requestedStyle);
   const requestedAssetUrl = requestedVariant === 'palette'
     ? getAlbumPortraitShareImagePath(album.id, album.country, {
@@ -314,12 +325,12 @@ export function ShareCardModal({
                     <div className="share-preview-loading" role="status" aria-live="polite">
                       <div className="share-preview-loading__art" aria-hidden="true">
                         <div className="share-preview-loading__orbit" />
-                        {albumColors.map((color, index) => (
+                        {albumColors.slice(0, MAX_DISPLAY_ART_COLORS).map((color, index) => (
                           <span
-                            key={`${color}-${index}`}
+                            key={`${color.hex}-${index}`}
                             className="share-preview-loading__color"
                             style={{
-                              backgroundColor: color,
+                              backgroundColor: color.hex,
                               width: `${24 + (index % 4) * 9}%`,
                               height: `${24 + ((index + 2) % 4) * 8}%`,
                               left: `${8 + (index * 17) % 70}%`,
@@ -332,7 +343,11 @@ export function ShareCardModal({
                       <div className="share-preview-loading__meta" aria-hidden="true">
                         <span />
                         <span />
-                        <div>{albumColors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div>
+                        <div>
+                          {albumColors.slice(0, MAX_DISPLAY_ART_COLORS).map((color) => (
+                            <i key={color.hex} style={{ backgroundColor: color.hex }} />
+                          ))}
+                        </div>
                       </div>
                       <p>{GENERATION_MESSAGES[messageIndex]}</p>
                     </div>
@@ -362,8 +377,8 @@ export function ShareCardModal({
                       {assetState === 'regenerating' && (
                         <div className="share-preview-regenerating" role="status" aria-live="polite">
                           <div className="share-preview-regenerating__veil" aria-hidden="true">
-                            {albumColors.map((color, index) => (
-                              <span key={`${color}-${index}`} style={{ backgroundColor: color }} />
+                            {albumColors.slice(0, MAX_DISPLAY_ART_COLORS).map((color, index) => (
+                              <span key={`${color.hex}-${index}`} style={{ backgroundColor: color.hex }} />
                             ))}
                             <i />
                           </div>
@@ -420,38 +435,55 @@ export function ShareCardModal({
                     <span className="share-artwork-mode__option-mark">ART</span>
                     <span className="share-artwork-mode__option-copy">
                       <strong>Palette art</strong>
-                      <small>Generated from every available color</small>
+                      <small>Generated from extracted coverage</small>
                     </span>
                     {requestedVariant === 'palette' && isAssetPending && <LoaderCircle className="share-artwork-busy" aria-hidden="true" />}
                   </button>
                 </div>
 
                 {requestedVariant === 'palette' && (
-                  <div className="share-artwork-styles" role="radiogroup" aria-label="Palette art style">
-                    {PALETTE_ART_STYLES.map((option) => {
-                      const styleIsBusy = requestedStyle === option.id && isAssetPending;
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={requestedStyle === option.id}
-                          aria-busy={styleIsBusy}
-                          disabled={isSharing}
-                          className={`share-artwork-style${requestedStyle === option.id ? ' is-selected' : ''}${styleIsBusy ? ' is-generating' : ''}`}
-                          onClick={() => setRequestedStyle(option.id)}
-                        >
-                          <span className={`share-artwork-style__preview share-artwork-style__preview--${option.id}`} aria-hidden="true">
-                            {styleIsBusy && <LoaderCircle />}
-                          </span>
-                          <span className="share-artwork-style__copy">
-                            <strong>{option.label}</strong>
-                            <small>{option.description}</small>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <>
+                    <div className="share-artwork-styles" role="radiogroup" aria-label="Palette art style">
+                      {PALETTE_ART_STYLES.map((option) => {
+                        const styleIsBusy = requestedStyle === option.id && isAssetPending;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={requestedStyle === option.id}
+                            aria-busy={styleIsBusy}
+                            disabled={isSharing}
+                            className={`share-artwork-style${requestedStyle === option.id ? ' is-selected' : ''}${styleIsBusy ? ' is-generating' : ''}`}
+                            onClick={() => setRequestedStyle(option.id)}
+                          >
+                            <span className="share-artwork-style__preview" aria-hidden="true">
+                              <PaletteArtCanvas
+                                colors={albumColors}
+                                artStyle={option.id}
+                                seed={album.id || 'preview'}
+                                size={44}
+                                visualFeatures={album.visualFeatures}
+                              />
+                              {styleIsBusy && <LoaderCircle />}
+                            </span>
+                            <span className="share-artwork-style__copy">
+                              <strong>{option.label}</strong>
+                              <small>{option.description}</small>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Data-to-form Explanation disclosure */}
+                    <div className="share-artwork-explanation">
+                      <p className="eyebrow-label">Why it looks this way</p>
+                      <p className="share-artwork-explanation__text">
+                        {activeModel.explanation.dominantSummary} {activeModel.explanation.accentSummary}
+                      </p>
+                    </div>
+                  </>
                 )}
               </section>
 
@@ -459,8 +491,12 @@ export function ShareCardModal({
                 <div>
                   <p className="eyebrow-label">Artwork palette</p>
                   <div className="share-studio__swatches" aria-label="Extracted cover palette">
-                    {albumColors.map((color, index) => (
-                      <span key={`${color}-${index}`} style={{ backgroundColor: color }} title={color} />
+                    {activeModel.colors.slice(0, MAX_DISPLAY_ART_COLORS).map((color, index) => (
+                      <span
+                        key={`${color.sourceHex}-${index}`}
+                        style={{ backgroundColor: color.sourceHex }}
+                        title={`${color.sourceHex} (${Math.round(color.normalizedWeight * 100)}% coverage)`}
+                      />
                     ))}
                   </div>
                 </div>
