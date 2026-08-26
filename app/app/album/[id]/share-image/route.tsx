@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 import { ShareImageArtwork } from '@/components/ShareImageArtwork';
 import { SHARE_IMAGE_SIZES } from '@/lib/share';
-import { isPaletteArtStyle } from '@/lib/paletteArtwork';
+import { parsePaletteArtStyle } from '@/lib/paletteArtwork';
 import { getShareAlbumData } from '@/lib/shareImageData';
 import { normalizeStorefront } from '@/lib/storefronts';
 
@@ -17,7 +17,7 @@ export async function GET(
   const variant = searchParams.get('variant');
   const style = searchParams.get('style');
   const album = await getShareAlbumData(id, country);
-  const parsedPaletteStyle = isPaletteArtStyle(style) ? style : undefined;
+  const parsedPaletteStyle = parsePaletteArtStyle(style);
   const isPaletteArtwork = variant === 'palette' && Boolean(parsedPaletteStyle);
 
   return new ImageResponse(

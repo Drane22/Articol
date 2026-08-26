@@ -1,7 +1,17 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Check, Copy, Download, ExternalLink, Image as ImageIcon, Share2, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  Image as ImageIcon,
+  LoaderCircle,
+  RefreshCw,
+  Share2,
+  X,
+} from 'lucide-react';
 import { DialogFrame } from '@/components/DialogFrame';
 import {
   getAlbumPortraitShareImagePath,
@@ -14,6 +24,7 @@ import { getStorefront } from '@/lib/storefronts';
 import {
   DEFAULT_PALETTE_ART_STYLE,
   getPaletteArtStyleLabel,
+  normalizePaletteArtColors,
   PALETTE_ART_STYLES,
   type PaletteArtStyle,
 } from '@/lib/paletteArtwork';
@@ -28,17 +39,54 @@ interface ShareCardModalProps {
 }
 
 type ShareAction = 'idle' | 'sharing';
-type AssetState = 'loading' | 'ready' | 'error';
+type AssetState = 'initial-loading' | 'regenerating' | 'ready' | 'error';
+type PortraitVariant = 'cover' | 'palette';
 
 interface ShareStatus {
   message: string;
   tone: 'success' | 'error';
 }
 
+interface DisplayedAsset {
+  file: File;
+  previewUrl: string;
+  selectionKey: string;
+  variant: PortraitVariant;
+  style?: PaletteArtStyle;
+}
+
+interface RequestedAsset {
+  variant: PortraitVariant;
+  style: PaletteArtStyle;
+}
+
+const GENERATION_MESSAGES = [
+  'Teaching these colors to cooperate.',
+  'Making beige feel emotionally significant.',
+  'Asking the palette to form a personality.',
+  'Rearranging colors with unjustified confidence.',
+  'Turning color theft into visual culture.',
+];
+
+function selectionKey(variant: PortraitVariant, style: PaletteArtStyle): string {
+  return variant === 'palette' ? `palette:${style}` : 'cover';
+}
+
+function artworkLabel(variant: PortraitVariant, style?: PaletteArtStyle): string {
+  return variant === 'palette' && style
+    ? `${getPaletteArtStyleLabel(style)} palette artwork`
+    : 'portrait card';
+}
+
 async function fetchPortraitFile(url: string, filename: string, signal?: AbortSignal): Promise<File> {
   const response = await fetch(url, { cache: 'no-store', signal });
   if (!response.ok) throw new Error(`Portrait card request failed (${response.status})`);
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().startsWith('image/')) {
+    throw new Error(`Portrait card returned ${contentType || 'an unknown file type'}`);
+  }
   const blob = await response.blob();
+  if (blob.size === 0) throw new Error('Portrait card returned an empty image');
   return new File([blob], filename, { type: blob.type || 'image/png' });
 }
 
@@ -63,101 +111,164 @@ export function ShareCardModal({
   onClose,
 }: ShareCardModalProps) {
   const [action, setAction] = useState<ShareAction>('idle');
-  const [assetState, setAssetState] = useState<AssetState>('loading');
-  const [portraitFile, setPortraitFile] = useState<File | null>(null);
+  const [assetState, setAssetState] = useState<AssetState>('initial-loading');
+  const [displayedAsset, setDisplayedAsset] = useState<DisplayedAsset | null>(null);
+  const [failedAsset, setFailedAsset] = useState<RequestedAsset | null>(null);
   const [status, setStatus] = useState<ShareStatus | null>(null);
-  const [previewError, setPreviewError] = useState(false);
-  const [portraitVariant, setPortraitVariant] = useState<'cover' | 'palette'>('cover');
-  const [paletteStyle, setPaletteStyle] = useState<PaletteArtStyle>(DEFAULT_PALETTE_ART_STYLE);
+  const [requestedVariant, setRequestedVariant] = useState<PortraitVariant>('cover');
+  const [requestedStyle, setRequestedStyle] = useState<PaletteArtStyle>(DEFAULT_PALETTE_ART_STYLE);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [messageIndex, setMessageIndex] = useState(0);
+  const activeRequestId = useRef(0);
+  const previewUrlRef = useRef<string | null>(null);
+  const displayedAssetRef = useRef<DisplayedAsset | null>(null);
   const storefront = getStorefront(album.country);
-  const portraitAssetUrl = portraitVariant === 'palette'
-    ? getAlbumPortraitShareImagePath(album.id, album.country, { variant: 'palette', style: paletteStyle })
+  const albumColors = normalizePaletteArtColors((album.dominantPalette || []).map((color) => color.hex));
+  const requestedSelectionKey = selectionKey(requestedVariant, requestedStyle);
+  const requestedAssetUrl = requestedVariant === 'palette'
+    ? getAlbumPortraitShareImagePath(album.id, album.country, { variant: 'palette', style: requestedStyle })
     : portraitImageUrl;
-  const filename = getAlbumShareFilename(
+  const requestedFilename = getAlbumShareFilename(
     album.title,
     album.artistName,
-    portraitVariant === 'palette' ? `palette-${paletteStyle}` : undefined,
+    requestedVariant === 'palette' ? `palette-${requestedStyle}` : undefined,
   );
-  const isBusy = action !== 'idle';
-  const isPaletteArtwork = portraitVariant === 'palette';
-  const artworkLabel = isPaletteArtwork ? `${getPaletteArtStyleLabel(paletteStyle)} palette artwork` : 'portrait card';
+  const requestedLabel = artworkLabel(requestedVariant, requestedStyle);
+  const displayedLabel = displayedAsset
+    ? artworkLabel(displayedAsset.variant, displayedAsset.style)
+    : requestedLabel;
+  const displayedIsPalette = displayedAsset?.variant === 'palette';
+  const isSharing = action !== 'idle';
+  const isAssetPending = assetState === 'initial-loading' || assetState === 'regenerating';
+  const imageActionsDisabled = isSharing || isAssetPending || !displayedAsset;
 
   useEffect(() => {
+    const requestId = activeRequestId.current + 1;
+    activeRequestId.current = requestId;
+    const currentAsset = displayedAssetRef.current;
+    if (currentAsset?.selectionKey === requestedSelectionKey) {
+      setAssetState('ready');
+      return undefined;
+    }
+
     const controller = new AbortController();
-    setAssetState('loading');
-    setPortraitFile(null);
-    setPreviewError(false);
+    const previousAsset = currentAsset;
+    setAssetState(previousAsset ? 'regenerating' : 'initial-loading');
+    setMessageIndex(0);
     setStatus(null);
-    fetchPortraitFile(portraitAssetUrl, filename, controller.signal)
+    setFailedAsset(null);
+
+    fetchPortraitFile(requestedAssetUrl, requestedFilename, controller.signal)
       .then((file) => {
-        setPortraitFile(file);
+        if (activeRequestId.current !== requestId) return;
+        const previewUrl = URL.createObjectURL(file);
+        const previousPreviewUrl = previewUrlRef.current;
+        previewUrlRef.current = previewUrl;
+        if (previousPreviewUrl) URL.revokeObjectURL(previousPreviewUrl);
+        const nextAsset: DisplayedAsset = {
+          file,
+          previewUrl,
+          selectionKey: requestedSelectionKey,
+          variant: requestedVariant,
+          style: requestedVariant === 'palette' ? requestedStyle : undefined,
+        };
+        displayedAssetRef.current = nextAsset;
+        setDisplayedAsset(nextAsset);
         setAssetState('ready');
+        setStatus(null);
       })
       .catch((error) => {
-        if ((error as DOMException)?.name === 'AbortError') return;
+        if ((error as DOMException)?.name === 'AbortError' || activeRequestId.current !== requestId) return;
         setAssetState('error');
-        setStatus({
-          tone: 'error',
-          message: `The ${artworkLabel} could not be prepared. You can still copy and share the album link.`,
-        });
+        setFailedAsset({ variant: requestedVariant, style: requestedStyle });
+        if (previousAsset) {
+          setRequestedVariant(previousAsset.variant);
+          if (previousAsset.style) setRequestedStyle(previousAsset.style);
+          setStatus({
+            tone: 'error',
+            message: `${requestedLabel} could not be generated. The last finished design is still ready to share.`,
+          });
+        } else {
+          setStatus({
+            tone: 'error',
+            message: `${requestedLabel} could not be generated. The album link remains ready to share.`,
+          });
+        }
       });
 
     return () => controller.abort();
-  }, [filename, portraitAssetUrl]);
+  }, [requestedAssetUrl, requestedFilename, requestedSelectionKey, retryNonce]);
+
+  useEffect(() => {
+    if (!isAssetPending) return undefined;
+    const interval = window.setInterval(() => {
+      setMessageIndex((current) => (current + 1) % GENERATION_MESSAGES.length);
+    }, 2800);
+    return () => window.clearInterval(interval);
+  }, [isAssetPending]);
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    displayedAssetRef.current = null;
+  }, []);
 
   const handleSharePortrait = async () => {
-    if (isBusy || !portraitFile) {
-      if (assetState === 'loading') {
-        setStatus({ tone: 'error', message: `The ${artworkLabel} is still being prepared. Try again in a moment.` });
-      }
-      return;
-    }
+    if (imageActionsDisabled || !displayedAsset) return;
     setAction('sharing');
     setStatus(null);
 
     try {
-      if (supportsNativeFileShare(navigator, [portraitFile])) {
+      if (supportsNativeFileShare(navigator, [displayedAsset.file])) {
         try {
           await navigator.share({
-            files: [portraitFile],
-            title: `${album.title} — ${album.artistName}`,
+            files: [displayedAsset.file],
+            title: `${album.title} - ${album.artistName}`,
             text: `Artwork card for ${album.title} by ${album.artistName}, discovered on Articol.`,
           });
         } catch (error) {
           if (isShareCancellation(error)) return;
-          downloadFile(portraitFile);
+          downloadFile(displayedAsset.file);
           setStatus({
             tone: 'success',
-            message: `The share sheet was unavailable, so the ${artworkLabel} was downloaded for Photos or Gallery.`,
+            message: `The share sheet was unavailable, so the ${displayedLabel} was downloaded for Photos or Gallery.`,
           });
         }
       } else {
-        downloadFile(portraitFile);
+        downloadFile(displayedAsset.file);
         setStatus({
           tone: 'success',
-          message: `${artworkLabel} downloaded. Post it from Photos or Gallery on Instagram or another app.`,
+          message: `${displayedLabel} downloaded. Post it from Photos or Gallery on Instagram or another app.`,
         });
       }
     } catch {
       setStatus({
         tone: 'error',
-        message: `The ${artworkLabel} could not be prepared. You can still copy and share the album link.`,
+        message: `The ${displayedLabel} could not be shared. You can still copy the album link.`,
       });
     } finally {
       setAction('idle');
     }
   };
 
-  const handleDownload = async () => {
-    if (isBusy || !portraitFile) return;
+  const handleDownload = () => {
+    if (imageActionsDisabled || !displayedAsset) return;
     setStatus(null);
-    downloadFile(portraitFile);
-    setStatus({ tone: 'success', message: `${artworkLabel} downloaded to this device.` });
+    downloadFile(displayedAsset.file);
+    setStatus({ tone: 'success', message: `${displayedLabel} downloaded to this device.` });
   };
 
   const handleCopyLink = async () => {
     const copiedLink = await onCopyLink();
     setStatus(copiedLink ? null : { tone: 'error', message: 'The link could not be copied on this browser.' });
+  };
+
+  const retryGeneration = () => {
+    setStatus(null);
+    if (failedAsset) {
+      setRequestedVariant(failedAsset.variant);
+      setRequestedStyle(failedAsset.style);
+    }
+    setRetryNonce((current) => current + 1);
   };
 
   return (
@@ -189,30 +300,84 @@ export function ShareCardModal({
           </header>
 
           <div className="share-studio__layout">
-            <section className="share-studio__preview-column" aria-label="Portrait share-card preview">
+            <section
+              className="share-studio__preview-column"
+              aria-label="Portrait share-card preview"
+              aria-busy={isAssetPending}
+            >
               <div className="share-studio__preview-bezel">
                 <div className="share-preview-shell share-preview-shell--portrait">
-                  {previewError ? (
+                  {!displayedAsset && assetState === 'initial-loading' && (
+                    <div className="share-preview-loading" role="status" aria-live="polite">
+                      <div className="share-preview-loading__art" aria-hidden="true">
+                        <div className="share-preview-loading__orbit" />
+                        {albumColors.map((color, index) => (
+                          <span
+                            key={`${color}-${index}`}
+                            className="share-preview-loading__color"
+                            style={{
+                              backgroundColor: color,
+                              width: `${24 + (index % 4) * 9}%`,
+                              height: `${24 + ((index + 2) % 4) * 8}%`,
+                              left: `${8 + (index * 17) % 70}%`,
+                              top: `${8 + (index * 23) % 68}%`,
+                              animationDelay: `${index * -120}ms`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <div className="share-preview-loading__meta" aria-hidden="true">
+                        <span />
+                        <span />
+                        <div>{albumColors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div>
+                      </div>
+                      <p>{GENERATION_MESSAGES[messageIndex]}</p>
+                    </div>
+                  )}
+
+                  {!displayedAsset && assetState === 'error' && (
                     <div className="share-preview-fallback">
                       <ImageIcon className="h-7 w-7" strokeWidth={1.4} aria-hidden="true" />
-                      <p className="eyebrow-label mt-4">Preview unavailable</p>
+                      <p className="eyebrow-label mt-4">Generation stalled</p>
                       <p className="mt-2 max-w-xs text-sm text-[var(--text-muted)]">
-                        The album link remains ready to share.
+                        Apparently the colors have unionized.
                       </p>
+                      <button type="button" className="share-preview-retry" onClick={retryGeneration}>
+                        <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> Retry image
+                      </button>
                     </div>
-                  ) : (
-                    <img
-                      src={portraitAssetUrl}
-                      alt={`${artworkLabel} for ${album.title} by ${album.artistName}`}
-                      className="share-preview-image"
-                      onError={() => setPreviewError(true)}
-                    />
+                  )}
+
+                  {displayedAsset && (
+                    <>
+                      <img
+                        src={displayedAsset.previewUrl}
+                        alt={`${displayedLabel} for ${album.title} by ${album.artistName}`}
+                        className="share-preview-image"
+                        onError={() => setStatus({ tone: 'error', message: 'The prepared image could not be displayed. Try generating it again.' })}
+                      />
+                      {assetState === 'regenerating' && (
+                        <div className="share-preview-regenerating" role="status" aria-live="polite">
+                          <div className="share-preview-regenerating__veil" aria-hidden="true">
+                            {albumColors.map((color, index) => (
+                              <span key={`${color}-${index}`} style={{ backgroundColor: color }} />
+                            ))}
+                            <i />
+                          </div>
+                          <p>{GENERATION_MESSAGES[messageIndex]}</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
               <div className="share-studio__preview-caption">
-                <span>{isPaletteArtwork ? 'Palette art portrait' : 'Post-ready portrait'}</span>
-                <span>1080 × 1350 · PNG</span>
+                <span>
+                  {displayedAsset
+                    ? displayedIsPalette ? getPaletteArtStyleLabel(displayedAsset.style!) : 'Post-ready portrait'
+                    : isAssetPending ? 'Generating portrait' : 'Portrait unavailable'}
+                </span>
+                <span>1080 x 1350 / PNG</span>
               </div>
             </section>
 
@@ -227,52 +392,62 @@ export function ShareCardModal({
                   <button
                     type="button"
                     role="radio"
-                    aria-checked={!isPaletteArtwork}
-                    disabled={isBusy}
-                    className={`share-artwork-mode__option${!isPaletteArtwork ? ' is-selected' : ''}`}
-                    onClick={() => setPortraitVariant('cover')}
+                    aria-checked={requestedVariant === 'cover'}
+                    aria-busy={requestedVariant === 'cover' && isAssetPending}
+                    disabled={isSharing}
+                    className={`share-artwork-mode__option${requestedVariant === 'cover' ? ' is-selected' : ''}`}
+                    onClick={() => setRequestedVariant('cover')}
                   >
                     <span className="share-artwork-mode__option-mark">COVER</span>
                     <span className="share-artwork-mode__option-copy">
                       <strong>Album cover</strong>
                       <small>Original artwork and metadata</small>
                     </span>
+                    {requestedVariant === 'cover' && isAssetPending && <LoaderCircle className="share-artwork-busy" aria-hidden="true" />}
                   </button>
                   <button
                     type="button"
                     role="radio"
-                    aria-checked={isPaletteArtwork}
-                    disabled={isBusy}
-                    className={`share-artwork-mode__option${isPaletteArtwork ? ' is-selected' : ''}`}
-                    onClick={() => setPortraitVariant('palette')}
+                    aria-checked={requestedVariant === 'palette'}
+                    aria-busy={requestedVariant === 'palette' && isAssetPending}
+                    disabled={isSharing}
+                    className={`share-artwork-mode__option${requestedVariant === 'palette' ? ' is-selected' : ''}`}
+                    onClick={() => setRequestedVariant('palette')}
                   >
                     <span className="share-artwork-mode__option-mark">ART</span>
                     <span className="share-artwork-mode__option-copy">
                       <strong>Palette art</strong>
-                      <small>Generated from all available colors</small>
+                      <small>Generated from every available color</small>
                     </span>
+                    {requestedVariant === 'palette' && isAssetPending && <LoaderCircle className="share-artwork-busy" aria-hidden="true" />}
                   </button>
                 </div>
 
-                {isPaletteArtwork && (
+                {requestedVariant === 'palette' && (
                   <div className="share-artwork-styles" role="radiogroup" aria-label="Palette art style">
-                    {PALETTE_ART_STYLES.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={paletteStyle === option.id}
-                        disabled={isBusy}
-                        className={`share-artwork-style${paletteStyle === option.id ? ' is-selected' : ''}`}
-                        onClick={() => setPaletteStyle(option.id)}
-                      >
-                        <span className={`share-artwork-style__preview share-artwork-style__preview--${option.id}`} aria-hidden="true" />
-                        <span className="share-artwork-style__copy">
-                          <strong>{option.label}</strong>
-                          <small>{option.description}</small>
-                        </span>
-                      </button>
-                    ))}
+                    {PALETTE_ART_STYLES.map((option) => {
+                      const styleIsBusy = requestedStyle === option.id && isAssetPending;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={requestedStyle === option.id}
+                          aria-busy={styleIsBusy}
+                          disabled={isSharing}
+                          className={`share-artwork-style${requestedStyle === option.id ? ' is-selected' : ''}${styleIsBusy ? ' is-generating' : ''}`}
+                          onClick={() => setRequestedStyle(option.id)}
+                        >
+                          <span className={`share-artwork-style__preview share-artwork-style__preview--${option.id}`} aria-hidden="true">
+                            {styleIsBusy && <LoaderCircle />}
+                          </span>
+                          <span className="share-artwork-style__copy">
+                            <strong>{option.label}</strong>
+                            <small>{option.description}</small>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </section>
@@ -290,7 +465,7 @@ export function ShareCardModal({
                       <strong>4:5 portrait</strong>
                       <span>For sharing the artwork itself.</span>
                     </div>
-                    <span className="share-format-row__badge">1080 × 1350</span>
+                    <span className="share-format-row__badge">1080 x 1350</span>
                   </div>
 
                   <div className="share-format-row">
@@ -299,47 +474,22 @@ export function ShareCardModal({
                       <strong>Social preview</strong>
                       <span>For album links. Applied automatically.</span>
                     </div>
-                    <span className="share-format-row__badge">1200 × 630</span>
+                    <span className="share-format-row__badge">1200 x 630</span>
                   </div>
                 </div>
               </section>
-
-              <div className="share-format-card share-format-card--featured">
-                <span className="share-format-card__icon" aria-hidden="true">
-                  <ImageIcon className="h-4 w-4" strokeWidth={1.5} />
-                </span>
-                <div>
-                  <strong>4:5 portrait</strong>
-                  <span>4:5 portrait · safe for feeds and other image-first platforms</span>
-                </div>
-              </div>
-
-              <div className="share-format-card">
-                <span className="share-format-card__icon" aria-hidden="true">
-                  <ExternalLink className="h-4 w-4" strokeWidth={1.5} />
-                </span>
-                <div>
-                  <strong>Social-link preview</strong>
-                  <span>1200 × 630 · used automatically when this album link is posted</span>
-                </div>
-              </div>
 
               <div className="share-studio__metadata">
                 <div>
                   <p className="eyebrow-label">Artwork palette</p>
                   <div className="share-studio__swatches" aria-label="Extracted cover palette">
-                    {(album.dominantPalette || []).slice(0, 10).map((color, index) => (
-                      <span
-                        key={`${color.hex}-${index}`}
-                        style={{ backgroundColor: color.hex }}
-                        title={color.hex}
-                      />
+                    {albumColors.map((color, index) => (
+                      <span key={`${color}-${index}`} style={{ backgroundColor: color }} title={color} />
                     ))}
-                    {!album.dominantPalette?.length && <small>Neutral fallback</small>}
                   </div>
                 </div>
                 <p className="share-studio__archive-line">
-                  {storefront.label}<span aria-hidden="true">·</span>{album.releaseYear || 'Year unavailable'}
+                  {storefront.label}<span aria-hidden="true">/</span>{album.releaseYear || 'Year unavailable'}
                 </p>
               </div>
 
@@ -347,53 +497,41 @@ export function ShareCardModal({
                 <button
                   type="button"
                   onClick={() => void handleSharePortrait()}
-                  disabled={isBusy || assetState !== 'ready'}
+                  disabled={imageActionsDisabled}
                   className="premium-button premium-button--primary share-studio__primary-action"
                 >
-                  <span>{assetState === 'loading' ? 'Preparing image…' : action === 'sharing' ? 'Opening share sheet…' : isPaletteArtwork ? 'Share palette artwork' : 'Share portrait card'}</span>
+                  <span>{isAssetPending ? 'Generating image...' : action === 'sharing' ? 'Opening share sheet...' : displayedIsPalette ? 'Share palette artwork' : 'Share portrait card'}</span>
                   <span className="premium-button__island" aria-hidden="true">
-                    <Share2 className="h-4 w-4" strokeWidth={1.5} />
+                    {isAssetPending ? <LoaderCircle className="share-artwork-busy" /> : <Share2 className="h-4 w-4" strokeWidth={1.5} />}
                   </span>
                 </button>
                 <div className="share-studio__secondary-actions">
                   <button
                     type="button"
-                    onClick={() => void handleDownload()}
-                    disabled={isBusy || assetState !== 'ready'}
+                    onClick={handleDownload}
+                    disabled={imageActionsDisabled}
                     className="premium-button premium-button--secondary"
                   >
                     <Download className="h-4 w-4" strokeWidth={1.5} />
-                    <span>{isPaletteArtwork ? 'Download palette art' : 'Download image'}</span>
+                    <span>{displayedIsPalette ? 'Download palette art' : 'Download image'}</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyLink()}
-                    className="premium-button premium-button--secondary"
-                  >
-                    {copied
-                      ? <Check className="h-4 w-4 theme-success" strokeWidth={1.5} />
-                      : <Copy className="h-4 w-4" strokeWidth={1.5} />}
+                  <button type="button" onClick={() => void handleCopyLink()} className="premium-button premium-button--secondary">
+                    {copied ? <Check className="h-4 w-4 theme-success" strokeWidth={1.5} /> : <Copy className="h-4 w-4" strokeWidth={1.5} />}
                     <span>{copied ? 'Link copied' : 'Copy album link'}</span>
                   </button>
                 </div>
               </div>
 
               {status && (
-                <p
-                  className={`share-studio__status share-studio__status--${status.tone}`}
-                  role={status.tone === 'error' ? 'alert' : 'status'}
-                  aria-live="polite"
-                >
-                  {status.message}
-                </p>
+                <div className={`share-studio__status share-studio__status--${status.tone}`} role={status.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
+                  <span>{status.message}</span>
+                  {status.tone === 'error' && failedAsset && (
+                    <button type="button" onClick={retryGeneration}>Retry</button>
+                  )}
+                </div>
               )}
 
-              <a
-                href={shareUrl}
-                className="share-studio__open-link"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={shareUrl} className="share-studio__open-link" target="_blank" rel="noopener noreferrer">
                 Open shared album page <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
               </a>
             </aside>

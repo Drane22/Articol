@@ -886,6 +886,8 @@
 }
 
 .share-preview-shell {
+  position: relative;
+  isolation: isolate;
   overflow: hidden;
   border-radius: calc(2rem - 0.45rem);
   background: var(--accent-soft);
@@ -910,6 +912,143 @@
   object-fit: cover;
 }
 
+.share-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 0.8rem;
+  padding: clamp(1rem, 4vw, 2rem);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-card) 90%, #0d0e12);
+}
+
+.share-preview-loading__art {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
+  border-radius: 1.2rem;
+  background: #111216;
+}
+
+.share-preview-loading__orbit {
+  position: absolute;
+  inset: 18%;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 50%;
+  animation: share-palette-orbit 3.6s linear infinite;
+}
+
+.share-preview-loading__orbit::after {
+  position: absolute;
+  top: -0.22rem;
+  left: 50%;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--text-primary);
+  content: '';
+}
+
+.share-preview-loading__color {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.58;
+  animation: share-palette-drift 2.4s var(--motion-enter) infinite alternate;
+}
+
+.share-preview-loading__meta {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.share-preview-loading__meta > span {
+  display: block;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-primary) 14%, transparent);
+  animation: share-palette-breathe 1.8s ease-in-out infinite alternate;
+}
+
+.share-preview-loading__meta > span:first-child { width: 68%; }
+.share-preview-loading__meta > span:nth-child(2) { width: 42%; }
+
+.share-preview-loading__meta > div {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.share-preview-loading__meta i {
+  width: 0.72rem;
+  height: 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+}
+
+.share-preview-loading > p,
+.share-preview-regenerating > p {
+  position: relative;
+  z-index: 4;
+  min-height: 1.3rem;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.63rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.share-preview-regenerating {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1.25rem;
+  pointer-events: none;
+}
+
+.share-preview-regenerating__veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+  background: rgba(8, 9, 12, 0.42);
+  backdrop-filter: blur(2px);
+}
+
+.share-preview-regenerating__veil > span {
+  flex: 1;
+  opacity: 0.09;
+  animation: share-palette-breathe 1.4s ease-in-out infinite alternate;
+}
+
+.share-preview-regenerating__veil > span:nth-child(even) {
+  animation-delay: -700ms;
+}
+
+.share-preview-regenerating__veil > i {
+  position: absolute;
+  top: -12%;
+  bottom: -12%;
+  left: -18%;
+  width: 13%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transform: skewX(-10deg);
+  animation: share-palette-scan 1.8s ease-in-out infinite;
+}
+
+.share-preview-regenerating > p {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 999px;
+  color: #f7f3eb;
+  background: rgba(12, 13, 16, 0.74);
+}
+
 .share-preview-fallback {
   display: flex;
   min-height: 100%;
@@ -918,6 +1057,21 @@
   flex-direction: column;
   padding: 2rem;
   text-align: center;
+}
+
+.share-preview-retry {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 1.1rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  font-size: 0.68rem;
 }
 
 .share-studio__preview-caption {
@@ -985,6 +1139,14 @@
   padding: 0.65rem;
   border-radius: 1rem;
   text-align: left;
+}
+
+.share-artwork-busy {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+  animation: share-palette-spin 900ms linear infinite;
 }
 
 .share-artwork-mode__option:hover,
@@ -1065,31 +1227,52 @@
 }
 
 .share-artwork-style__preview {
-  display: block;
+  position: relative;
+  display: flex;
   width: 2.2rem;
   height: 2.2rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
   border-radius: 0.65rem;
   box-shadow: inset 0 1px rgba(255,255,255,0.22);
 }
 
-.share-artwork-style__preview--spectral-field {
-  background: radial-gradient(circle at 28% 30%, #d8c4a8, transparent 34%), radial-gradient(circle at 72% 66%, #587a74, transparent 39%), #171a20;
+.share-artwork-style__preview svg {
+  position: relative;
+  z-index: 2;
+  width: 1rem;
+  height: 1rem;
+  color: #fff;
+  animation: share-palette-spin 900ms linear infinite;
 }
 
-.share-artwork-style__preview--orbit-atlas {
-  background: repeating-radial-gradient(circle at 50% 50%, #8db2c2 0 1px, transparent 1px 5px), #161a26;
+.share-artwork-style.is-generating .share-artwork-style__preview::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: rgba(8, 9, 12, 0.48);
+  content: '';
 }
 
-.share-artwork-style__preview--cut-paper-drift {
-  background: linear-gradient(135deg, #d1a873 0 32%, #5e7d78 32% 62%, #2b3143 62%);
+.share-artwork-style__preview--chromatic-bloom {
+  background: radial-gradient(circle at 50% 50%, #d8c4a8 0 15%, transparent 16%), conic-gradient(from 20deg, #587a74, #d3a6b2, #d1a873, #657ca0, #587a74);
 }
 
-.share-artwork-style__preview--moire-pulse {
-  background: repeating-linear-gradient(158deg, #d3a6b2 0 2px, #2e3142 2px 5px, #7b9d9b 5px 7px);
+.share-artwork-style__preview--palette-dna {
+  background: repeating-linear-gradient(73deg, #d3a6b2 0 2px, transparent 2px 5px, #7b9d9b 5px 7px), #191b24;
 }
 
-.share-artwork-style__preview--ink-bloom {
-  background: radial-gradient(circle at 38% 38%, #d5b69b 0 13%, transparent 35%), radial-gradient(circle at 70% 65%, #6e8290, transparent 43%), #18181b;
+.share-artwork-style__preview--chord-map {
+  background: repeating-radial-gradient(circle at 50% 50%, transparent 0 4px, #8db2c2 4px 5px), conic-gradient(#d1a873, #657ca0, #d3a6b2, #587a74, #d1a873);
+}
+
+.share-artwork-style__preview--spectrum-code {
+  background: repeating-linear-gradient(180deg, #d3a6b2 0 2px, #252838 2px 5px, #7b9d9b 5px 7px, #252838 7px 10px);
+}
+
+.share-artwork-style__preview--orbital-weave {
+  background: repeating-radial-gradient(ellipse at 50% 50%, transparent 0 4px, #8db2c2 4px 5px, transparent 5px 8px), #161a26;
 }
 
 .share-format-card { display: none; }
@@ -1237,10 +1420,47 @@
 }
 
 .share-studio__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
   padding: 0.7rem 0.8rem;
   border-radius: 0.85rem;
   font-size: 0.68rem;
   line-height: 1.45;
+}
+
+.share-studio__status > button {
+  flex: 0 0 auto;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+@keyframes share-palette-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes share-palette-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes share-palette-drift {
+  from { transform: translate3d(-4%, 3%, 0) scale(0.94); }
+  to { transform: translate3d(5%, -4%, 0) scale(1.06); }
+}
+
+@keyframes share-palette-breathe {
+  from { opacity: 0.32; }
+  to { opacity: 0.76; }
+}
+
+@keyframes share-palette-scan {
+  from { transform: translateX(0) skewX(-10deg); }
+  to { transform: translateX(900%) skewX(-10deg); }
 }
 
 .share-studio__status--success {
@@ -1524,6 +1744,16 @@
   .premium-button,
   .icon-button {
     transition: none;
+  }
+
+  .share-preview-loading__orbit,
+  .share-preview-loading__color,
+  .share-preview-loading__meta > span,
+  .share-preview-regenerating__veil > span,
+  .share-preview-regenerating__veil > i,
+  .share-artwork-busy,
+  .share-artwork-style__preview svg {
+    animation: none;
   }
 }
 
