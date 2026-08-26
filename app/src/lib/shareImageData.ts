@@ -41,8 +41,8 @@ export async function getShareAlbumData(id: string, country: string): Promise<Sh
   const album = liveAlbum || storedAlbum;
   const palette = (storedAlbum?.dominantPalette || album?.dominantPalette || [])
     .slice(0, 10)
-    .map((color) => color.hex)
-    .filter(Boolean);
+    .map((color) => (typeof color?.hex === 'string' ? color.hex.trim().toLowerCase() : ''))
+    .filter((color): color is string => /^#[0-9a-f]{6}$/i.test(color));
 
   return {
     title: album?.title || 'Album artwork',

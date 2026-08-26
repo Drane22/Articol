@@ -22,8 +22,9 @@ export function getPaletteArtStyleLabel(style: PaletteArtStyle): string {
   return PALETTE_ART_STYLES.find((option) => option.id === style)?.label || 'Palette art';
 }
 
-export function normalizePaletteArtColors(colors: string[] | null | undefined): string[] {
+export function normalizePaletteArtColors(colors: unknown[] | null | undefined): string[] {
   const normalized = (Array.isArray(colors) ? colors : [])
+    .filter((color): color is string => typeof color === 'string')
     .map((color) => color.trim().toLowerCase())
     .filter((color) => HEX_COLOR.test(color))
     .slice(0, MAX_PALETTE_ART_COLORS);
@@ -32,6 +33,7 @@ export function normalizePaletteArtColors(colors: string[] | null | undefined): 
 }
 
 export function getPaletteArtColor(colors: string[], index: number): string {
+  if (colors.length === 0) return PALETTE_ART_FALLBACK[index % PALETTE_ART_FALLBACK.length];
   return colors[index % colors.length] || PALETTE_ART_FALLBACK[index % PALETTE_ART_FALLBACK.length];
 }
 

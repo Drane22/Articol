@@ -76,7 +76,7 @@ function absolute(style: CSSProperties): CSSProperties {
 
 function SpectralField({ colors, seed }: { colors: string[]; seed: number }) {
   return (
-    <div style={{ position: 'relative', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, background: `linear-gradient(145deg, ${getPaletteArtColor(colors, 0)} 0%, #111216 54%, ${getPaletteArtColor(colors, 1)} 100%)` }}>
+    <div style={{ position: 'relative', display: 'flex', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, backgroundColor: '#111216' }}>
       {colors.map((color, index) => {
         const size = 300 + Math.round(seededUnit(seed, index) * 300);
         const left = -120 + Math.round(seededUnit(seed, index + 20) * 690);
@@ -90,15 +90,14 @@ function SpectralField({ colors, seed }: { colors: string[]; seed: number }) {
               width: size,
               height: Math.round(size * 0.78),
               borderRadius: '50%',
-              background: `radial-gradient(circle at 35% 35%, ${colorWithAlpha(color, 0.94)} 0%, ${colorWithAlpha(color, 0.58)} 42%, transparent 78%)`,
-              opacity: 0.82,
-              transform: `rotate(${Math.round(seededUnit(seed, index + 60) * 70 - 35)}deg)`,
+              backgroundColor: color,
+              opacity: 0.28 + seededUnit(seed, index + 60) * 0.45,
             })}
           />
         );
       })}
       <div style={absolute({ left: 28, top: 28, width: 844, height: 844, border: '1px solid rgba(255,255,255,0.24)', borderRadius: 22 })} />
-      <div style={absolute({ left: 0, top: 0, width: 900, height: 900, background: 'linear-gradient(180deg, rgba(8,9,12,0.08) 20%, rgba(8,9,12,0.32) 100%)' })} />
+      <div style={absolute({ left: 62, top: 62, width: 776, height: 776, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 18 })} />
     </div>
   );
 }
@@ -106,7 +105,7 @@ function SpectralField({ colors, seed }: { colors: string[]; seed: number }) {
 function OrbitAtlas({ colors, seed }: { colors: string[]; seed: number }) {
   const ringSizes = [790, 650, 510, 370, 230];
   return (
-    <div style={{ position: 'relative', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, background: `radial-gradient(circle at 50% 46%, ${colorWithAlpha(getPaletteArtColor(colors, 2), 0.58)} 0%, #14161b 42%, ${getPaletteArtColor(colors, 0)} 100%)` }}>
+    <div style={{ position: 'relative', display: 'flex', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, backgroundColor: '#14161b' }}>
       {ringSizes.map((size, index) => (
         <div
           key={size}
@@ -117,7 +116,6 @@ function OrbitAtlas({ colors, seed }: { colors: string[]; seed: number }) {
             height: Math.round(size * (0.64 + seededUnit(seed, index) * 0.2)),
             border: `${index === 0 ? 2 : 1}px solid ${colorWithAlpha(getPaletteArtColor(colors, index), 0.42)}`,
             borderRadius: '50%',
-            transform: `rotate(${Math.round(seededUnit(seed, index + 30) * 80 - 40)}deg)`,
           })}
         />
       ))}
@@ -134,13 +132,12 @@ function OrbitAtlas({ colors, seed }: { colors: string[]; seed: number }) {
               width: dotSize,
               height: dotSize,
               borderRadius: '50%',
-              background: color,
-              boxShadow: `0 0 0 6px ${colorWithAlpha(color, 0.12)}`,
+              backgroundColor: color,
             })}
           />
         );
       })}
-      <div style={absolute({ left: 390, top: 370, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle at 35% 30%, ${getPaletteArtColor(colors, 8)} 0%, ${getPaletteArtColor(colors, 3)} 55%, #121319 100%)`, border: '2px solid rgba(255,255,255,0.34)' })} />
+      <div style={absolute({ left: 390, top: 370, width: 120, height: 120, borderRadius: '50%', backgroundColor: getPaletteArtColor(colors, 8), border: `16px solid ${getPaletteArtColor(colors, 3)}` })} />
       <div style={absolute({ left: 28, top: 28, width: 844, height: 844, border: '1px solid rgba(255,255,255,0.2)', borderRadius: 22 })} />
     </div>
   );
@@ -148,7 +145,7 @@ function OrbitAtlas({ colors, seed }: { colors: string[]; seed: number }) {
 
 function CutPaperDrift({ colors, seed }: { colors: string[]; seed: number }) {
   return (
-    <div style={{ position: 'relative', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, background: `linear-gradient(155deg, ${getPaletteArtColor(colors, 0)} 0%, #16161a 50%, ${getPaletteArtColor(colors, 2)} 100%)` }}>
+    <div style={{ position: 'relative', display: 'flex', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, backgroundColor: '#16161a' }}>
       {colors.map((color, index) => {
         const width = 210 + Math.round(seededUnit(seed, index) * 260);
         const height = 130 + Math.round(seededUnit(seed, index + 20) * 220);
@@ -161,16 +158,14 @@ function CutPaperDrift({ colors, seed }: { colors: string[]; seed: number }) {
               width,
               height,
               borderRadius: 28 + Math.round(seededUnit(seed, index + 80) * 22),
-              background: color,
+              backgroundColor: color,
               opacity: 0.52 + seededUnit(seed, index + 100) * 0.32,
-              transform: `rotate(${Math.round(seededUnit(seed, index + 120) * 70 - 35)}deg)`,
-              boxShadow: `14px 18px 0 ${colorWithAlpha('#000000', 0.2)}`,
             })}
           />
         );
       })}
       <div style={absolute({ left: 84, top: 84, width: 730, height: 730, border: '1px solid rgba(255,255,255,0.24)', borderRadius: 30 })} />
-      <div style={absolute({ left: 120, top: 120, width: 660, height: 660, background: 'linear-gradient(135deg, rgba(255,255,255,0.12), transparent 34%, rgba(0,0,0,0.22))', borderRadius: 24 })} />
+      <div style={absolute({ left: 120, top: 120, width: 660, height: 660, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 24 })} />
     </div>
   );
 }
@@ -178,7 +173,7 @@ function CutPaperDrift({ colors, seed }: { colors: string[]; seed: number }) {
 function MoirePulse({ colors, seed }: { colors: string[]; seed: number }) {
   const lines = Array.from({ length: 22 }, (_, index) => index);
   return (
-    <div style={{ position: 'relative', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, background: `linear-gradient(145deg, ${getPaletteArtColor(colors, 1)} 0%, #111318 46%, ${getPaletteArtColor(colors, 5)} 100%)` }}>
+    <div style={{ position: 'relative', display: 'flex', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, backgroundColor: '#111318' }}>
       {lines.map((index) => (
         <div
           key={index}
@@ -188,9 +183,8 @@ function MoirePulse({ colors, seed }: { colors: string[]; seed: number }) {
             width: 1180,
             height: 5 + Math.round(seededUnit(seed, index + 30) * 5),
             borderRadius: 999,
-            background: getPaletteArtColor(colors, index),
+            backgroundColor: getPaletteArtColor(colors, index),
             opacity: 0.18 + (index % 3) * 0.06,
-            transform: `rotate(${Math.round(seededUnit(seed, index + 60) * 24 - 12)}deg)`,
           })}
         />
       ))}
@@ -206,7 +200,6 @@ function MoirePulse({ colors, seed }: { colors: string[]; seed: number }) {
               height: size,
               border: `${index + 2}px solid ${colorWithAlpha(getPaletteArtColor(colors, index + 4), 0.28)}`,
               borderRadius: '50%',
-              transform: `rotate(${Math.round(seededUnit(seed, index + 100) * 45)}deg) scaleY(0.58)`,
             })}
           />
         );
@@ -218,7 +211,7 @@ function MoirePulse({ colors, seed }: { colors: string[]; seed: number }) {
 
 function InkBloom({ colors, seed }: { colors: string[]; seed: number }) {
   return (
-    <div style={{ position: 'relative', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, background: `radial-gradient(circle at 48% 40%, ${colorWithAlpha(getPaletteArtColor(colors, 2), 0.42)} 0%, #131317 48%, ${getPaletteArtColor(colors, 0)} 100%)` }}>
+    <div style={{ position: 'relative', display: 'flex', width: 900, height: 900, overflow: 'hidden', borderRadius: 26, backgroundColor: '#131317' }}>
       {colors.map((color, index) => {
         const size = 190 + Math.round(seededUnit(seed, index) * 350);
         return (
@@ -230,9 +223,8 @@ function InkBloom({ colors, seed }: { colors: string[]; seed: number }) {
               width: size,
               height: Math.round(size * (0.72 + seededUnit(seed, index + 70) * 0.42)),
               borderRadius: '50%',
-              background: `radial-gradient(circle at 45% 45%, ${colorWithAlpha(color, 0.74)} 0%, ${colorWithAlpha(color, 0.34)} 48%, transparent 78%)`,
-              opacity: 0.76,
-              transform: `rotate(${Math.round(seededUnit(seed, index + 90) * 90 - 45)}deg)`,
+              backgroundColor: color,
+              opacity: 0.24 + seededUnit(seed, index + 90) * 0.45,
             })}
           />
         );
@@ -246,13 +238,13 @@ function InkBloom({ colors, seed }: { colors: string[]; seed: number }) {
             width: 4 + Math.round(seededUnit(seed, index + 160) * 9),
             height: 4 + Math.round(seededUnit(seed, index + 180) * 9),
             borderRadius: '50%',
-            background: getPaletteArtColor(colors, index + 4),
+            backgroundColor: getPaletteArtColor(colors, index + 4),
             opacity: 0.4,
           })}
         />
       ))}
       <div style={absolute({ left: 28, top: 28, width: 844, height: 844, border: '1px solid rgba(255,255,255,0.2)', borderRadius: 22 })} />
-      <div style={absolute({ left: 0, top: 0, width: 900, height: 900, background: 'linear-gradient(180deg, transparent 45%, rgba(7,7,10,0.34) 100%)' })} />
+      <div style={absolute({ left: 62, top: 62, width: 776, height: 776, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 18 })} />
     </div>
   );
 }
