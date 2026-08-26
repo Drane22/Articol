@@ -97,8 +97,8 @@ function SpectralField({ colors, seed }: { colors: string[]; seed: number }) {
           />
         );
       })}
-      <div style={absolute({ inset: 28, border: '1px solid rgba(255,255,255,0.24)', borderRadius: 22 })} />
-      <div style={absolute({ inset: 0, background: 'linear-gradient(180deg, rgba(8,9,12,0.08) 20%, rgba(8,9,12,0.32) 100%)' })} />
+      <div style={absolute({ left: 28, top: 28, width: 844, height: 844, border: '1px solid rgba(255,255,255,0.24)', borderRadius: 22 })} />
+      <div style={absolute({ left: 0, top: 0, width: 900, height: 900, background: 'linear-gradient(180deg, rgba(8,9,12,0.08) 20%, rgba(8,9,12,0.32) 100%)' })} />
     </div>
   );
 }
@@ -141,7 +141,7 @@ function OrbitAtlas({ colors, seed }: { colors: string[]; seed: number }) {
         );
       })}
       <div style={absolute({ left: 390, top: 370, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle at 35% 30%, ${getPaletteArtColor(colors, 8)} 0%, ${getPaletteArtColor(colors, 3)} 55%, #121319 100%)`, border: '2px solid rgba(255,255,255,0.34)' })} />
-      <div style={absolute({ inset: 28, border: '1px solid rgba(255,255,255,0.2)', borderRadius: 22 })} />
+      <div style={absolute({ left: 28, top: 28, width: 844, height: 844, border: '1px solid rgba(255,255,255,0.2)', borderRadius: 22 })} />
     </div>
   );
 }
@@ -211,7 +211,7 @@ function MoirePulse({ colors, seed }: { colors: string[]; seed: number }) {
           />
         );
       })}
-      <div style={absolute({ inset: 28, border: '1px solid rgba(255,255,255,0.22)', borderRadius: 22 })} />
+      <div style={absolute({ left: 28, top: 28, width: 844, height: 844, border: '1px solid rgba(255,255,255,0.22)', borderRadius: 22 })} />
     </div>
   );
 }
@@ -251,8 +251,8 @@ function InkBloom({ colors, seed }: { colors: string[]; seed: number }) {
           })}
         />
       ))}
-      <div style={absolute({ inset: 28, border: '1px solid rgba(255,255,255,0.2)', borderRadius: 22 })} />
-      <div style={absolute({ inset: 0, background: 'linear-gradient(180deg, transparent 45%, rgba(7,7,10,0.34) 100%)' })} />
+      <div style={absolute({ left: 28, top: 28, width: 844, height: 844, border: '1px solid rgba(255,255,255,0.2)', borderRadius: 22 })} />
+      <div style={absolute({ left: 0, top: 0, width: 900, height: 900, background: 'linear-gradient(180deg, transparent 45%, rgba(7,7,10,0.34) 100%)' })} />
     </div>
   );
 }
