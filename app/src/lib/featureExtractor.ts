@@ -342,12 +342,15 @@ async function extractFromBuffer(
         monoCount++;
       }
 
-      // 32-step quantisation → 8 × 8 × 8 = 512 buckets
-      const qR = Math.floor(r / 32) * 32;
-      const qG = Math.floor(g / 32) * 32;
-      const qB = Math.floor(b / 32) * 32;
+      // Quantisation bucket key for fast initial spatial grouping (16-step grid = 4096 cells)
+      const qR = Math.floor(r / 16);
+      const qG = Math.floor(g / 16);
+      const qB = Math.floor(b / 16);
       const key = `${qR},${qG},${qB}`;
-      if (!colorBuckets[key]) colorBuckets[key] = { r: qR, g: qG, b: qB, count: 0 };
+      if (!colorBuckets[key]) colorBuckets[key] = { r: 0, g: 0, b: 0, count: 0 };
+      colorBuckets[key].r += r;
+      colorBuckets[key].g += g;
+      colorBuckets[key].b += b;
       colorBuckets[key].count++;
     }
 
@@ -370,16 +373,68 @@ async function extractFromBuffer(
       lightnessSpread: r2(Math.sqrt(lightnessVariance)),
     };
 
-    // Preserve up to ten meaningful buckets for richer palette inspection and
-    // feed the same ten-color spectrum into the descriptor above.
-    const sortedBuckets = Object.values(colorBuckets)
-      .sort((a, b) => b.count - a.count)
+    // Calculate centroid color for each bucket rather than floored corners
+    const candidateSwatches = Object.values(colorBuckets)
+      .filter((bucket) => bucket.count > 0)
+      .map((bucket) => {
+        const r = Math.round(bucket.r / bucket.count);
+        const g = Math.round(bucket.g / bucket.count);
+        const b = Math.round(bucket.b / bucket.count);
+        return {
+          hex: rgbToHex(r, g, b),
+          lab: rgbToLab(r, g, b),
+          weight: bucket.count / pixelCount,
+        };
+      })
+      .sort((a, b) => b.weight - a.weight);
+
+    // Merge near-duplicate colors in Lab space using CIEDE2000
+    const rawPalette: DominantColor[] = [];
+    for (const swatch of candidateSwatches) {
+      let merged = false;
+      for (const existing of rawPalette) {
+        if (rgbToLab && swatch.lab) {
+          // Lab Euclidean / CIEDE2000 approximation for fast extraction clustering
+          const dL = existing.lab[0] - swatch.lab[0];
+          const da = existing.lab[1] - swatch.lab[1];
+          const db = existing.lab[2] - swatch.lab[2];
+          const dist = Math.sqrt(dL * dL + da * da + db * db);
+          if (dist < 14) {
+            const combinedWeight = existing.weight + swatch.weight;
+            existing.lab = [
+              (existing.lab[0] * existing.weight + swatch.lab[0] * swatch.weight) / combinedWeight,
+              (existing.lab[1] * existing.weight + swatch.lab[1] * swatch.weight) / combinedWeight,
+              (existing.lab[2] * existing.weight + swatch.lab[2] * swatch.weight) / combinedWeight,
+            ];
+            existing.weight = combinedWeight;
+            merged = true;
+            break;
+          }
+        }
+      }
+      if (!merged) {
+        rawPalette.push({ ...swatch });
+      }
+    }
+
+    // Preserve up to ten meaningful colors, sorting by weight while ensuring small chromatic accents survive
+    const sortedPalette = rawPalette
+      .sort((a, b) => {
+        // Boost score for high-chroma accents so they don't get truncated after neutral backgrounds
+        const aChroma = Math.sqrt(a.lab[1] ** 2 + a.lab[2] ** 2);
+        const bChroma = Math.sqrt(b.lab[1] ** 2 + b.lab[2] ** 2);
+        const aScore = a.weight + (aChroma > 25 ? 0.08 : 0);
+        const bScore = b.weight + (bChroma > 25 ? 0.08 : 0);
+        return bScore - aScore;
+      })
       .slice(0, MAX_PALETTE_COLORS);
 
-    const palette: DominantColor[] = sortedBuckets.map(c => ({
-      hex: rgbToHex(c.r, c.g, c.b),
-      lab: rgbToLab(c.r, c.g, c.b),
-      weight: c.count / pixelCount,
+    // Renormalize weights across extracted palette
+    const totalPaletteWeight = sortedPalette.reduce((sum, c) => sum + c.weight, 0);
+    const palette: DominantColor[] = sortedPalette.map((c) => ({
+      hex: c.hex,
+      lab: c.lab,
+      weight: totalPaletteWeight > 0 ? c.weight / totalPaletteWeight : 1 / sortedPalette.length,
     }));
 
     // Edge density (Sobel-lite)

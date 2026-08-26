@@ -62,8 +62,11 @@ function normalizePalette(value: unknown): Album['dominantPalette'] {
   if (!Array.isArray(palette)) return [];
   return palette.flatMap((entry: any) => {
     if (!entry?.hex || typeof entry.hex !== 'string' || !/^#[0-9a-f]{6}$/i.test(entry.hex)) return [];
-    const lab = rgbToLab(...hexToRgb(entry.hex));
-    return [{ hex: entry.hex, lab, weight: Number(entry.weight) || 0 }];
+    const lab: [number, number, number] = Array.isArray(entry.lab) && entry.lab.length === 3 && entry.lab.every(Number.isFinite)
+      ? entry.lab
+      : rgbToLab(...hexToRgb(entry.hex));
+    const weight = Number.isFinite(Number(entry.weight)) && Number(entry.weight) > 0 ? Number(entry.weight) : 0.1;
+    return [{ hex: entry.hex.toLowerCase(), lab, weight }];
   }).slice(0, MAX_PALETTE_COLORS);
 }
 

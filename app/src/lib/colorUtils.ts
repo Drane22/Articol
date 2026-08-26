@@ -45,6 +45,184 @@ export function rgbToHex(r: number, g: number, b: number): string {
   }).join('');
 }
 
+// ─────────────────────────────────────────────────────────────
+// sRGB <-> Linear RGB <-> OKLab <-> OKLCH
+// ─────────────────────────────────────────────────────────────
+function srgbToLinear(c: number): number {
+  const v = c / 255;
+  return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+}
+
+function linearToSrgb(c: number): number {
+  const clamped = Math.max(0, Math.min(1, c));
+  const v = clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+  return Math.round(Math.max(0, Math.min(255, v * 255)));
+}
+
+export function rgbToOklab(r: number, g: number, b: number): [number, number, number] {
+  const lr = srgbToLinear(r);
+  const lg = srgbToLinear(g);
+  const lb = srgbToLinear(b);
+
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+
+  return [
+    0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+  ];
+}
+
+export function oklabToRgb(L: number, a: number, b: number): [number, number, number] {
+  const l = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s = L - 0.0894841775 * a - 1.2914855480 * b;
+
+  const l3 = l * l * l;
+  const m3 = m * m * m;
+  const s3 = s * s * s;
+
+  const lr = +4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3;
+  const lg = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3;
+  const lb = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3;
+
+  return [linearToSrgb(lr), linearToSrgb(lg), linearToSrgb(lb)];
+}
+
+export function oklabToOklch(L: number, a: number, b: number): [number, number, number] {
+  const C = Math.sqrt(a * a + b * b);
+  let h = (Math.atan2(b, a) * 180) / Math.PI;
+  if (h < 0) h += 360;
+  return [L, C, h];
+}
+
+export function oklchToOklab(L: number, C: number, h: number): [number, number, number] {
+  const hRad = (h * Math.PI) / 180;
+  return [L, C * Math.cos(hRad), C * Math.sin(hRad)];
+}
+
+export function hexToOklch(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex);
+  const [L, a, bOk] = rgbToOklab(r, g, b);
+  return oklabToOklch(L, a, bOk);
+}
+
+export function oklchToHex(L: number, C: number, h: number): string {
+  const [lOk, aOk, bOk] = oklchToOklab(L, C, h);
+  const [r, g, b] = oklabToRgb(lOk, aOk, bOk);
+  return rgbToHex(r, g, b);
+}
+
+/**
+ * Adjusts a source hex color into a background-adjusted display color with
+ * guaranteed visibility and balanced chroma for generative art marks.
+ */
+export function getDisplayColor(sourceHex: string, bgIsDark = true): string {
+  const [L, C, h] = hexToOklch(sourceHex);
+  let targetL = L;
+  let targetC = C;
+
+  if (bgIsDark) {
+    // For dark backgrounds (L ~ 0.08 - 0.16):
+    // If the color is very dark (e.g. L < 0.40), elevate lightness so geometry pops
+    if (L < 0.42) {
+      targetL = 0.48 + (L / 0.42) * 0.22;
+    } else {
+      targetL = Math.max(0.48, Math.min(0.92, L));
+    }
+    // Maintain minimum chroma for colored marks so dark saturated hues don't become muddy grays
+    if (C > 0.02) {
+      targetC = Math.max(0.065, Math.min(0.22, C * 1.15));
+    }
+  } else {
+    // For light backgrounds (L ~ 0.88 - 0.96):
+    if (L > 0.65) {
+      targetL = 0.28 + (1 - L) * 0.35;
+    } else {
+      targetL = Math.max(0.18, Math.min(0.55, L));
+    }
+    if (C > 0.02) {
+      targetC = Math.max(0.06, Math.min(0.22, C));
+    }
+  }
+
+  return oklchToHex(targetL, targetC, h);
+}
+
+/**
+ * Computes circular mean and angular dispersion (0..1) for a collection of hues and weights.
+ */
+export function circularHueStats(
+  items: Array<{ hue: number; weight: number }>,
+): { meanHue: number; dispersion: number } {
+  if (!items.length) return { meanHue: 0, dispersion: 0 };
+  let sumSin = 0;
+  let sumCos = 0;
+  let totalWeight = 0;
+
+  for (const item of items) {
+    const rad = (item.hue * Math.PI) / 180;
+    const w = Math.max(0.0001, item.weight);
+    sumSin += Math.sin(rad) * w;
+    sumCos += Math.cos(rad) * w;
+    totalWeight += w;
+  }
+
+  if (totalWeight <= 0) return { meanHue: 0, dispersion: 0 };
+  const meanSin = sumSin / totalWeight;
+  const meanCos = sumCos / totalWeight;
+  let meanHue = ((Math.atan2(meanSin, meanCos) * 180) / Math.PI) % 360;
+  if (meanHue < 0) meanHue += 360;
+  if (Math.abs(meanHue - 360) < 0.0001 || Math.abs(meanHue) < 0.0001) meanHue = 0;
+
+  const resultantLength = Math.min(1, Math.sqrt(meanSin * meanSin + meanCos * meanCos));
+  const dispersion = Math.max(0, Math.min(1, 1 - resultantLength));
+
+  return { meanHue, dispersion };
+}
+
+/**
+ * Perceptually deduplicates and clusters nearby palette colors.
+ */
+export function deduplicatePaletteColors(
+  colors: Array<{ hex: string; weight?: number; lab?: [number, number, number] }>,
+  threshold = 12.0,
+): Array<{ hex: string; weight: number; lab: [number, number, number] }> {
+  const result: Array<{ hex: string; weight: number; lab: [number, number, number] }> = [];
+
+  for (const input of colors) {
+    if (!input.hex || !/^#[0-9a-f]{6}$/i.test(input.hex)) continue;
+    const lab: [number, number, number] = input.lab && input.lab.length === 3 && input.lab.every(Number.isFinite)
+      ? input.lab
+      : rgbToLab(...hexToRgb(input.hex));
+    const weight = Number.isFinite(input.weight) && (input.weight as number) > 0 ? (input.weight as number) : 1;
+
+    let merged = false;
+    for (const existing of result) {
+      if (ciede2000(existing.lab, lab) < threshold) {
+        // Merge weights and update centroid
+        const combinedWeight = existing.weight + weight;
+        existing.lab = [
+          (existing.lab[0] * existing.weight + lab[0] * weight) / combinedWeight,
+          (existing.lab[1] * existing.weight + lab[1] * weight) / combinedWeight,
+          (existing.lab[2] * existing.weight + lab[2] * weight) / combinedWeight,
+        ];
+        existing.weight = combinedWeight;
+        merged = true;
+        break;
+      }
+    }
+
+    if (!merged) {
+      result.push({ hex: input.hex.toLowerCase(), weight, lab });
+    }
+  }
+
+  return result;
+}
+
 // CIEDE2000 Perceptual Color Difference calculation
 export function ciede2000(lab1: [number, number, number], lab2: [number, number, number]): number {
   const [L1, a1, b1] = lab1;
