@@ -29,6 +29,7 @@ export async function GET(
       colors: album.palette,
       artStyle: parsedPaletteStyle!,
       seed: id,
+      visualFeatures: album.visualFeatures,
     })
     : undefined;
 

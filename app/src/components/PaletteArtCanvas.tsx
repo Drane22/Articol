@@ -1,19 +1,21 @@
 import React from 'react';
 import {
   buildPaletteArtModel,
-  colorWithAlpha,
   mixHexColors,
   seededUnit,
   type PaletteArtColor,
+  type PaletteArtInputColor,
   type PaletteArtModel,
   type PaletteArtStyle,
 } from '@/lib/paletteArtwork';
+import type { VisualFeatures } from '@/lib/types';
 
 interface PaletteArtCanvasProps {
-  colors: string[];
+  colors: Array<string | PaletteArtInputColor>;
   artStyle: PaletteArtStyle;
   seed: string;
   size?: number;
+  visualFeatures?: VisualFeatures | null;
 }
 
 interface Point {
@@ -21,349 +23,594 @@ interface Point {
   y: number;
 }
 
-const ART_SIZE = 900;
-const CENTER = ART_SIZE / 2;
+const CANVAS_SIZE = 900;
+const CENTER = CANVAS_SIZE / 2;
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function polarPoint(radius: number, angle: number, centerX = CENTER, centerY = CENTER): Point {
+function polarPoint(radius: number, angleRad: number, cx = CENTER, cy = CENTER): Point {
   return {
-    x: round(centerX + Math.cos(angle) * radius),
-    y: round(centerY + Math.sin(angle) * radius),
+    x: round(cx + Math.cos(angleRad) * radius),
+    y: round(cy + Math.sin(angleRad) * radius),
   };
 }
 
-function linePath(points: Point[]): string {
-  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-}
-
-function petalPath(
-  centerX: number,
-  centerY: number,
-  angle: number,
-  innerRadius: number,
-  outerRadius: number,
-  width: number,
-): string {
-  const start = polarPoint(innerRadius, angle, centerX, centerY);
-  const tip = polarPoint(outerRadius, angle, centerX, centerY);
-  const controlRadius = innerRadius + (outerRadius - innerRadius) * 0.62;
-  const left = polarPoint(controlRadius, angle - width, centerX, centerY);
-  const right = polarPoint(controlRadius, angle + width, centerX, centerY);
-  return `M ${start.x} ${start.y} Q ${left.x} ${left.y} ${tip.x} ${tip.y} Q ${right.x} ${right.y} ${start.x} ${start.y} Z`;
-}
-
-function CanvasFrame({ model }: { model: PaletteArtModel }) {
-  const accent = model.colors[0]?.hex || '#ffffff';
-  return (
-    <>
-      <rect x="0" y="0" width={ART_SIZE} height={ART_SIZE} rx="26" fill={model.background} />
-      <rect x="28" y="28" width="844" height="844" rx="22" fill="none" stroke={colorWithAlpha(accent, 0.42)} strokeWidth="2" />
-      <rect x="54" y="54" width="792" height="792" rx="18" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-    </>
-  );
-}
-
-function PaletteSignature({ colors }: { colors: PaletteArtColor[] }) {
-  const width = Math.min(620, colors.length * 54);
-  const startX = CENTER - width / 2;
-  return (
-    <>
-      {colors.map((color, index) => (
-        <circle
-          key={`signature-${color.hex}-${index}`}
-          cx={round(startX + (index + 0.5) * (width / colors.length))}
-          cy="824"
-          r={round(4 + color.prominence * 4)}
-          fill={color.hex}
-        />
-      ))}
-    </>
-  );
-}
-
+// ─────────────────────────────────────────────────────────────
+// 1. CHROMATIC BLOOM
+// ─────────────────────────────────────────────────────────────
 function ChromaticBloom({ model }: { model: PaletteArtModel }) {
-  const layerCount = model.contrast > 0.45 ? 2 : 1;
-  const phase = seededUnit(model.seed, 2) * Math.PI * 2;
+  const { colors, dominant, seed } = model;
+  const baseRotation = seededUnit(seed, 1) * Math.PI * 2;
+  const coreRadius = round(38 + dominant.normalizedWeight * 54);
+
+  // Group colors into major petal layers and minor interior accents
+  const primaryColors = colors.slice(0, 5);
+
+  const petals: Array<{
+    d: string;
+    fill: string;
+    fillOpacity: number;
+    stroke: string;
+    strokeWidth: number;
+    strokeOpacity: number;
+  }> = [];
+
+  // Outer and mid-tier organic petals
+  primaryColors.forEach((color, colorIdx) => {
+    const petalsPerColor = color.normalizedWeight > 0.28 ? 3 : 2;
+
+    for (let p = 0; p < petalsPerColor; p++) {
+      const angleOffset = baseRotation + (colorIdx / primaryColors.length) * Math.PI * 2 + (p * 0.42);
+      const reach = round(170 + color.salience * 150 + color.normalizedWeight * 80);
+      const span = 0.28 + color.normalizedWeight * 0.35;
+      const innerR = round(coreRadius * 0.7);
+
+      const start = polarPoint(innerR, angleOffset - span * 0.5);
+      const tip = polarPoint(reach, angleOffset);
+      const end = polarPoint(innerR, angleOffset + span * 0.5);
+
+      const ctrlRadius = reach * (0.55 + color.lightness * 0.2);
+      const ctrlLeft = polarPoint(ctrlRadius, angleOffset - span * 0.85);
+      const ctrlRight = polarPoint(ctrlRadius, angleOffset + span * 0.85);
+
+      const d = `M ${start.x} ${start.y} Q ${ctrlLeft.x} ${ctrlLeft.y} ${tip.x} ${tip.y} Q ${ctrlRight.x} ${ctrlRight.y} ${end.x} ${end.y} Z`;
+
+      petals.push({
+        d,
+        fill: color.displayHex,
+        fillOpacity: round(0.42 + color.salience * 0.45),
+        stroke: mixHexColors(color.displayHex, '#ffffff', 0.25),
+        strokeWidth: round(1.5 + color.normalizedWeight * 3),
+        strokeOpacity: 0.7,
+      });
+    }
+  });
+
   return (
-    <>
-      <CanvasFrame model={model} />
+    <g id="chromatic-bloom">
+      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+
+      {/* Atmospheric radial halo */}
       <circle
         cx={CENTER}
-        cy="424"
-        r={round(225 + model.hueSpread * 70)}
-        fill={colorWithAlpha(model.colors[0].hex, 0.08)}
+        cy={CENTER}
+        r={round(260 + dominant.salience * 80)}
+        fill={dominant.displayHex}
+        fillOpacity={0.12}
       />
-      {Array.from({ length: layerCount }, (_, layer) => model.colors.map((color, index) => {
-        const step = (Math.PI * 2) / model.colors.length;
-        const angle = phase + index * step + layer * step * 0.5;
-        const innerRadius = 58 + layer * 52;
-        const outerRadius = 235 + color.prominence * 105 - layer * 34;
-        const width = 0.1 + color.saturation * 0.12 + model.hueSpread * 0.04;
-        return (
-          <path
-            key={`bloom-${layer}-${color.hex}-${index}`}
-            d={petalPath(CENTER, 424, angle, innerRadius, outerRadius, width)}
-            fill={color.hex}
-            fillOpacity={round((0.46 + color.prominence * 0.38) / (layer + 1))}
-            stroke={mixHexColors(color.hex, '#ffffff', 0.2)}
-            strokeOpacity="0.24"
-            strokeWidth="2"
-          />
-        );
-      }))}
-      {model.colors.slice(0, 4).map((color, index) => (
-        <circle
-          key={`bloom-core-${color.hex}-${index}`}
-          cx={CENTER}
-          cy="424"
-          r={round(82 - index * 15)}
-          fill={color.hex}
-          fillOpacity={round(0.72 + index * 0.05)}
+
+      {/* Organic Petal Array */}
+      {petals.map((petal, index) => (
+        <path
+          key={`petal-${index}`}
+          d={petal.d}
+          fill={petal.fill}
+          fillOpacity={petal.fillOpacity}
+          stroke={petal.stroke}
+          strokeWidth={petal.strokeWidth}
+          strokeOpacity={petal.strokeOpacity}
         />
       ))}
-      <PaletteSignature colors={model.colors} />
-    </>
-  );
-}
 
-function PaletteDna({ model }: { model: PaletteArtModel }) {
-  const rungCount = Math.max(18, model.colors.length * 3);
-  const amplitude = 125 + model.hueSpread * 65;
-  const phase = seededUnit(model.seed, 5) * Math.PI;
-  const phaseSpan = Math.PI * (3.2 + model.averageSaturation * 1.8);
-  const points = Array.from({ length: rungCount }, (_, index) => {
-    const progress = index / (rungCount - 1);
-    const wave = Math.sin(phase + progress * phaseSpan);
-    const y = 100 + progress * 650;
-    return {
-      first: { x: round(CENTER + wave * amplitude), y: round(y) },
-      second: { x: round(CENTER - wave * amplitude), y: round(y) },
-      color: model.colors[index % model.colors.length],
-    };
-  });
-  return (
-    <>
-      <CanvasFrame model={model} />
-      {points.map((rung, index) => (
-        <g key={`dna-rung-${index}`}>
-          <line
-            x1={rung.first.x}
-            y1={rung.first.y}
-            x2={rung.second.x}
-            y2={rung.second.y}
-            stroke={rung.color.hex}
-            strokeOpacity={round(0.5 + rung.color.prominence * 0.4)}
-            strokeWidth={round(4 + rung.color.saturation * 7)}
-          />
-          <circle cx={rung.first.x} cy={rung.first.y} r={round(6 + rung.color.prominence * 5)} fill={rung.color.hex} />
-          <circle cx={rung.second.x} cy={rung.second.y} r={round(6 + rung.color.prominence * 5)} fill={rung.color.hex} />
-        </g>
-      ))}
-      <path
-        d={linePath(points.map((point) => point.first))}
-        fill="none"
-        stroke={model.colors[0].hex}
-        strokeWidth={round(7 + model.averageSaturation * 5)}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d={linePath(points.map((point) => point.second))}
-        fill="none"
-        stroke={model.colors[1 % model.colors.length].hex}
-        strokeWidth={round(7 + model.averageSaturation * 5)}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <PaletteSignature colors={model.colors} />
-    </>
-  );
-}
-
-function ChordMap({ model }: { model: PaletteArtModel }) {
-  const phase = seededUnit(model.seed, 8) * Math.PI * 2;
-  const nodes = model.colors.map((color, index) => {
-    const angle = phase + (index / model.colors.length) * Math.PI * 2;
-    const radius = 235 + color.luminance * 105;
-    return { ...polarPoint(radius, angle, CENTER, 420), color, angle };
-  });
-  return (
-    <>
-      <CanvasFrame model={model} />
-      {[118, 206, 302].map((radius, index) => (
-        <circle
-          key={`chord-ring-${radius}`}
-          cx={CENTER}
-          cy="420"
-          r={radius}
-          fill="none"
-          stroke={colorWithAlpha(model.colors[index % model.colors.length].hex, 0.22)}
-          strokeWidth={index === 2 ? 2 : 1}
-        />
-      ))}
-      {nodes.map((node, index) => {
-        const targetOffset = 1 + Math.round((1 - node.color.saturation) * Math.max(1, nodes.length / 2));
-        const target = nodes[(index + targetOffset) % nodes.length];
+      {/* Radiant Veins */}
+      {primaryColors.map((color, index) => {
+        const angle = baseRotation + (index / primaryColors.length) * Math.PI * 2;
+        const outer = polarPoint(210 + color.salience * 100, angle);
         return (
           <line
-            key={`chord-${node.color.hex}-${index}`}
-            x1={node.x}
-            y1={node.y}
-            x2={target.x}
-            y2={target.y}
-            stroke={node.color.hex}
-            strokeOpacity={round(0.28 + model.contrast * 0.42)}
-            strokeWidth={round(2 + node.color.prominence * 5)}
+            key={`vein-${index}`}
+            x1={CENTER}
+            y1={CENTER}
+            x2={outer.x}
+            y2={outer.y}
+            stroke={color.displayHex}
+            strokeWidth={round(1.5 + color.normalizedWeight * 2.5)}
+            strokeOpacity={0.65}
+            strokeDasharray="4 6"
           />
         );
       })}
-      {nodes.map((node, index) => (
-        <g key={`chord-node-${node.color.hex}-${index}`}>
-          <circle cx={node.x} cy={node.y} r={round(16 + node.color.prominence * 18)} fill={colorWithAlpha(node.color.hex, 0.2)} />
-          <circle cx={node.x} cy={node.y} r={round(7 + node.color.prominence * 10)} fill={node.color.hex} />
-        </g>
-      ))}
-      <circle cx={CENTER} cy="420" r={round(44 + model.hueSpread * 28)} fill={model.colors[0].hex} />
-      <circle cx={CENTER} cy="420" r={round(22 + model.contrast * 12)} fill={model.colors[model.colors.length - 1].hex} />
-      <PaletteSignature colors={model.colors} />
-    </>
+
+      {/* Concentric Dominant Core */}
+      <circle
+        cx={CENTER}
+        cy={CENTER}
+        r={coreRadius}
+        fill={dominant.displayHex}
+        stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.4)}
+        strokeWidth="3"
+      />
+      {colors.length > 1 ? (
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={round(coreRadius * 0.55)}
+          fill={colors[1].displayHex}
+          fillOpacity={0.9}
+        />
+      ) : null}
+      {colors.length > 2 ? (
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={round(coreRadius * 0.25)}
+          fill={colors[2].displayHex}
+        />
+      ) : null}
+    </g>
   );
 }
 
-function SpectrumCode({ model }: { model: PaletteArtModel }) {
-  const bandGap = 610 / Math.max(1, model.colors.length - 1);
+// ─────────────────────────────────────────────────────────────
+// 2. PALETTE DNA
+// ─────────────────────────────────────────────────────────────
+function PaletteDna({ model }: { model: PaletteArtModel }) {
+  const { colors, dominant, seed } = model;
+  const pairCount = Math.max(12, colors.length * 3);
+  const amplitude = round(130 + model.lightnessRange * 70);
+  const phase = seededUnit(seed, 3) * Math.PI;
+
+  const leftColor = dominant.displayHex;
+  const rightColor = (colors[1] || dominant).displayHex;
+
+  const rungs: Array<{
+    y: number;
+    leftX: number;
+    rightX: number;
+    color: string;
+    weight: number;
+    salience: number;
+  }> = [];
+
+  const leftPoints: Point[] = [];
+  const rightPoints: Point[] = [];
+
+  for (let i = 0; i < pairCount; i++) {
+    const progress = i / (pairCount - 1);
+    const wave = Math.sin(phase + progress * Math.PI * 3.6);
+    const y = round(110 + progress * 680);
+    const leftX = round(CENTER + wave * amplitude);
+    const rightX = round(CENTER - wave * amplitude);
+
+    leftPoints.push({ x: leftX, y });
+    rightPoints.push({ x: rightX, y });
+
+    const swatch = colors[i % colors.length];
+    rungs.push({
+      y,
+      leftX,
+      rightX,
+      color: swatch.displayHex,
+      weight: swatch.normalizedWeight,
+      salience: swatch.salience,
+    });
+  }
+
+  // Smooth cubic path generator
+  function makeRibbonPath(points: Point[]): string {
+    if (!points.length) return '';
+    let path = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const midY = (p0.y + p1.y) / 2;
+      path += ` C ${p0.x} ${midY} ${p1.x} ${midY} ${p1.x} ${p1.y}`;
+    }
+    return path;
+  }
+
   return (
-    <>
-      <CanvasFrame model={model} />
-      {model.colors.map((color, index) => {
-        const baseY = model.colors.length === 1 ? 420 : 118 + index * bandGap;
-        const amplitude = 18 + color.luminance * 48 + model.contrast * 20;
-        const frequency = 1.4 + color.saturation * 3.4 + model.hueSpread;
-        const phase = seededUnit(model.seed, index + 40) * Math.PI * 2;
-        const points = Array.from({ length: 42 }, (_, pointIndex) => {
-          const progress = pointIndex / 41;
-          const envelope = Math.sin(progress * Math.PI);
-          return {
-            x: round(70 + progress * 760),
-            y: round(baseY + Math.sin(phase + progress * Math.PI * 2 * frequency) * amplitude * envelope),
-          };
+    <g id="palette-dna">
+      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+
+      {/* Woven Harmonic Rungs */}
+      {rungs.map((rung, idx) => (
+        <g key={`rung-${idx}`}>
+          <line
+            x1={rung.leftX}
+            y1={rung.y}
+            x2={rung.rightX}
+            y2={rung.y}
+            stroke={rung.color}
+            strokeWidth={round(3 + rung.weight * 10)}
+            strokeOpacity={round(0.45 + rung.salience * 0.45)}
+            strokeLinecap="round"
+          />
+          <circle
+            cx={rung.leftX}
+            cy={rung.y}
+            r={round(5 + rung.weight * 8)}
+            fill={rung.color}
+          />
+          <circle
+            cx={rung.rightX}
+            cy={rung.y}
+            r={round(5 + rung.weight * 8)}
+            fill={rung.color}
+          />
+        </g>
+      ))}
+
+      {/* Main Braided Strands */}
+      <path
+        d={makeRibbonPath(leftPoints)}
+        fill="none"
+        stroke={leftColor}
+        strokeWidth={round(9 + dominant.normalizedWeight * 14)}
+        strokeLinecap="round"
+      />
+      <path
+        d={makeRibbonPath(rightPoints)}
+        fill="none"
+        stroke={rightColor}
+        strokeWidth={round(9 + (colors[1]?.normalizedWeight || 0.2) * 14)}
+        strokeLinecap="round"
+      />
+    </g>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3. CHORD MAP
+// ─────────────────────────────────────────────────────────────
+function ChordMap({ model }: { model: PaletteArtModel }) {
+  const { colors, dominant, seed } = model;
+  const baseAngle = seededUnit(seed, 4) * Math.PI * 2;
+
+  // Position nodes along perceptual coordinates: angle = hue, radius = lightness
+  const nodes = colors.map((color, idx) => {
+    const angleRad = baseAngle + (color.hue * Math.PI) / 180;
+    const radius = round(130 + color.lightness * 220);
+    const pt = polarPoint(radius, angleRad);
+    const nodeR = round(14 + Math.sqrt(color.normalizedWeight) * 44);
+
+    return {
+      ...pt,
+      color,
+      radius,
+      angleRad,
+      nodeR,
+      index: idx,
+    };
+  });
+
+  // Meaningful connections: between dominant and accents, and between close hues
+  const chords: Array<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    color: string;
+    width: number;
+    opacity: number;
+  }> = [];
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const n1 = nodes[i];
+      const n2 = nodes[j];
+      const hueDiff = Math.min(
+        Math.abs(n1.color.hue - n2.color.hue),
+        360 - Math.abs(n1.color.hue - n2.color.hue),
+      );
+      const isDominantPair = i === 0 || j === 0;
+
+      if (isDominantPair || hueDiff < 60 || hueDiff > 140) {
+        chords.push({
+          x1: n1.x,
+          y1: n1.y,
+          x2: n2.x,
+          y2: n2.y,
+          color: n1.color.displayHex,
+          width: round(2 + (n1.color.normalizedWeight + n2.color.normalizedWeight) * 5),
+          opacity: round(0.28 + (n1.color.salience + n2.color.salience) * 0.28),
         });
+      }
+    }
+  }
+
+  return (
+    <g id="chord-map">
+      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+
+      {/* Harmonic Polar Grids */}
+      {[140, 220, 310].map((ringR, idx) => (
+        <circle
+          key={`ring-${idx}`}
+          cx={CENTER}
+          cy={CENTER}
+          r={ringR}
+          fill="none"
+          stroke={dominant.displayHex}
+          strokeOpacity={0.18}
+          strokeWidth={idx === 1 ? '1.5' : '1'}
+          strokeDasharray={idx === 0 ? '4 6' : undefined}
+        />
+      ))}
+
+      {/* Relational Chords */}
+      {chords.map((chord, idx) => {
+        // Curve chord slightly towards center
+        const midX = (chord.x1 + chord.x2) / 2;
+        const midY = (chord.y1 + chord.y2) / 2;
+        const ctrlX = round(midX * 0.7 + CENTER * 0.3);
+        const ctrlY = round(midY * 0.7 + CENTER * 0.3);
+        const path = `M ${chord.x1} ${chord.y1} Q ${ctrlX} ${ctrlY} ${chord.x2} ${chord.y2}`;
+
         return (
-          <g key={`spectrum-${color.hex}-${index}`}>
-            <line x1="70" y1={round(baseY)} x2="830" y2={round(baseY)} stroke={colorWithAlpha(color.hex, 0.16)} strokeWidth="1" />
-            <path
-              d={linePath(points)}
-              fill="none"
-              stroke={color.hex}
-              strokeWidth={round(3 + color.saturation * 8 + color.prominence * 2)}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <path
+            key={`chord-${idx}`}
+            d={path}
+            fill="none"
+            stroke={chord.color}
+            strokeWidth={chord.width}
+            strokeOpacity={chord.opacity}
+          />
+        );
+      })}
+
+      {/* Central Harmonic Anchor */}
+      <circle
+        cx={CENTER}
+        cy={CENTER}
+        r={round(22 + dominant.normalizedWeight * 20)}
+        fill={dominant.displayHex}
+        stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.35)}
+        strokeWidth="2"
+      />
+
+      {/* Harmonic Nodes */}
+      {nodes.map((node) => (
+        <g key={`node-${node.index}`}>
+          {/* Luminous Salience Halo */}
+          <circle
+            cx={node.x}
+            cy={node.y}
+            r={round(node.nodeR + node.color.salience * 14)}
+            fill={node.color.displayHex}
+            fillOpacity={0.22}
+          />
+          {/* Main Node Body */}
+          <circle
+            cx={node.x}
+            cy={node.y}
+            r={node.nodeR}
+            fill={node.color.displayHex}
+            stroke={mixHexColors(node.color.displayHex, '#ffffff', 0.3)}
+            strokeWidth={round(2 + node.color.normalizedWeight * 3)}
+          />
+        </g>
+      ))}
+    </g>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 4. SPECTRUM CODE
+// ─────────────────────────────────────────────────────────────
+function SpectrumCode({ model }: { model: PaletteArtModel }) {
+  const { colors, dominant, seed } = model;
+  const count = colors.length;
+  const spacing = 580 / Math.max(1, count);
+
+  return (
+    <g id="spectrum-code">
+      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+
+      {colors.map((color, index) => {
+        const baseY = round(160 + index * spacing + color.lightness * 28);
+        const amplitude = round(20 + color.normalizedWeight * 65 + color.salience * 25);
+        const frequency = 1.2 + (color.hue / 360) * 3.2;
+        const phase = seededUnit(seed, index + 10) * Math.PI * 2;
+        const strokeW = round(7 + color.normalizedWeight * 28);
+
+        // Build continuous wave ribbon points
+        const pointsTop: Point[] = [];
+        const pointsBottom: Point[] = [];
+        const steps = 48;
+
+        for (let s = 0; s <= steps; s++) {
+          const progress = s / steps;
+          const x = round(70 + progress * 760);
+          const envelope = Math.sin(progress * Math.PI);
+          const y = baseY + Math.sin(phase + progress * Math.PI * 2 * frequency) * amplitude * envelope;
+          pointsTop.push({ x, y: round(y - strokeW * 0.4) });
+          pointsBottom.push({ x, y: round(y + strokeW * 0.4) });
+        }
+
+        const ribbonPath = `M ${pointsTop[0].x} ${pointsTop[0].y} `
+          + pointsTop.map((p) => `L ${p.x} ${p.y}`).join(' ')
+          + pointsBottom.reverse().map((p) => `L ${p.x} ${p.y}`).join(' ')
+          + ' Z';
+
+        return (
+          <g key={`spectrum-band-${index}`}>
+            {/* Guide Grid line */}
+            <line
+              x1="70"
+              y1={baseY}
+              x2="830"
+              y2={baseY}
+              stroke={color.displayHex}
+              strokeOpacity={0.15}
+              strokeWidth="1"
             />
-            <circle cx="70" cy={round(baseY)} r={round(4 + color.prominence * 4)} fill={color.hex} />
+
+            {/* Filled Signal Ribbon */}
+            <path
+              d={ribbonPath}
+              fill={color.displayHex}
+              fillOpacity={round(0.72 + color.salience * 0.25)}
+            />
+
+            {/* Terminal Signal Nodes */}
+            <circle
+              cx="70"
+              cy={baseY}
+              r={round(5 + color.normalizedWeight * 6)}
+              fill={color.displayHex}
+            />
+            <circle
+              cx="830"
+              cy={baseY}
+              r={round(5 + color.normalizedWeight * 6)}
+              fill={color.displayHex}
+            />
           </g>
         );
       })}
-      <PaletteSignature colors={model.colors} />
-    </>
+    </g>
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// 5. ORBITAL WEAVE
+// ─────────────────────────────────────────────────────────────
 function OrbitalWeave({ model }: { model: PaletteArtModel }) {
-  const phase = seededUnit(model.seed, 16) * Math.PI * 2;
-  const orbits = model.colors.map((color, index) => {
-    const progress = model.colors.length === 1 ? 0 : index / (model.colors.length - 1);
-    const radiusX = 130 + progress * 255;
-    const radiusY = 82 + progress * (120 + model.hueSpread * 75);
-    const angle = phase + index * (0.72 + model.warmBalance * 0.18);
-    const centerX = CENTER + Math.sin(index * 1.7) * 16;
-    const centerY = 420 + Math.cos(index * 1.3) * 14;
+  const { colors, dominant, seed } = model;
+  const basePhase = seededUnit(seed, 7) * Math.PI * 2;
+
+  const orbits = colors.map((color, index) => {
+    const rx = round(140 + index * 52 + color.lightness * 45);
+    const ry = round(85 + index * 42 + color.chroma * 90);
+    const angle = basePhase + (color.hue * Math.PI) / 180 + index * 0.65;
+    const bodyR = round(16 + Math.sqrt(color.normalizedWeight) * 36);
+    const pos = polarPoint(rx, angle, CENTER, CENTER);
+
     return {
       color,
-      radiusX,
-      radiusY,
-      centerX,
-      centerY,
-      point: {
-        x: round(centerX + Math.cos(angle) * radiusX),
-        y: round(centerY + Math.sin(angle) * radiusY),
-      },
-      trail: [0.13, 0.25].map((offset) => ({
-        x: round(centerX + Math.cos(angle - offset) * radiusX),
-        y: round(centerY + Math.sin(angle - offset) * radiusY),
-      })),
+      rx,
+      ry,
+      angle,
+      bodyR,
+      pos,
+      index,
     };
   });
+
   return (
-    <>
-      <CanvasFrame model={model} />
-      {orbits.map((orbit, index) => (
+    <g id="orbital-weave">
+      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+
+      {/* Central Sun Mass */}
+      <circle
+        cx={CENTER}
+        cy={CENTER}
+        r={round(44 + dominant.normalizedWeight * 42)}
+        fill={dominant.displayHex}
+        stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.35)}
+        strokeWidth="3"
+      />
+
+      {/* Luminous Core Corona */}
+      <circle
+        cx={CENTER}
+        cy={CENTER}
+        r={round(80 + dominant.salience * 50)}
+        fill={dominant.displayHex}
+        fillOpacity={0.14}
+      />
+
+      {/* Elliptical Orbital Paths */}
+      {orbits.map((orbit) => (
         <ellipse
-          key={`orbit-path-${orbit.color.hex}-${index}`}
-          cx={round(orbit.centerX)}
-          cy={round(orbit.centerY)}
-          rx={round(orbit.radiusX)}
-          ry={round(orbit.radiusY)}
+          key={`orbit-ellipse-${orbit.index}`}
+          cx={CENTER}
+          cy={CENTER}
+          rx={orbit.rx}
+          ry={orbit.ry}
           fill="none"
-          stroke={orbit.color.hex}
-          strokeOpacity={round(0.28 + orbit.color.prominence * 0.25)}
-          strokeWidth={round(2 + orbit.color.saturation * 3)}
+          stroke={orbit.color.displayHex}
+          strokeWidth={round(1.5 + orbit.color.normalizedWeight * 4)}
+          strokeOpacity={round(0.24 + orbit.color.salience * 0.35)}
+          strokeDasharray={orbit.index % 2 === 1 ? '6 8' : undefined}
         />
       ))}
-      {orbits.map((orbit, index) => {
-        const next = orbits[(index + 1) % orbits.length];
+
+      {/* Orbital Bodies and Particle Trails */}
+      {orbits.map((orbit) => {
+        const trail1 = polarPoint(orbit.rx, orbit.angle - 0.22, CENTER, CENTER);
+        const trail2 = polarPoint(orbit.rx, orbit.angle - 0.44, CENTER, CENTER);
+
         return (
-          <line
-            key={`orbit-thread-${index}`}
-            x1={orbit.point.x}
-            y1={orbit.point.y}
-            x2={next.point.x}
-            y2={next.point.y}
-            stroke={orbit.color.hex}
-            strokeOpacity={round(0.18 + model.contrast * 0.3)}
-            strokeWidth="2"
-          />
+          <g key={`body-${orbit.index}`}>
+            {/* Trail particles */}
+            <circle
+              cx={trail2.x}
+              cy={trail2.y}
+              r={round(orbit.bodyR * 0.35)}
+              fill={orbit.color.displayHex}
+              fillOpacity={0.25}
+            />
+            <circle
+              cx={trail1.x}
+              cy={trail1.y}
+              r={round(orbit.bodyR * 0.55)}
+              fill={orbit.color.displayHex}
+              fillOpacity={0.45}
+            />
+            {/* Planetary Body */}
+            <circle
+              cx={orbit.pos.x}
+              cy={orbit.pos.y}
+              r={orbit.bodyR}
+              fill={orbit.color.displayHex}
+              stroke={mixHexColors(orbit.color.displayHex, '#ffffff', 0.3)}
+              strokeWidth="2"
+            />
+          </g>
         );
       })}
-      {orbits.map((orbit, index) => (
-        <g key={`orbit-body-${orbit.color.hex}-${index}`}>
-          {orbit.trail.map((point, trailIndex) => (
-            <circle
-              key={`trail-${trailIndex}`}
-              cx={point.x}
-              cy={point.y}
-              r={round(3 + orbit.color.prominence * (5 - trailIndex))}
-              fill={orbit.color.hex}
-              fillOpacity={trailIndex === 0 ? 0.3 : 0.16}
-            />
-          ))}
-          <circle cx={orbit.point.x} cy={orbit.point.y} r={round(8 + orbit.color.prominence * 12)} fill={orbit.color.hex} />
-        </g>
-      ))}
-      <circle cx={CENTER} cy="420" r={round(58 + model.averageLuminance * 26)} fill={model.colors[0].hex} />
-      <circle cx={CENTER} cy="420" r={round(28 + model.averageSaturation * 18)} fill={model.colors[model.colors.length - 1].hex} />
-      <PaletteSignature colors={model.colors} />
-    </>
+    </g>
   );
 }
 
-export function PaletteArtCanvas({ colors, artStyle, seed, size = ART_SIZE }: PaletteArtCanvasProps) {
-  const model = buildPaletteArtModel(colors, seed, artStyle);
+// ─────────────────────────────────────────────────────────────
+// MAIN CANVAS EXPORT
+// ─────────────────────────────────────────────────────────────
+export function PaletteArtCanvas({
+  colors,
+  artStyle,
+  seed,
+  size = CANVAS_SIZE,
+  visualFeatures,
+}: PaletteArtCanvasProps) {
+  const model = buildPaletteArtModel(colors, seed, artStyle, visualFeatures);
+
   return (
     <svg
       width={size}
       height={size}
-      viewBox={`0 0 ${ART_SIZE} ${ART_SIZE}`}
-      role="img"
-      aria-label={`${artStyle} generated from ${model.colors.length} album colors`}
+      viewBox={`0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}`}
+      xmlns="http://www.w3.org/2000/svg"
     >
+      {artStyle === 'chromatic-bloom' && <ChromaticBloom model={model} />}
       {artStyle === 'palette-dna' && <PaletteDna model={model} />}
       {artStyle === 'chord-map' && <ChordMap model={model} />}
       {artStyle === 'spectrum-code' && <SpectrumCode model={model} />}
       {artStyle === 'orbital-weave' && <OrbitalWeave model={model} />}
-      {artStyle === 'chromatic-bloom' && <ChromaticBloom model={model} />}
     </svg>
   );
 }
