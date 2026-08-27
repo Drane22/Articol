@@ -329,32 +329,24 @@ export function ShareCardModal({
                   {!displayedAsset && assetState === 'initial-loading' && (
                     <div className="share-preview-loading" role="status" aria-live="polite">
                       <div className="share-preview-loading__art" aria-hidden="true">
-                        <div className="share-preview-loading__orbit" />
-                        {albumColors.slice(0, MAX_DISPLAY_ART_COLORS).map((color, index) => (
-                          <span
+                        {albumColors.slice(0, 3).map((color, index) => (
+                          <div
                             key={`${color.hex}-${index}`}
-                            className="share-preview-loading__color"
+                            className="share-preview-loading__wave"
                             style={{
                               backgroundColor: color.hex,
-                              width: `${24 + (index % 4) * 9}%`,
-                              height: `${24 + ((index + 2) % 4) * 8}%`,
-                              left: `${8 + (index * 17) % 70}%`,
-                              top: `${8 + (index * 23) % 68}%`,
-                              animationDelay: `${index * -120}ms`,
+                              width: `${110 + index * 20}%`,
+                              height: `${110 + index * 20}%`,
+                              left: `${-5 + (index * 10)}%`,
+                              top: `${-5 + (index * 10)}%`,
+                              animationDelay: `${index * 800}ms`,
                             }}
                           />
                         ))}
                       </div>
-                      <div className="share-preview-loading__meta" aria-hidden="true">
-                        <span />
-                        <span />
-                        <div>
-                          {albumColors.slice(0, MAX_DISPLAY_ART_COLORS).map((color) => (
-                            <i key={color.hex} style={{ backgroundColor: color.hex }} />
-                          ))}
-                        </div>
-                      </div>
-                      <p>{generationMessages[messageIndex]}</p>
+                      <p className="share-preview-loading__indicator">
+                        {generationMessages[messageIndex]}
+                      </p>
                     </div>
                   )}
 
