@@ -134,7 +134,7 @@ function PortraitPoster({
         flexDirection: 'column',
         width: 1080,
         height: 1350,
-        padding: '32px 54px 36px',
+        padding: '28px 50px 30px',
         backgroundImage: `linear-gradient(165deg, ${primaryColor} 0%, ${secondaryColor} 26%, #0d0e12 58%, #07080b 100%)`,
         color: '#f6f2eb',
         fontFamily: 'sans-serif',
@@ -147,7 +147,7 @@ function PortraitPoster({
           display: 'flex',
           flexShrink: 0,
           width: '100%',
-          height: 64,
+          height: 56,
           position: 'relative',
           alignItems: 'center',
           borderBottom: `1.5px solid ${headerBorderColor}`,
@@ -163,7 +163,7 @@ function PortraitPoster({
             position: 'absolute',
             left: 0,
             top: 0,
-            height: 64,
+            height: 56,
             alignItems: 'center',
             color: headerBrandColor,
             fontWeight: 800,
@@ -177,7 +177,7 @@ function PortraitPoster({
             position: 'absolute',
             right: 0,
             top: 0,
-            height: 64,
+            height: 56,
             alignItems: 'center',
             justifyContent: 'flex-end',
             color: headerEditionColor,
@@ -189,13 +189,13 @@ function PortraitPoster({
         </div>
       </div>
 
-      {/* Main Artwork Frame - Hero Expanded */}
+      {/* Main Artwork Frame - 940px Hero */}
       <div
         style={{
           display: 'flex',
           flexShrink: 0,
           width: '100%',
-          height: 920,
+          height: 940,
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -204,16 +204,16 @@ function PortraitPoster({
           <img
             src={paletteArtworkUrl}
             alt=""
-            width="890"
-            height="890"
-            style={{ display: 'flex', width: 890, height: 890, objectFit: 'contain' }}
+            width="930"
+            height="930"
+            style={{ display: 'flex', width: 930, height: 930, objectFit: 'contain' }}
           />
         ) : isPaletteArtwork ? (
           <div
             style={{
               display: 'flex',
-              width: 890,
-              height: 890,
+              width: 930,
+              height: 930,
               alignItems: 'center',
               justifyContent: 'center',
               color: '#b8b0a7',
@@ -225,11 +225,11 @@ function PortraitPoster({
             Generating artwork...
           </div>
         ) : (
-          <CoverArtwork album={album} colors={colors} size={890} radius={20} />
+          <CoverArtwork album={album} colors={colors} size={930} radius={22} />
         )}
       </div>
 
-      {/* Bottom Metadata Section - Tight & Balanced */}
+      {/* Bottom Metadata Section - Cohesive & Zero Clipping */}
       <div
         style={{
           display: 'flex',
@@ -238,7 +238,7 @@ function PortraitPoster({
           flexDirection: 'column',
           justifyContent: 'space-between',
           borderTop: '1.5px solid rgba(255,255,255,0.16)',
-          paddingTop: 20,
+          paddingTop: 16,
           paddingBottom: 2,
         }}
       >
@@ -247,15 +247,14 @@ function PortraitPoster({
           <div
             style={{
               display: 'flex',
-              maxWidth: 960,
-              maxHeight: 130,
-              overflow: 'hidden',
+              maxWidth: 980,
               color: '#ffffff',
               fontFamily: 'sans-serif',
-              fontSize: 58,
+              fontSize: 54,
               fontWeight: 700,
-              lineHeight: 1.08,
-              letterSpacing: -1.3,
+              lineHeight: 1.15,
+              letterSpacing: -1.2,
+              paddingBottom: 4,
             }}
           >
             {truncate(album.title, 66)}
@@ -263,15 +262,13 @@ function PortraitPoster({
           <div
             style={{
               display: 'flex',
-              marginTop: 8,
-              maxWidth: 920,
-              overflow: 'hidden',
+              marginTop: 6,
+              maxWidth: 940,
               color: '#f0ebe4',
-              fontSize: 36,
+              fontSize: 34,
               fontWeight: 600,
-              lineHeight: 1.25,
-              paddingBottom: 4,
-              textOverflow: 'ellipsis',
+              lineHeight: 1.35,
+              paddingBottom: 10,
               whiteSpace: 'nowrap',
             }}
           >
@@ -285,22 +282,22 @@ function PortraitPoster({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingTop: 6,
+            paddingTop: 4,
           }}
         >
           <div
             style={{
               display: 'flex',
               color: '#d6cec4',
-              fontSize: 26,
+              fontSize: 25,
               fontWeight: 700,
-              letterSpacing: 2.4,
+              letterSpacing: 2.2,
               textTransform: 'uppercase',
             }}
           >
             {album.releaseYear ? `Released ${album.releaseYear}` : 'Archive'}
           </div>
-          <PaletteLegend colors={colors} size={48} gap={14} />
+          <PaletteLegend colors={colors} size={46} gap={14} />
         </div>
       </div>
     </div>
@@ -320,7 +317,7 @@ function LandscapePoster({ album, colors }: { album: ShareAlbumData; colors: str
         display: 'flex',
         width: 1200,
         height: 630,
-        padding: '38px 44px',
+        padding: '36px 44px',
         backgroundImage: `linear-gradient(145deg, ${primaryColor} 0%, ${secondaryColor} 30%, #0d0e12 67%, #07080b 100%)`,
         color: '#f6f2eb',
         fontFamily: 'sans-serif',
@@ -359,15 +356,14 @@ function LandscapePoster({ album, colors }: { album: ShareAlbumData; colors: str
             style={{
               display: 'flex',
               maxWidth: 520,
-              maxHeight: 124,
-              marginTop: 22,
-              overflow: 'hidden',
+              marginTop: 20,
               color: '#ffffff',
               fontFamily: 'sans-serif',
-              fontSize: 54,
+              fontSize: 52,
               fontWeight: 700,
-              lineHeight: 1.08,
+              lineHeight: 1.15,
               letterSpacing: -1.2,
+              paddingBottom: 4,
             }}
           >
             {truncate(album.title, 54)}
@@ -376,15 +372,13 @@ function LandscapePoster({ album, colors }: { album: ShareAlbumData; colors: str
             style={{
               display: 'flex',
               maxWidth: 520,
-              marginTop: 10,
-              overflow: 'hidden',
+              marginTop: 8,
               color: '#f0ebe4',
               fontSize: 32,
               fontWeight: 600,
-              lineHeight: 1.25,
-              paddingBottom: 4,
+              lineHeight: 1.35,
+              paddingBottom: 8,
               whiteSpace: 'nowrap',
-              textOverflow: 'ellipsis',
             }}
           >
             {truncate(album.artistName, 34)}
