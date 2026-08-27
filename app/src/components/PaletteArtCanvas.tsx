@@ -114,29 +114,29 @@ function succulentLeafPath(cx: number, cy: number, angle: number, inner: number,
 function SucculentSculpture({ model }: { model: PaletteArtModel }) {
   const { colors, dominant, seed, traits } = model;
   const baseRotation = seededUnit(seed, 2) * Math.PI * 2;
-  const cx = CENTER + (traits.focalX - 0.5) * 54;
-  const cy = CENTER + (traits.focalY - 0.5) * 42;
+  const cx = CENTER + (traits.focalX - 0.5) * 36;
+  const cy = CENTER + (traits.focalY - 0.5) * 28;
   const layers = [
-    { count: 9, inner: 78, reach: 418, width: 0.35, rotation: 0 },
-    { count: 7, inner: 52, reach: 312, width: 0.42, rotation: 0.38 },
-    { count: 6, inner: 24, reach: 200, width: 0.48, rotation: 0.72 },
+    { count: 9, inner: 74, reach: 365, width: 0.34, rotation: 0 },
+    { count: 7, inner: 48, reach: 275, width: 0.40, rotation: 0.38 },
+    { count: 6, inner: 22, reach: 175, width: 0.46, rotation: 0.72 },
   ];
   const totalLeaves = layers.reduce((sum, layer) => sum + layer.count, 0);
   let slot = 0;
   return (
     <g id="succulent-bloom" data-art-system="succulent-bloom" data-render-mode="material-2.5d">
       <MaterialDefinitions system="succulent" model={model} />
-      <Atmosphere system="succulent" model={model} radius={435} />
-      <ellipse cx={round(cx + 18)} cy={round(cy + 334)} rx="330" ry="86" fill="#010207" fillOpacity="0.38" data-art-layer="ground-shadow" />
+      <Atmosphere system="succulent" model={model} radius={415} />
+      <ellipse cx={round(cx + 16)} cy={round(cy + 295)} rx="300" ry="78" fill="#010207" fillOpacity="0.38" data-art-layer="ground-shadow" />
       {layers.map((layer, layerIndex) => (
         <g key={`succulent-tier-${layerIndex}`} data-depth-tier={layerIndex}>
           {Array.from({ length: layer.count }, (_, index) => {
             const color = weightedColor(colors, slot, totalLeaves);
             const variation = seededUnit(seed, 30 + slot);
             const angle = baseRotation + layer.rotation + (index / layer.count) * Math.PI * 2 + (variation - 0.5) * (1 - traits.symmetry) * 0.3;
-            const reach = layer.reach * (0.9 + color.salience * 0.14 + variation * 0.08);
-            const leafWidth = layer.width * (0.92 + color.chroma * 1.3 + color.normalizedWeight * 0.45);
-            const bend = (seededUnit(seed, 90 + slot) - 0.5) * 0.22;
+            const reach = layer.reach * (0.92 + color.salience * 0.12 + variation * 0.06);
+            const leafWidth = layer.width * (0.92 + color.chroma * 1.2 + color.normalizedWeight * 0.4);
+            const bend = (seededUnit(seed, 90 + slot) - 0.5) * 0.2;
             const path = succulentLeafPath(cx, cy, angle, layer.inner, reach, leafWidth, bend);
             const shadowPath = succulentLeafPath(cx + 8, cy + 12, angle, layer.inner, reach, leafWidth, bend);
             const veinRoot = polarPoint(layer.inner + 12, angle, cx, cy);
@@ -153,8 +153,8 @@ function SucculentSculpture({ model }: { model: PaletteArtModel }) {
           })}
         </g>
       ))}
-      <circle cx={round(cx + 7)} cy={round(cy + 10)} r={round(42 + dominant.normalizedWeight * 24)} fill={mixHexColors(dominant.displayHex, '#010208', 0.68)} />
-      <circle cx={round(cx)} cy={round(cy)} r={round(38 + dominant.normalizedWeight * 22)} fill={`url(#${materialId('succulent', seed, 0)}-sphere)`} />
+      <circle cx={round(cx + 7)} cy={round(cy + 10)} r={round(36 + dominant.normalizedWeight * 20)} fill={mixHexColors(dominant.displayHex, '#010208', 0.68)} />
+      <circle cx={round(cx)} cy={round(cy)} r={round(33 + dominant.normalizedWeight * 18)} fill={`url(#${materialId('succulent', seed, 0)}-sphere)`} />
     </g>
   );
 }
@@ -164,11 +164,11 @@ interface GenomeFacet { depth: number; ribbon: number; index: number; path: stri
 function GenomeSculpture({ model }: { model: PaletteArtModel }) {
   const { colors, dominant, seed, traits } = model;
   const segments = 18 + Math.round(traits.segmentation * 6);
-  const amplitude = 200 + traits.depthRange * 75;
+  const amplitude = 160 + traits.depthRange * 50;
   const turns = 2.1 + traits.complexity * 1.15;
-  const top = 48;
-  const height = 804;
-  const lean = (traits.focalX - 0.5) * 96;
+  const top = 64;
+  const height = 760;
+  const lean = (traits.focalX - 0.5) * 60;
   const facets: GenomeFacet[] = [];
   for (let ribbon = 0; ribbon < 2; ribbon += 1) {
     for (let index = 0; index < segments; index += 1) {
@@ -180,8 +180,8 @@ function GenomeSculpture({ model }: { model: PaletteArtModel }) {
       const x1 = CENTER + Math.sin(phase1) * amplitude * (0.78 + t1 * 0.18) + lean * (t1 - 0.5);
       const y0 = top + t0 * height;
       const y1 = top + t1 * height;
-      const width0 = 54 + Math.max(0, Math.cos(phase0)) * 40 + traits.materialRichness * 22;
-      const width1 = 54 + Math.max(0, Math.cos(phase1)) * 40 + traits.materialRichness * 22;
+      const width0 = 48 + Math.max(0, Math.cos(phase0)) * 36 + traits.materialRichness * 18;
+      const width1 = 48 + Math.max(0, Math.cos(phase1)) * 36 + traits.materialRichness * 18;
       const color = weightedColor(colors, index + ribbon * segments, segments * 2);
       const path = pointsPath([{ x: x0 - width0 / 2, y: y0 }, { x: x0 + width0 / 2, y: y0 }, { x: x1 + width1 / 2, y: y1 + 2 }, { x: x1 - width1 / 2, y: y1 + 2 }]);
       const shadowPath = pointsPath([{ x: x0 - width0 / 2 + 9, y: y0 + 12 }, { x: x0 + width0 / 2 + 9, y: y0 + 12 }, { x: x1 + width1 / 2 + 9, y: y1 + 14 }, { x: x1 - width1 / 2 + 9, y: y1 + 14 }]);
@@ -189,13 +189,13 @@ function GenomeSculpture({ model }: { model: PaletteArtModel }) {
     }
   }
   facets.sort((a, b) => a.depth - b.depth);
-  const coreWidth = 108 + traits.coverageConcentration * 60;
+  const coreWidth = 96 + traits.coverageConcentration * 50;
   return (
     <g id="cover-genome" data-art-system="cover-genome" data-render-mode="material-2.5d">
       <MaterialDefinitions system="genome" model={model} />
-      <Atmosphere system="genome" model={model} radius={435} />
-      <ellipse cx={round(CENTER + lean * 0.46)} cy="856" rx={round(205 + traits.depthRange * 48)} ry="56" fill="#010207" fillOpacity="0.46" data-art-layer="ground-shadow" />
-      <path d={pointsPath([{ x: CENTER - coreWidth / 2, y: 54 }, { x: CENTER + coreWidth / 2, y: 54 }, { x: CENTER + coreWidth * 0.72 + lean / 2, y: 846 }, { x: CENTER - coreWidth * 0.72 + lean / 2, y: 846 }])} fill={`url(#${materialId('genome', seed, 0)}-linear)`} fillOpacity="0.28" stroke={colorWithAlpha(dominant.displayHex, 0.56)} strokeWidth="3" data-art-layer="translucent-core" />
+      <Atmosphere system="genome" model={model} radius={415} />
+      <ellipse cx={round(CENTER + lean * 0.46)} cy="828" rx={round(180 + traits.depthRange * 40)} ry="50" fill="#010207" fillOpacity="0.46" data-art-layer="ground-shadow" />
+      <path d={pointsPath([{ x: CENTER - coreWidth / 2, y: 72 }, { x: CENTER + coreWidth / 2, y: 72 }, { x: CENTER + coreWidth * 0.72 + lean / 2, y: 815 }, { x: CENTER - coreWidth * 0.72 + lean / 2, y: 815 }])} fill={`url(#${materialId('genome', seed, 0)}-linear)`} fillOpacity="0.28" stroke={colorWithAlpha(dominant.displayHex, 0.56)} strokeWidth="3" data-art-layer="translucent-core" />
       {facets.map((facet) => {
         const colorIndex = colors.indexOf(facet.color);
         return (
@@ -212,7 +212,7 @@ function GenomeSculpture({ model }: { model: PaletteArtModel }) {
         const y = top + progress * height;
         const color = colors[index % colors.length];
         const colorIndex = colors.indexOf(color);
-        const radius = 15 + color.salience * 18;
+        const radius = 13 + color.salience * 15;
         return (
           <g key={`genome-mutation-${index}`} data-art-layer="raised-mutation">
             <ellipse cx={round(x + 8)} cy={round(y + 11)} rx={round(radius * 1.18)} ry={round(radius * 0.62)} fill="#010207" fillOpacity="0.48" />
@@ -225,10 +225,10 @@ function GenomeSculpture({ model }: { model: PaletteArtModel }) {
 }
 
 function planePoint(u: number, v: number, traits: PaletteArtModel['traits'], z = 0): Point {
-  const left = 54 + v * 58;
-  const right = 846 - v * 32;
+  const left = 80 + v * 48;
+  const right = 820 - v * 28;
   const fold = Math.sin(u * Math.PI * 2) * traits.complexity * 22 * Math.sin(v * Math.PI);
-  return { x: left + (right - left) * u, y: 68 + 764 * v + fold - z };
+  return { x: left + (right - left) * u, y: 90 + 720 * v + fold - z };
 }
 
 function bandQuad(u0: number, u1: number, v0: number, v1: number, traits: PaletteArtModel['traits'], z = 0): Point[] {
@@ -245,7 +245,7 @@ function TextileLoom({ model }: { model: PaletteArtModel }) {
   return (
     <g id="chord-loom" data-art-system="chord-loom" data-render-mode="material-2.5d">
       <MaterialDefinitions system="loom" model={model} />
-      <Atmosphere system="loom" model={model} radius={400} />
+      <Atmosphere system="loom" model={model} radius={420} />
       <path d={pointsPath(plane.map((point) => ({ x: point.x + 14, y: point.y + 28 })))} fill="#010207" fillOpacity="0.48" data-art-layer="ground-shadow" />
       <path d={pointsPath([plane[3], plane[2], { x: plane[2].x + 2, y: plane[2].y + 26 }, { x: plane[3].x + 2, y: plane[3].y + 26 }])} fill={mixHexColors(dominant.displayHex, '#010208', 0.8)} fillOpacity="0.88" data-art-layer="textile-edge" />
       <path d={pointsPath(plane)} fill={mixHexColors(dominant.displayHex, '#05070d', 0.72)} fillOpacity="0.82" stroke={colorWithAlpha(dominant.displayHex, 0.42)} strokeWidth="2" data-art-layer="textile-plane" />
@@ -281,10 +281,10 @@ function TextileLoom({ model }: { model: PaletteArtModel }) {
 
 function terrainPoints(model: PaletteArtModel, progress: number, count: number): Point[] {
   const { traits, seed } = model;
-  const centerX = CENTER + (traits.focalX - 0.5) * 116;
-  const centerY = CENTER + (traits.focalY - 0.5) * 74 - progress * 72;
-  const baseRx = 352 - progress * 238;
-  const baseRy = 244 - progress * 148;
+  const centerX = CENTER + (traits.focalX - 0.5) * 70;
+  const centerY = CENTER + (traits.focalY - 0.5) * 50 - progress * 60;
+  const baseRx = 365 - progress * 230;
+  const baseRy = 265 - progress * 155;
   return Array.from({ length: count }, (_, index) => {
     const angle = (index / count) * Math.PI * 2;
     const phase = seededUnit(seed, 500 + Math.round(progress * 203)) * Math.PI * 2;
@@ -298,12 +298,12 @@ function TopographicRelief({ model }: { model: PaletteArtModel }) {
   const { colors, dominant, seed, traits } = model;
   const levels = 5 + Math.round(traits.segmentation * 4);
   const pointCount = 12 + Math.round(traits.complexity * 6);
-  const extrusion = 22 + traits.depthRange * 32;
+  const extrusion = 20 + traits.depthRange * 28;
   return (
     <g id="cover-pulse" data-art-system="cover-pulse" data-render-mode="material-2.5d">
       <MaterialDefinitions system="terrain" model={model} />
-      <Atmosphere system="terrain" model={model} radius={440} />
-      <ellipse cx={round(CENTER + 26)} cy="788" rx="405" ry="102" fill="#010207" fillOpacity="0.5" data-art-layer="ground-shadow" />
+      <Atmosphere system="terrain" model={model} radius={420} />
+      <ellipse cx={round(CENTER + 22)} cy="725" rx="360" ry="92" fill="#010207" fillOpacity="0.5" data-art-layer="ground-shadow" />
       {Array.from({ length: levels }, (_, level) => {
         const progress = level / Math.max(1, levels - 1);
         const color = weightedColor(colors, levels - level - 1, levels);
@@ -313,7 +313,7 @@ function TopographicRelief({ model }: { model: PaletteArtModel }) {
         const colorIndex = colors.indexOf(color);
         return <g key={`terrain-level-${level}`} data-art-layer="extruded-terrain-plate" data-depth-level={level}><path d={smoothClosedPath(side)} fill={mixHexColors(color.displayHex, '#010208', 0.68)} fillOpacity="0.98" /><path d={smoothClosedPath(points)} fill={`url(#${materialId('terrain', seed, colorIndex)}-linear)`} stroke={mixHexColors(color.displayHex, '#ffffff', 0.36)} strokeOpacity="0.5" strokeWidth="2" /></g>;
       })}
-      <ellipse cx={round(CENTER + (traits.focalX - 0.5) * 96 + 16)} cy={round(CENTER + (traits.focalY - 0.5) * 58 - 64)} rx={round(42 + traits.negativeSpace * 45)} ry={round(24 + traits.negativeSpace * 28)} fill={mixHexColors(dominant.displayHex, '#010208', 0.82)} fillOpacity="0.9" stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.42)} strokeOpacity="0.42" strokeWidth="3" data-art-layer="relief-basin" />
+      <ellipse cx={round(CENTER + (traits.focalX - 0.5) * 80 + 12)} cy={round(CENTER + (traits.focalY - 0.5) * 48 - 56)} rx={round(38 + traits.negativeSpace * 38)} ry={round(22 + traits.negativeSpace * 24)} fill={mixHexColors(dominant.displayHex, '#010208', 0.82)} fillOpacity="0.9" stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.42)} strokeOpacity="0.42" strokeWidth="3" data-art-layer="relief-basin" />
     </g>
   );
 }
@@ -327,32 +327,37 @@ function SolarAtlas({ model }: { model: PaletteArtModel }) {
   const { colors, seed, traits } = model;
   const sun = colors.reduce((best, color) => color.normalizedWeight * 0.72 + color.chroma * 1.5 > best.normalizedWeight * 0.72 + best.chroma * 1.5 ? color : best, colors[0]);
   const planets = colors.filter((color) => color !== sun);
-  const sunX = CENTER + (traits.focalX - 0.5) * 90;
-  const sunY = CENTER + (traits.focalY - 0.5) * 60;
-  const tilt = clamp(0.42 + traits.cameraTilt * 0.32, 0.46, 0.74);
+  const sunX = CENTER + (traits.focalX - 0.5) * 40;
+  const sunY = CENTER + (traits.focalY - 0.5) * 30;
+  const tilt = clamp(0.36 + traits.cameraTilt * 0.22, 0.38, 0.58);
+  const planetsCount = Math.max(1, planets.length);
+  const maxOrbit = 310 - traits.negativeSpace * 25;
+  const minOrbit = 160;
   const bodies: Planet[] = planets.map((color, index) => {
-    const orbit = 225 + index * (68 - traits.negativeSpace * 12) + color.lightness * 48;
+    const orbitRatio = planetsCount === 1 ? 0.5 : index / (planetsCount - 1);
+    const orbit = minOrbit + orbitRatio * (maxOrbit - minOrbit) + color.lightness * 20;
     const rx = orbit;
-    const ry = orbit * tilt * clamp(0.86 + color.chroma * 1.2, 0.88, 1.15);
+    const ry = orbit * tilt * clamp(0.88 + color.chroma * 0.8, 0.9, 1.12);
     const angle = (color.hue * Math.PI) / 180 + seededUnit(seed, 700 + index) * 1.2 + index * 0.56;
-    return { color, colorIndex: colors.indexOf(color), cx: sunX + Math.cos(angle) * rx, cy: sunY + Math.sin(angle) * ry, radius: 26 + Math.sqrt(color.normalizedWeight) * 84, rx, ry, front: Math.sin(angle) >= 0 };
+    const radius = 18 + Math.sqrt(color.normalizedWeight) * 44;
+    return { color, colorIndex: colors.indexOf(color), cx: sunX + Math.cos(angle) * rx, cy: sunY + Math.sin(angle) * ry, radius, rx, ry, front: Math.sin(angle) >= 0 };
   });
   const sunIndex = colors.indexOf(sun);
-  const sunRadius = 124 + Math.sqrt(sun.normalizedWeight) * 94;
+  const sunRadius = 88 + Math.sqrt(sun.normalizedWeight) * 58;
   const starCount = 18 + Math.round(traits.complexity * 26);
   return (
     <g id="record-atlas" data-art-system="record-atlas" data-render-mode="material-2.5d">
       <MaterialDefinitions system="solar" model={model} />
-      <Atmosphere system="solar" model={model} radius={440} />
+      <Atmosphere system="solar" model={model} radius={420} />
       <defs><radialGradient id={`solar-corona-${seed}`} cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor={sun.displayHex} stopOpacity="0.52" /><stop offset="52%" stopColor={sun.displayHex} stopOpacity="0.18" /><stop offset="100%" stopColor={sun.displayHex} stopOpacity="0" /></radialGradient></defs>
       {Array.from({ length: starCount }, (_, index) => <circle key={`atlas-dust-${index}`} cx={round(36 + seededUnit(seed, 760 + index * 2) * 828)} cy={round(40 + seededUnit(seed, 761 + index * 2) * 820)} r={round(1.4 + seededUnit(seed, 840 + index) * 3.5)} fill={colors[index % colors.length].displayHex} fillOpacity={round(0.18 + seededUnit(seed, 900 + index) * 0.36)} data-art-layer="stellar-dust" />)}
-      {bodies.map((body, index) => <path key={`orbit-back-${index}`} d={orbitBackPath(sunX, sunY, body.rx, body.ry)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.22)} strokeOpacity="0.34" strokeWidth={round(2.5 + body.color.normalizedWeight * 6)} data-art-layer="rear-orbit" />)}
+      {bodies.map((body, index) => <path key={`orbit-back-${index}`} d={orbitBackPath(sunX, sunY, body.rx, body.ry)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.22)} strokeOpacity="0.34" strokeWidth={round(2.5 + body.color.normalizedWeight * 5)} data-art-layer="rear-orbit" />)}
       {bodies.filter((body) => !body.front).map((body, index) => <g key={`rear-planet-${index}`} data-art-layer="rear-planet"><ellipse cx={round(body.cx + body.radius * 0.28)} cy={round(body.cy + body.radius * 0.7)} rx={round(body.radius * 0.86)} ry={round(body.radius * 0.28)} fill="#010207" fillOpacity="0.42" /><circle cx={round(body.cx)} cy={round(body.cy)} r={round(body.radius)} fill={`url(#${materialId('solar', seed, body.colorIndex)}-sphere)`} /></g>)}
-      <circle cx={round(sunX)} cy={round(sunY)} r={round(sunRadius * 1.85)} fill={`url(#solar-corona-${seed})`} data-art-layer="solar-corona" />
-      <ellipse cx={round(sunX + 18)} cy={round(sunY + sunRadius * 0.72)} rx={round(sunRadius * 0.82)} ry={round(sunRadius * 0.28)} fill="#010207" fillOpacity="0.42" />
+      <circle cx={round(sunX)} cy={round(sunY)} r={round(sunRadius * 1.8)} fill={`url(#solar-corona-${seed})`} data-art-layer="solar-corona" />
+      <ellipse cx={round(sunX + 16)} cy={round(sunY + sunRadius * 0.72)} rx={round(sunRadius * 0.82)} ry={round(sunRadius * 0.28)} fill="#010207" fillOpacity="0.42" />
       <circle cx={round(sunX)} cy={round(sunY)} r={round(sunRadius)} fill={`url(#${materialId('solar', seed, sunIndex)}-sphere)`} stroke={mixHexColors(sun.displayHex, '#ffffff', 0.34)} strokeOpacity="0.52" strokeWidth="3" data-art-layer="volumetric-sun" />
-      {bodies.map((body, index) => <path key={`orbit-front-${index}`} d={orbitFrontPath(sunX, sunY, body.rx, body.ry)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.34)} strokeOpacity="0.62" strokeWidth={round(3 + body.color.normalizedWeight * 7)} data-art-layer="front-orbit" />)}
-      {bodies.filter((body) => body.front).map((body, index) => <g key={`front-planet-${index}`} data-art-layer="front-planet"><ellipse cx={round(body.cx + body.radius * 0.3)} cy={round(body.cy + body.radius * 0.78)} rx={round(body.radius * 0.92)} ry={round(body.radius * 0.3)} fill="#010207" fillOpacity="0.48" /><circle cx={round(body.cx)} cy={round(body.cy)} r={round(body.radius)} fill={`url(#${materialId('solar', seed, body.colorIndex)}-sphere)`} stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.48)} strokeOpacity="0.58" strokeWidth="2" />{body.color.salience > 0.68 && <ellipse cx={round(body.cx)} cy={round(body.cy)} rx={round(body.radius * 1.55)} ry={round(body.radius * 0.42)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.62)} strokeOpacity="0.72" strokeWidth={round(4 + body.radius * 0.05)} transform={`rotate(-12 ${round(body.cx)} ${round(body.cy)})`} data-art-layer="planet-ring" />}</g>)}
+      {bodies.map((body, index) => <path key={`orbit-front-${index}`} d={orbitFrontPath(sunX, sunY, body.rx, body.ry)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.34)} strokeOpacity="0.62" strokeWidth={round(3 + body.color.normalizedWeight * 6)} data-art-layer="front-orbit" />)}
+      {bodies.filter((body) => body.front).map((body, index) => <g key={`front-planet-${index}`} data-art-layer="front-planet"><ellipse cx={round(body.cx + body.radius * 0.3)} cy={round(body.cy + body.radius * 0.78)} rx={round(body.radius * 0.92)} ry={round(body.radius * 0.3)} fill="#010207" fillOpacity="0.48" /><circle cx={round(body.cx)} cy={round(body.cy)} r={round(body.radius)} fill={`url(#${materialId('solar', seed, body.colorIndex)}-sphere)`} stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.48)} strokeOpacity="0.58" strokeWidth="2" />{body.color.salience > 0.68 && <ellipse cx={round(body.cx)} cy={round(body.cy)} rx={round(body.radius * 1.45)} ry={round(body.radius * 0.38)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.62)} strokeOpacity="0.72" strokeWidth={round(3.5 + body.radius * 0.04)} transform={`rotate(-12 ${round(body.cx)} ${round(body.cy)})`} data-art-layer="planet-ring" />}</g>)}
     </g>
   );
 }
