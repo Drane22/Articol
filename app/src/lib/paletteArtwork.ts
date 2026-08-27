@@ -13,33 +13,33 @@ import type { DominantColor, VisualFeatures } from './types';
 export const PALETTE_ART_STYLES = [
   {
     id: 'chromatic-bloom',
-    label: 'Chromatic Bloom',
-    description: 'Petals shaped by coverage and chroma',
-    formula: 'Petal area scales with extracted coverage, radial reach with chroma, and angle with hue.',
+    label: 'Succulent Bloom',
+    description: 'A layered rosette grown from the cover palette',
+    formula: 'Leaf area maps to color coverage, reach to salience, roundness to chroma, and ordering to hue.',
   },
   {
     id: 'palette-dna',
-    label: 'Palette DNA',
-    description: 'Album colors woven by coverage and contrast',
-    formula: 'Strand thickness maps to cumulative coverage, separation to perceptual contrast, and crossings to harmony.',
+    label: 'Cover Genome',
+    description: 'Cover traits twisted into a translucent sculpture',
+    formula: 'Contrast controls twist depth, symmetry controls regularity, and palette coverage controls ribbon and facet mass.',
   },
   {
     id: 'chord-map',
-    label: 'Chord Map',
-    description: 'Perceptual color harmonies, connected',
-    formula: 'Harmonic nodes positioned by hue and lightness, linked by perceptual Lab similarity.',
+    label: 'Chord Loom',
+    description: 'Album colors woven into a dimensional textile',
+    formula: 'Coverage controls band width, contrast controls crossing depth, and edge detail controls weave density.',
   },
   {
     id: 'spectrum-code',
-    label: 'Spectrum Code',
-    description: 'Album colors translated into layered signals',
-    formula: 'Ribbon thickness encodes color weight, oscillation density maps to hue, and placement to lightness.',
+    label: 'Cover Pulse',
+    description: 'A sculpted terrain relief shaped by the cover',
+    formula: 'Contrast controls elevation, entropy shapes the terrain, and negative space carves the central basin.',
   },
   {
     id: 'orbital-weave',
-    label: 'Orbital Weave',
-    description: 'Color coverage arranged in a weighted orbit',
-    formula: 'Planetary mass reflects color coverage, radius maps to lightness, and eccentricity to chroma.',
+    label: 'Record Atlas',
+    description: 'A miniature solar system built from the album',
+    formula: 'The dominant color forms the sun; coverage sizes planets while lightness, chroma, and hue place their orbits.',
   },
 ] as const;
 
@@ -72,6 +72,32 @@ export interface PaletteArtExplanation {
   accentSummary: string;
 }
 
+export interface PaletteArtTraits {
+  coverageConcentration: number;
+  chroma: number;
+  lightness: number;
+  contrast: number;
+  edgeDensity: number;
+  symmetry: number;
+  warmth: number;
+  exposure: number;
+  materialRichness: number;
+  depthRange: number;
+  complexity: number;
+  segmentation: number;
+  focalX: number;
+  focalY: number;
+  sculptureScale: number;
+  negativeSpace: number;
+  cameraTilt: number;
+  photography: number;
+  illustration: number;
+  abstraction: number;
+  collage: number;
+}
+
+export type AlbumArtSignature = PaletteArtTraits;
+
 export interface PaletteArtModel {
   colors: PaletteArtColor[];
   dominant: PaletteArtColor;
@@ -84,6 +110,7 @@ export interface PaletteArtModel {
   background: string;
   foreground: string;
   seed: number;
+  traits: PaletteArtTraits;
   explanation: PaletteArtExplanation;
 }
 
@@ -109,6 +136,16 @@ const LEGACY_STYLE_MAP: Record<string, PaletteArtStyle> = {
 
 function clamp(value: number, min = 0, max = 1): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function finiteOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function availableFeatureValue(value: unknown, fallback: number): number {
+  if (!value || typeof value !== 'object') return fallback;
+  const candidate = value as { value?: unknown; available?: unknown };
+  return candidate.available !== false ? finiteOr(candidate.value, fallback) : fallback;
 }
 
 function channelLuminance(channel: number): number {
@@ -323,6 +360,61 @@ export function buildPaletteArtModel(
     ? `Accent swatch (${highestAccent.sourceHex}) has high chroma (${accentPct}% salience), driving the focal marks.`
     : `Tonal swatch (${highestAccent.sourceHex}) provides the highest lightness contrast against the background.`;
 
+  const fallbackContrast = lightnessRange;
+  const fallbackEdgeDensity = 0.28 + hueStats.dispersion * 0.52;
+  const complexity = visualFeatures?.complexity;
+  const contrast = clamp(finiteOr(visualFeatures?.contrast, fallbackContrast));
+  const edgeDensity = clamp(finiteOr(
+    visualFeatures?.edgeDensity,
+    availableFeatureValue(complexity?.edgeDensity, fallbackEdgeDensity),
+  ));
+  const entropy = clamp(finiteOr(
+    visualFeatures?.visualEntropy,
+    availableFeatureValue(complexity?.visualEntropy, 0.42 + hueStats.dispersion * 0.34),
+  ));
+  const detailDensity = clamp(availableFeatureValue(complexity?.detailDensity, edgeDensity));
+  const regionCount = clamp(availableFeatureValue(complexity?.regionCount, 3 + edgeDensity * 8) / 14);
+  const negativeSpace = clamp(availableFeatureValue(
+    complexity?.negativeSpaceRatio,
+    finiteOr(visualFeatures?.minimalismScore, 0.5),
+  ));
+  const lightnessSpread = clamp(finiteOr(visualFeatures?.colorProfile?.lightnessSpread, lightnessRange));
+  const saturation = clamp(finiteOr(visualFeatures?.saturation, averageChroma * 4.5));
+  const symmetry = clamp(finiteOr(visualFeatures?.symmetryScore, 0.58));
+  const focalX = clamp(finiteOr(visualFeatures?.centroidX, 0.5));
+  const focalY = clamp(finiteOr(visualFeatures?.centroidY, 0.5));
+  const warmth = clamp(finiteOr(visualFeatures?.warmCool, warmBalance * 2 - 1) * 0.5 + 0.5);
+
+  const traits: PaletteArtTraits = {
+    coverageConcentration: clamp(dominant.normalizedWeight),
+    chroma: saturation,
+    lightness: clamp(averageLightness),
+    contrast,
+    edgeDensity,
+    symmetry,
+    warmth,
+    exposure: clamp(finiteOr(visualFeatures?.luminance, averageLightness)),
+    materialRichness: saturation,
+    depthRange: clamp(contrast * 0.64 + lightnessSpread * 0.36),
+    complexity: clamp(entropy * 0.62 + detailDensity * 0.25 + regionCount * 0.13),
+    segmentation: clamp(edgeDensity * 0.7 + regionCount * 0.3),
+    focalX,
+    focalY,
+    sculptureScale: clamp(finiteOr(visualFeatures?.foregroundRatio, 0.58)),
+    negativeSpace,
+    cameraTilt: clamp(
+      visualFeatures?.layoutType === 'dense_pattern' ? 0.72
+        : visualFeatures?.layoutType === 'grid_collage' ? 0.64
+          : visualFeatures?.layoutType === 'off_center' ? 0.58
+            : visualFeatures?.layoutType === 'minimal_text' ? 0.34
+              : 0.48,
+    ),
+    photography: clamp(finiteOr(visualFeatures?.photographyProb, 0.5)),
+    illustration: clamp(finiteOr(visualFeatures?.illustrationProb, 0.35)),
+    abstraction: clamp(finiteOr(visualFeatures?.abstractProb, entropy)),
+    collage: clamp(finiteOr(visualFeatures?.collageProb, edgeDensity * (1 - symmetry))),
+  };
+
   return {
     colors,
     dominant,
@@ -335,6 +427,7 @@ export function buildPaletteArtModel(
     background,
     foreground,
     seed: paletteArtSeed(`${seedSource}:${style}`),
+    traits,
     explanation: {
       dominantSummary,
       accentSummary,

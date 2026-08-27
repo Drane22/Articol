@@ -1,6 +1,8 @@
 import React from 'react';
 import {
   buildPaletteArtModel,
+  colorWithAlpha,
+  getPaletteArtStyleLabel,
   mixHexColors,
   seededUnit,
   type PaletteArtColor,
@@ -18,593 +20,203 @@ interface PaletteArtCanvasProps {
   visualFeatures?: VisualFeatures | null;
 }
 
-interface Point {
-  x: number;
-  y: number;
-}
+interface Point { x: number; y: number }
 
 const CANVAS_SIZE = 900;
 const CENTER = CANVAS_SIZE / 2;
 
-function round(value: number): number {
-  return Math.round(value * 100) / 100;
+function round(value: number): number { return Math.round(value * 100) / 100; }
+function clamp(value: number, min: number, max: number): number { return Math.max(min, Math.min(max, value)); }
+
+function pointsPath(points: Point[], close = true): string {
+  if (points.length === 0) return '';
+  return `M ${points.map((point) => `${round(point.x)} ${round(point.y)}`).join(' L ')}${close ? ' Z' : ''}`;
 }
 
-function polarPoint(radius: number, angleRad: number, cx = CENTER, cy = CENTER): Point {
-  return {
-    x: round(cx + Math.cos(angleRad) * radius),
-    y: round(cy + Math.sin(angleRad) * radius),
-  };
+function smoothClosedPath(points: Point[]): string {
+  if (points.length < 3) return '';
+  const tension = 0.17;
+  let path = `M ${round(points[0].x)} ${round(points[0].y)}`;
+  for (let index = 0; index < points.length; index += 1) {
+    const previous = points[(index - 1 + points.length) % points.length];
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const afterNext = points[(index + 2) % points.length];
+    path += ` C ${round(current.x + (next.x - previous.x) * tension)} ${round(current.y + (next.y - previous.y) * tension)} ${round(next.x - (afterNext.x - current.x) * tension)} ${round(next.y - (afterNext.y - current.y) * tension)} ${round(next.x)} ${round(next.y)}`;
+  }
+  return `${path} Z`;
 }
 
-// ─────────────────────────────────────────────────────────────
-// SHARED GENERATIVE TECHNICAL BACKDROP (n-gen aesthetic)
-// ─────────────────────────────────────────────────────────────
-function GenerativeBackdrop({
-  gradientId,
-  model,
-  haloColor,
-  haloRadius = 380,
-  haloCx = CENTER,
-  haloCy = CENTER,
-}: {
-  gradientId: string;
-  model: PaletteArtModel;
-  haloColor: string;
-  haloRadius?: number;
-  haloCx?: number;
-  haloCy?: number;
-}) {
-  const cornerPad = 36;
-  const frameSize = CANVAS_SIZE - cornerPad * 2; // 828
+function polarPoint(radius: number, angle: number, cx = CENTER, cy = CENTER): Point {
+  return { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+}
 
+function weightedColor(colors: PaletteArtColor[], slot: number, totalSlots: number): PaletteArtColor {
+  const target = (slot + 0.5) / totalSlots;
+  let cumulative = 0;
+  for (const color of colors) {
+    cumulative += color.normalizedWeight;
+    if (target <= cumulative) return color;
+  }
+  return colors[colors.length - 1];
+}
+
+function materialId(system: string, seed: number, index: number): string {
+  return `${system}-${seed}-${index}`;
+}
+
+function MaterialDefinitions({ system, model }: { system: string; model: PaletteArtModel }) {
+  const { colors, traits, seed } = model;
+  const lightX = round(20 + traits.focalX * 28);
+  const lightY = round(12 + traits.focalY * 20);
   return (
-    <g id={`backdrop-${gradientId}`}>
-      <defs>
-        <radialGradient
-          id={gradientId}
-          cx={`${round((haloCx / CANVAS_SIZE) * 100)}%`}
-          cy={`${round((haloCy / CANVAS_SIZE) * 100)}%`}
-          r={`${round((haloRadius / CANVAS_SIZE) * 100)}%`}
-        >
-          <stop offset="0%" stopColor={haloColor} stopOpacity={0.24} />
-          <stop offset="55%" stopColor={haloColor} stopOpacity={0.07} />
-          <stop offset="100%" stopColor={model.background} stopOpacity={0} />
-        </radialGradient>
-      </defs>
-
-      {/* Solid Deep Base */}
-      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
-
-      {/* Ambient Gradient Glow */}
-      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={`url(#${gradientId})`} />
-
-      {/* Technical Outer Guide Frame */}
-      <rect
-        x={cornerPad}
-        y={cornerPad}
-        width={frameSize}
-        height={frameSize}
-        fill="none"
-        stroke="rgba(255, 255, 255, 0.08)"
-        strokeWidth="1"
-      />
-
-      {/* 4 Corner Registration Crosshairs */}
-      <path
-        d={`M ${cornerPad - 8} ${cornerPad} L ${cornerPad + 8} ${cornerPad} M ${cornerPad} ${cornerPad - 8} L ${cornerPad} ${cornerPad + 8}`}
-        stroke="rgba(255, 255, 255, 0.22)"
-        strokeWidth="1"
-      />
-      <path
-        d={`M ${CANVAS_SIZE - cornerPad - 8} ${cornerPad} L ${CANVAS_SIZE - cornerPad + 8} ${cornerPad} M ${CANVAS_SIZE - cornerPad} ${cornerPad - 8} L ${CANVAS_SIZE - cornerPad} ${cornerPad + 8}`}
-        stroke="rgba(255, 255, 255, 0.22)"
-        strokeWidth="1"
-      />
-      <path
-        d={`M ${cornerPad - 8} ${CANVAS_SIZE - cornerPad} L ${cornerPad + 8} ${CANVAS_SIZE - cornerPad} M ${cornerPad} ${CANVAS_SIZE - cornerPad - 8} L ${cornerPad} ${CANVAS_SIZE - cornerPad + 8}`}
-        stroke="rgba(255, 255, 255, 0.22)"
-        strokeWidth="1"
-      />
-      <path
-        d={`M ${CANVAS_SIZE - cornerPad - 8} ${CANVAS_SIZE - cornerPad} L ${CANVAS_SIZE - cornerPad + 8} ${CANVAS_SIZE - cornerPad} M ${CANVAS_SIZE - cornerPad} ${CANVAS_SIZE - cornerPad - 8} L ${CANVAS_SIZE - cornerPad} ${CANVAS_SIZE - cornerPad + 8}`}
-        stroke="rgba(255, 255, 255, 0.22)"
-        strokeWidth="1"
-      />
-
-      {/* Axis Calibration Ticks */}
-      <line x1={CENTER} y1={cornerPad} x2={CENTER} y2={cornerPad + 8} stroke="rgba(255, 255, 255, 0.16)" strokeWidth="1" />
-      <line x1={CENTER} y1={CANVAS_SIZE - cornerPad - 8} x2={CENTER} y2={CANVAS_SIZE - cornerPad} stroke="rgba(255, 255, 255, 0.16)" strokeWidth="1" />
-      <line x1={cornerPad} y1={CENTER} x2={cornerPad + 8} y2={CENTER} stroke="rgba(255, 255, 255, 0.16)" strokeWidth="1" />
-      <line x1={CANVAS_SIZE - cornerPad - 8} y1={CENTER} x2={CANVAS_SIZE - cornerPad} y2={CENTER} stroke="rgba(255, 255, 255, 0.16)" strokeWidth="1" />
-    </g>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// 1. CHROMATIC BLOOM
-// ─────────────────────────────────────────────────────────────
-function ChromaticBloom({ model }: { model: PaletteArtModel }) {
-  const { colors, dominant, seed } = model;
-  const baseRotation = seededUnit(seed, 1) * Math.PI * 2;
-  const coreRadius = round(38 + dominant.normalizedWeight * 54);
-
-  // Group colors into major petal layers and minor interior accents
-  const primaryColors = colors.slice(0, 5);
-
-  const petals: Array<{
-    d: string;
-    fill: string;
-    fillOpacity: number;
-    stroke: string;
-    strokeWidth: number;
-    strokeOpacity: number;
-  }> = [];
-
-  // Outer and mid-tier organic petals
-  primaryColors.forEach((color, colorIdx) => {
-    const petalsPerColor = color.normalizedWeight > 0.28 ? 3 : 2;
-
-    for (let p = 0; p < petalsPerColor; p++) {
-      const angleOffset = baseRotation + (colorIdx / primaryColors.length) * Math.PI * 2 + (p * 0.42);
-      const reach = round(170 + color.salience * 150 + color.normalizedWeight * 80);
-      const span = 0.28 + color.normalizedWeight * 0.35;
-      const innerR = round(coreRadius * 0.7);
-
-      const start = polarPoint(innerR, angleOffset - span * 0.5);
-      const tip = polarPoint(reach, angleOffset);
-      const end = polarPoint(innerR, angleOffset + span * 0.5);
-
-      const ctrlRadius = reach * (0.55 + color.lightness * 0.2);
-      const ctrlLeft = polarPoint(ctrlRadius, angleOffset - span * 0.85);
-      const ctrlRight = polarPoint(ctrlRadius, angleOffset + span * 0.85);
-
-      const d = `M ${start.x} ${start.y} Q ${ctrlLeft.x} ${ctrlLeft.y} ${tip.x} ${tip.y} Q ${ctrlRight.x} ${ctrlRight.y} ${end.x} ${end.y} Z`;
-
-      petals.push({
-        d,
-        fill: color.displayHex,
-        fillOpacity: round(0.44 + color.salience * 0.45),
-        stroke: mixHexColors(color.displayHex, '#ffffff', 0.25),
-        strokeWidth: round(1.5 + color.normalizedWeight * 3),
-        strokeOpacity: 0.75,
-      });
-    }
-  });
-
-  return (
-    <g id="chromatic-bloom">
-      <GenerativeBackdrop
-        gradientId={`bloom-halo-${seed}`}
-        model={model}
-        haloColor={dominant.displayHex}
-        haloRadius={360}
-      />
-
-      {/* Subtle Circular Harmonic Halo Rings */}
-      <circle
-        cx={CENTER}
-        cy={CENTER}
-        r={round(260 + dominant.salience * 80)}
-        fill="none"
-        stroke={dominant.displayHex}
-        strokeOpacity={0.16}
-        strokeWidth="1"
-        strokeDasharray="6 8"
-      />
-
-      {/* Organic Petal Array */}
-      {petals.map((petal, index) => (
-        <path
-          key={`petal-${index}`}
-          d={petal.d}
-          fill={petal.fill}
-          fillOpacity={petal.fillOpacity}
-          stroke={petal.stroke}
-          strokeWidth={petal.strokeWidth}
-          strokeOpacity={petal.strokeOpacity}
-        />
+    <defs>
+      {colors.map((color, index) => (
+        <React.Fragment key={`${system}-material-${index}`}>
+          <linearGradient id={`${materialId(system, seed, index)}-linear`} x1={`${lightX}%`} y1={`${lightY}%`} x2="82%" y2="90%">
+            <stop offset="0%" stopColor={mixHexColors(color.displayHex, '#ffffff', 0.5)} />
+            <stop offset="34%" stopColor={mixHexColors(color.displayHex, '#ffffff', 0.12)} />
+            <stop offset="72%" stopColor={color.displayHex} />
+            <stop offset="100%" stopColor={mixHexColors(color.displayHex, '#02040a', 0.54)} />
+          </linearGradient>
+          <radialGradient id={`${materialId(system, seed, index)}-sphere`} cx={`${lightX}%`} cy={`${lightY}%`} r="72%">
+            <stop offset="0%" stopColor={mixHexColors(color.displayHex, '#ffffff', 0.78)} />
+            <stop offset="28%" stopColor={mixHexColors(color.displayHex, '#ffffff', 0.24)} />
+            <stop offset="68%" stopColor={color.displayHex} />
+            <stop offset="100%" stopColor={mixHexColors(color.displayHex, '#010208', 0.76)} />
+          </radialGradient>
+        </React.Fragment>
       ))}
-
-      {/* Radiant Veins */}
-      {primaryColors.map((color, index) => {
-        const angle = baseRotation + (index / primaryColors.length) * Math.PI * 2;
-        const outer = polarPoint(210 + color.salience * 100, angle);
-        return (
-          <line
-            key={`vein-${index}`}
-            x1={CENTER}
-            y1={CENTER}
-            x2={outer.x}
-            y2={outer.y}
-            stroke={color.displayHex}
-            strokeWidth={round(1.5 + color.normalizedWeight * 2.5)}
-            strokeOpacity={0.65}
-            strokeDasharray="4 6"
-          />
-        );
-      })}
-
-      {/* Concentric Dominant Core */}
-      <circle
-        cx={CENTER}
-        cy={CENTER}
-        r={coreRadius}
-        fill={dominant.displayHex}
-        stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.4)}
-        strokeWidth="3"
-      />
-      {colors.length > 1 ? (
-        <circle
-          cx={CENTER}
-          cy={CENTER}
-          r={round(coreRadius * 0.55)}
-          fill={colors[1].displayHex}
-          fillOpacity={0.9}
-        />
-      ) : null}
-      {colors.length > 2 ? (
-        <circle
-          cx={CENTER}
-          cy={CENTER}
-          r={round(coreRadius * 0.25)}
-          fill={colors[2].displayHex}
-        />
-      ) : null}
-    </g>
+      <radialGradient id={`${system}-${seed}-atmosphere`} cx="50%" cy="48%" r="50%">
+        <stop offset="0%" stopColor={model.dominant.displayHex} stopOpacity="0.2" />
+        <stop offset="58%" stopColor={model.dominant.displayHex} stopOpacity="0.055" />
+        <stop offset="100%" stopColor={model.dominant.displayHex} stopOpacity="0" />
+      </radialGradient>
+    </defs>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// 2. PALETTE DNA
-// ─────────────────────────────────────────────────────────────
-function PaletteDna({ model }: { model: PaletteArtModel }) {
-  const { colors, dominant, seed } = model;
-  const pairCount = Math.max(12, colors.length * 3);
-  const amplitude = round(130 + model.lightnessRange * 70);
-  const phase = seededUnit(seed, 3) * Math.PI;
+function Atmosphere({ system, model, radius = 390 }: { system: string; model: PaletteArtModel; radius?: number }) {
+  return <circle cx={CENTER} cy={CENTER} r={radius} fill={`url(#${system}-${model.seed}-atmosphere)`} aria-hidden="true" />;
+}
 
-  const leftColor = dominant.displayHex;
-  const rightColor = (colors[1] || dominant).displayHex;
+function succulentLeafPath(cx: number, cy: number, angle: number, inner: number, reach: number, width: number, bend: number): string {
+  const rootLeft = polarPoint(inner, angle - width * 0.18, cx, cy);
+  const rootRight = polarPoint(inner, angle + width * 0.18, cx, cy);
+  const tip = polarPoint(reach, angle + bend * 0.08, cx, cy);
+  const leftShoulder = polarPoint(reach * 0.58, angle - width + bend, cx, cy);
+  const rightShoulder = polarPoint(reach * 0.58, angle + width + bend, cx, cy);
+  const leftTip = polarPoint(reach * 0.91, angle - width * 0.2, cx, cy);
+  const rightTip = polarPoint(reach * 0.91, angle + width * 0.2, cx, cy);
+  return `M ${round(rootLeft.x)} ${round(rootLeft.y)} C ${round(leftShoulder.x)} ${round(leftShoulder.y)} ${round(leftTip.x)} ${round(leftTip.y)} ${round(tip.x)} ${round(tip.y)} C ${round(rightTip.x)} ${round(rightTip.y)} ${round(rightShoulder.x)} ${round(rightShoulder.y)} ${round(rootRight.x)} ${round(rootRight.y)} Q ${round(cx)} ${round(cy)} ${round(rootLeft.x)} ${round(rootLeft.y)} Z`;
+}
 
-  const rungs: Array<{
-    y: number;
-    leftX: number;
-    rightX: number;
-    color: string;
-    weight: number;
-    salience: number;
-  }> = [];
-
-  const leftPoints: Point[] = [];
-  const rightPoints: Point[] = [];
-
-  for (let i = 0; i < pairCount; i++) {
-    const progress = i / (pairCount - 1);
-    const wave = Math.sin(phase + progress * Math.PI * 3.6);
-    const y = round(110 + progress * 680);
-    const leftX = round(CENTER + wave * amplitude);
-    const rightX = round(CENTER - wave * amplitude);
-
-    leftPoints.push({ x: leftX, y });
-    rightPoints.push({ x: rightX, y });
-
-    const swatch = colors[i % colors.length];
-    rungs.push({
-      y,
-      leftX,
-      rightX,
-      color: swatch.displayHex,
-      weight: swatch.normalizedWeight,
-      salience: swatch.salience,
-    });
-  }
-
-  // Smooth cubic path generator
-  function makeRibbonPath(points: Point[]): string {
-    if (!points.length) return '';
-    let path = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[i];
-      const p1 = points[i + 1];
-      const midY = (p0.y + p1.y) / 2;
-      path += ` C ${p0.x} ${midY} ${p1.x} ${midY} ${p1.x} ${p1.y}`;
-    }
-    return path;
-  }
-
+function SucculentSculpture({ model }: { model: PaletteArtModel }) {
+  const { colors, dominant, seed, traits } = model;
+  const baseRotation = seededUnit(seed, 2) * Math.PI * 2;
+  const cx = CENTER + (traits.focalX - 0.5) * 54;
+  const cy = CENTER + (traits.focalY - 0.5) * 42;
+  const layers = [
+    { count: 9, inner: 78, reach: 352, width: 0.32, rotation: 0 },
+    { count: 7, inner: 52, reach: 262, width: 0.39, rotation: 0.38 },
+    { count: 6, inner: 24, reach: 168, width: 0.47, rotation: 0.72 },
+  ];
+  const totalLeaves = layers.reduce((sum, layer) => sum + layer.count, 0);
+  let slot = 0;
   return (
-    <g id="palette-dna">
-      <GenerativeBackdrop
-        gradientId={`dna-glow-${seed}`}
-        model={model}
-        haloColor={dominant.displayHex}
-        haloRadius={420}
-      />
-
-      {/* Vertical Calibration Rails */}
-      <line
-        x1={round(CENTER - amplitude * 0.9)}
-        y1="90"
-        x2={round(CENTER - amplitude * 0.9)}
-        y2="810"
-        stroke="rgba(255, 255, 255, 0.06)"
-        strokeWidth="1"
-        strokeDasharray="4 8"
-      />
-      <line
-        x1={round(CENTER + amplitude * 0.9)}
-        y1="90"
-        x2={round(CENTER + amplitude * 0.9)}
-        y2="810"
-        stroke="rgba(255, 255, 255, 0.06)"
-        strokeWidth="1"
-        strokeDasharray="4 8"
-      />
-
-      {/* Woven Harmonic Rungs */}
-      {rungs.map((rung, idx) => (
-        <g key={`rung-${idx}`}>
-          <line
-            x1={rung.leftX}
-            y1={rung.y}
-            x2={rung.rightX}
-            y2={rung.y}
-            stroke={rung.color}
-            strokeWidth={round(3 + rung.weight * 10)}
-            strokeOpacity={round(0.48 + rung.salience * 0.45)}
-            strokeLinecap="round"
-          />
-          <circle
-            cx={rung.leftX}
-            cy={rung.y}
-            r={round(5 + rung.weight * 8)}
-            fill={rung.color}
-          />
-          <circle
-            cx={rung.rightX}
-            cy={rung.y}
-            r={round(5 + rung.weight * 8)}
-            fill={rung.color}
-          />
+    <g id="succulent-bloom" data-art-system="succulent-bloom" data-render-mode="material-2.5d">
+      <MaterialDefinitions system="succulent" model={model} />
+      <Atmosphere system="succulent" model={model} />
+      <ellipse cx={round(cx + 18)} cy={round(cy + 282)} rx="286" ry="74" fill="#010207" fillOpacity="0.38" data-art-layer="ground-shadow" />
+      {layers.map((layer, layerIndex) => (
+        <g key={`succulent-tier-${layerIndex}`} data-depth-tier={layerIndex}>
+          {Array.from({ length: layer.count }, (_, index) => {
+            const color = weightedColor(colors, slot, totalLeaves);
+            const variation = seededUnit(seed, 30 + slot);
+            const angle = baseRotation + layer.rotation + (index / layer.count) * Math.PI * 2 + (variation - 0.5) * (1 - traits.symmetry) * 0.3;
+            const reach = layer.reach * (0.9 + color.salience * 0.14 + variation * 0.08);
+            const leafWidth = layer.width * (0.92 + color.chroma * 1.3 + color.normalizedWeight * 0.45);
+            const bend = (seededUnit(seed, 90 + slot) - 0.5) * 0.22;
+            const path = succulentLeafPath(cx, cy, angle, layer.inner, reach, leafWidth, bend);
+            const shadowPath = succulentLeafPath(cx + 8, cy + 12, angle, layer.inner, reach, leafWidth, bend);
+            const veinRoot = polarPoint(layer.inner + 12, angle, cx, cy);
+            const veinTip = polarPoint(reach * 0.8, angle + bend * 0.05, cx, cy);
+            const colorIndex = colors.indexOf(color);
+            slot += 1;
+            return (
+              <g key={`succulent-leaf-${layerIndex}-${index}`} data-art-layer="dimensional-leaf">
+                <path d={shadowPath} fill={mixHexColors(color.displayHex, '#010208', 0.82)} fillOpacity="0.58" />
+                <path d={path} fill={`url(#${materialId('succulent', seed, colorIndex)}-linear)`} stroke={mixHexColors(color.displayHex, '#ffffff', 0.38)} strokeOpacity="0.64" strokeWidth="2.2" strokeLinejoin="round" />
+                <path d={`M ${round(veinRoot.x)} ${round(veinRoot.y)} Q ${round((veinRoot.x + veinTip.x) / 2 + Math.sin(angle) * 13)} ${round((veinRoot.y + veinTip.y) / 2 - Math.cos(angle) * 13)} ${round(veinTip.x)} ${round(veinTip.y)}`} fill="none" stroke={mixHexColors(color.displayHex, '#ffffff', 0.72)} strokeOpacity="0.38" strokeWidth="3" strokeLinecap="round" />
+              </g>
+            );
+          })}
         </g>
       ))}
-
-      {/* Main Braided Strands */}
-      <path
-        d={makeRibbonPath(leftPoints)}
-        fill="none"
-        stroke={leftColor}
-        strokeWidth={round(9 + dominant.normalizedWeight * 14)}
-        strokeLinecap="round"
-      />
-      <path
-        d={makeRibbonPath(rightPoints)}
-        fill="none"
-        stroke={rightColor}
-        strokeWidth={round(9 + (colors[1]?.normalizedWeight || 0.2) * 14)}
-        strokeLinecap="round"
-      />
+      <circle cx={round(cx + 7)} cy={round(cy + 10)} r={round(34 + dominant.normalizedWeight * 20)} fill={mixHexColors(dominant.displayHex, '#010208', 0.68)} />
+      <circle cx={round(cx)} cy={round(cy)} r={round(31 + dominant.normalizedWeight * 18)} fill={`url(#${materialId('succulent', seed, 0)}-sphere)`} />
     </g>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// 3. CHORD MAP
-// ─────────────────────────────────────────────────────────────
-function ChordMap({ model }: { model: PaletteArtModel }) {
-  const { colors, dominant, seed } = model;
-  const baseAngle = seededUnit(seed, 4) * Math.PI * 2;
+interface GenomeFacet { depth: number; ribbon: number; index: number; path: string; shadowPath: string; color: PaletteArtColor }
 
-  // Position nodes along perceptual coordinates: angle = hue, radius = lightness
-  const nodes = colors.map((color, idx) => {
-    const angleRad = baseAngle + (color.hue * Math.PI) / 180;
-    const radius = round(130 + color.lightness * 220);
-    const pt = polarPoint(radius, angleRad);
-    const nodeR = round(14 + Math.sqrt(color.normalizedWeight) * 44);
-
-    return {
-      ...pt,
-      color,
-      radius,
-      angleRad,
-      nodeR,
-      index: idx,
-    };
-  });
-
-  // Meaningful connections: between dominant and accents, and between close hues
-  const chords: Array<{
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-    color: string;
-    width: number;
-    opacity: number;
-  }> = [];
-
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
-      const n1 = nodes[i];
-      const n2 = nodes[j];
-      const hueDiff = Math.min(
-        Math.abs(n1.color.hue - n2.color.hue),
-        360 - Math.abs(n1.color.hue - n2.color.hue),
-      );
-      const isDominantPair = i === 0 || j === 0;
-
-      if (isDominantPair || hueDiff < 60 || hueDiff > 140) {
-        chords.push({
-          x1: n1.x,
-          y1: n1.y,
-          x2: n2.x,
-          y2: n2.y,
-          color: n1.color.displayHex,
-          width: round(2 + (n1.color.normalizedWeight + n2.color.normalizedWeight) * 5),
-          opacity: round(0.32 + (n1.color.salience + n2.color.salience) * 0.28),
-        });
-      }
+function GenomeSculpture({ model }: { model: PaletteArtModel }) {
+  const { colors, dominant, seed, traits } = model;
+  const segments = 18 + Math.round(traits.segmentation * 6);
+  const amplitude = 142 + traits.depthRange * 66;
+  const turns = 2.1 + traits.complexity * 1.15;
+  const top = 92;
+  const height = 690;
+  const lean = (traits.focalX - 0.5) * 96;
+  const facets: GenomeFacet[] = [];
+  for (let ribbon = 0; ribbon < 2; ribbon += 1) {
+    for (let index = 0; index < segments; index += 1) {
+      const t0 = index / segments;
+      const t1 = (index + 1) / segments;
+      const phase0 = t0 * Math.PI * 2 * turns + ribbon * Math.PI;
+      const phase1 = t1 * Math.PI * 2 * turns + ribbon * Math.PI;
+      const x0 = CENTER + Math.sin(phase0) * amplitude * (0.78 + t0 * 0.18) + lean * (t0 - 0.5);
+      const x1 = CENTER + Math.sin(phase1) * amplitude * (0.78 + t1 * 0.18) + lean * (t1 - 0.5);
+      const y0 = top + t0 * height;
+      const y1 = top + t1 * height;
+      const width0 = 42 + Math.max(0, Math.cos(phase0)) * 34 + traits.materialRichness * 18;
+      const width1 = 42 + Math.max(0, Math.cos(phase1)) * 34 + traits.materialRichness * 18;
+      const color = weightedColor(colors, index + ribbon * segments, segments * 2);
+      const path = pointsPath([{ x: x0 - width0 / 2, y: y0 }, { x: x0 + width0 / 2, y: y0 }, { x: x1 + width1 / 2, y: y1 + 2 }, { x: x1 - width1 / 2, y: y1 + 2 }]);
+      const shadowPath = pointsPath([{ x: x0 - width0 / 2 + 9, y: y0 + 12 }, { x: x0 + width0 / 2 + 9, y: y0 + 12 }, { x: x1 + width1 / 2 + 9, y: y1 + 14 }, { x: x1 - width1 / 2 + 9, y: y1 + 14 }]);
+      facets.push({ depth: (Math.cos(phase0) + Math.cos(phase1)) / 2, ribbon, index, path, shadowPath, color });
     }
   }
-
+  facets.sort((a, b) => a.depth - b.depth);
+  const coreWidth = 86 + traits.coverageConcentration * 54;
   return (
-    <g id="chord-map">
-      <GenerativeBackdrop
-        gradientId={`chord-glow-${seed}`}
-        model={model}
-        haloColor={dominant.displayHex}
-        haloRadius={390}
-      />
-
-      {/* Harmonic Polar Grids */}
-      {[140, 220, 310].map((ringR, idx) => (
-        <circle
-          key={`ring-${idx}`}
-          cx={CENTER}
-          cy={CENTER}
-          r={ringR}
-          fill="none"
-          stroke={dominant.displayHex}
-          strokeOpacity={0.18}
-          strokeWidth={idx === 1 ? '1.5' : '1'}
-          strokeDasharray={idx === 0 ? '4 6' : undefined}
-        />
-      ))}
-
-      {/* Relational Chords */}
-      {chords.map((chord, idx) => {
-        // Curve chord slightly towards center
-        const midX = (chord.x1 + chord.x2) / 2;
-        const midY = (chord.y1 + chord.y2) / 2;
-        const ctrlX = round(midX * 0.7 + CENTER * 0.3);
-        const ctrlY = round(midY * 0.7 + CENTER * 0.3);
-        const path = `M ${chord.x1} ${chord.y1} Q ${ctrlX} ${ctrlY} ${chord.x2} ${chord.y2}`;
-
+    <g id="cover-genome" data-art-system="cover-genome" data-render-mode="material-2.5d">
+      <MaterialDefinitions system="genome" model={model} />
+      <Atmosphere system="genome" model={model} radius={380} />
+      <ellipse cx={round(CENTER + lean * 0.46)} cy="812" rx={round(164 + traits.depthRange * 42)} ry="50" fill="#010207" fillOpacity="0.46" data-art-layer="ground-shadow" />
+      <path d={pointsPath([{ x: CENTER - coreWidth / 2, y: 112 }, { x: CENTER + coreWidth / 2, y: 112 }, { x: CENTER + coreWidth * 0.72 + lean / 2, y: 770 }, { x: CENTER - coreWidth * 0.72 + lean / 2, y: 770 }])} fill={`url(#${materialId('genome', seed, 0)}-linear)`} fillOpacity="0.28" stroke={colorWithAlpha(dominant.displayHex, 0.56)} strokeWidth="3" data-art-layer="translucent-core" />
+      {facets.map((facet) => {
+        const colorIndex = colors.indexOf(facet.color);
         return (
-          <path
-            key={`chord-${idx}`}
-            d={path}
-            fill="none"
-            stroke={chord.color}
-            strokeWidth={chord.width}
-            strokeOpacity={chord.opacity}
-          />
+          <g key={`genome-facet-${facet.ribbon}-${facet.index}`} data-art-layer={facet.depth >= 0 ? 'front-ribbon-facet' : 'rear-ribbon-facet'}>
+            <path d={facet.shadowPath} fill={mixHexColors(facet.color.displayHex, '#010208', 0.82)} fillOpacity={facet.depth >= 0 ? 0.48 : 0.26} />
+            <path d={facet.path} fill={`url(#${materialId('genome', seed, colorIndex)}-linear)`} fillOpacity={facet.depth >= 0 ? 0.98 : 0.58} stroke={mixHexColors(facet.color.displayHex, '#ffffff', 0.42)} strokeOpacity={facet.depth >= 0 ? 0.66 : 0.28} strokeWidth="1.8" />
+          </g>
         );
       })}
-
-      {/* Central Harmonic Anchor */}
-      <circle
-        cx={CENTER}
-        cy={CENTER}
-        r={round(22 + dominant.normalizedWeight * 20)}
-        fill={dominant.displayHex}
-        stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.35)}
-        strokeWidth="2"
-      />
-
-      {/* Harmonic Nodes */}
-      {nodes.map((node) => (
-        <g key={`node-${node.index}`}>
-          {/* Luminous Salience Halo */}
-          <circle
-            cx={node.x}
-            cy={node.y}
-            r={round(node.nodeR + node.color.salience * 14)}
-            fill={node.color.displayHex}
-            fillOpacity={0.24}
-          />
-          {/* Main Node Body */}
-          <circle
-            cx={node.x}
-            cy={node.y}
-            r={node.nodeR}
-            fill={node.color.displayHex}
-            stroke={mixHexColors(node.color.displayHex, '#ffffff', 0.3)}
-            strokeWidth={round(2 + node.color.normalizedWeight * 3)}
-          />
-        </g>
-      ))}
-    </g>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// 4. SPECTRUM CODE
-// ─────────────────────────────────────────────────────────────
-function SpectrumCode({ model }: { model: PaletteArtModel }) {
-  const { colors, dominant, seed } = model;
-  const count = colors.length;
-  const spacing = 580 / Math.max(1, count);
-
-  return (
-    <g id="spectrum-code">
-      <GenerativeBackdrop
-        gradientId={`spectrum-glow-${seed}`}
-        model={model}
-        haloColor={dominant.displayHex}
-        haloRadius={440}
-      />
-
-      {colors.map((color, index) => {
-        const baseY = round(160 + index * spacing + color.lightness * 28);
-        const amplitude = round(20 + color.normalizedWeight * 65 + color.salience * 25);
-        const frequency = 1.2 + (color.hue / 360) * 3.2;
-        const phase = seededUnit(seed, index + 10) * Math.PI * 2;
-        const strokeW = round(7 + color.normalizedWeight * 28);
-
-        // Build continuous wave ribbon points
-        const pointsTop: Point[] = [];
-        const pointsBottom: Point[] = [];
-        const steps = 48;
-
-        for (let s = 0; s <= steps; s++) {
-          const progress = s / steps;
-          const x = round(70 + progress * 760);
-          const envelope = Math.sin(progress * Math.PI);
-          const y = baseY + Math.sin(phase + progress * Math.PI * 2 * frequency) * amplitude * envelope;
-          pointsTop.push({ x, y: round(y - strokeW * 0.4) });
-          pointsBottom.push({ x, y: round(y + strokeW * 0.4) });
-        }
-
-        const ribbonPath = `M ${pointsTop[0].x} ${pointsTop[0].y} `
-          + pointsTop.map((p) => `L ${p.x} ${p.y}`).join(' ')
-          + pointsBottom.reverse().map((p) => `L ${p.x} ${p.y}`).join(' ')
-          + ' Z';
-
+      {Array.from({ length: 7 }, (_, index) => {
+        const progress = (index + 0.5) / 7;
+        const phase = progress * Math.PI * 2 * turns;
+        const x = CENTER + Math.sin(phase) * amplitude * (0.78 + progress * 0.18) + lean * (progress - 0.5);
+        const y = top + progress * height;
+        const color = colors[index % colors.length];
+        const colorIndex = colors.indexOf(color);
+        const radius = 12 + color.salience * 15;
         return (
-          <g key={`spectrum-band-${index}`}>
-            {/* Guide Grid line */}
-            <line
-              x1="70"
-              y1={baseY}
-              x2="830"
-              y2={baseY}
-              stroke={color.displayHex}
-              strokeOpacity={0.2}
-              strokeWidth="1"
-            />
-
-            {/* Filled Signal Ribbon */}
-            <path
-              d={ribbonPath}
-              fill={color.displayHex}
-              fillOpacity={round(0.76 + color.salience * 0.22)}
-            />
-
-            {/* Terminal Signal Nodes */}
-            <circle
-              cx="70"
-              cy={baseY}
-              r={round(5 + color.normalizedWeight * 6)}
-              fill={color.displayHex}
-            />
-            <circle
-              cx="830"
-              cy={baseY}
-              r={round(5 + color.normalizedWeight * 6)}
-              fill={color.displayHex}
-            />
+          <g key={`genome-mutation-${index}`} data-art-layer="raised-mutation">
+            <ellipse cx={round(x + 8)} cy={round(y + 11)} rx={round(radius * 1.18)} ry={round(radius * 0.62)} fill="#010207" fillOpacity="0.48" />
+            <circle cx={round(x)} cy={round(y)} r={round(radius)} fill={`url(#${materialId('genome', seed, colorIndex)}-sphere)`} stroke={mixHexColors(color.displayHex, '#ffffff', 0.58)} strokeWidth="2" />
           </g>
         );
       })}
@@ -612,137 +224,149 @@ function SpectrumCode({ model }: { model: PaletteArtModel }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// 5. ORBITAL WEAVE
-// ─────────────────────────────────────────────────────────────
-function OrbitalWeave({ model }: { model: PaletteArtModel }) {
-  const { colors, dominant, seed } = model;
-  const basePhase = seededUnit(seed, 7) * Math.PI * 2;
+function planePoint(u: number, v: number, traits: PaletteArtModel['traits'], z = 0): Point {
+  const left = 126 + v * 74;
+  const right = 774 - v * 44;
+  const fold = Math.sin(u * Math.PI * 2) * traits.complexity * 22 * Math.sin(v * Math.PI);
+  return { x: left + (right - left) * u, y: 178 + 536 * v + fold - z };
+}
 
-  const orbits = colors.map((color, index) => {
-    const rx = round(140 + index * 52 + color.lightness * 45);
-    const ry = round(85 + index * 42 + color.chroma * 90);
-    const angle = basePhase + (color.hue * Math.PI) / 180 + index * 0.65;
-    const bodyR = round(16 + Math.sqrt(color.normalizedWeight) * 36);
-    const pos = polarPoint(rx, angle, CENTER, CENTER);
+function bandQuad(u0: number, u1: number, v0: number, v1: number, traits: PaletteArtModel['traits'], z = 0): Point[] {
+  return [planePoint(u0, v0, traits, z), planePoint(u1, v0, traits, z), planePoint(u1, v1, traits, z), planePoint(u0, v1, traits, z)];
+}
 
-    return {
-      color,
-      rx,
-      ry,
-      angle,
-      bodyR,
-      pos,
-      index,
-    };
-  });
-
+function TextileLoom({ model }: { model: PaletteArtModel }) {
+  const { colors, dominant, seed, traits } = model;
+  const horizontalCount = 5 + Math.round(traits.segmentation * 3);
+  const verticalCount = 4 + Math.round(traits.complexity * 3);
+  const hStep = 1 / (horizontalCount + 1);
+  const vStep = 1 / (verticalCount + 1);
+  const plane = bandQuad(0, 1, 0, 1, traits);
   return (
-    <g id="orbital-weave">
-      <GenerativeBackdrop
-        gradientId={`orbital-corona-${seed}`}
-        model={model}
-        haloColor={dominant.displayHex}
-        haloRadius={410}
-      />
-
-      {/* Central Sun Mass */}
-      <circle
-        cx={CENTER}
-        cy={CENTER}
-        r={round(44 + dominant.normalizedWeight * 42)}
-        fill={dominant.displayHex}
-        stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.35)}
-        strokeWidth="3"
-      />
-
-      {/* Luminous Core Corona */}
-      <circle
-        cx={CENTER}
-        cy={CENTER}
-        r={round(80 + dominant.salience * 50)}
-        fill={dominant.displayHex}
-        fillOpacity={0.16}
-      />
-
-      {/* Elliptical Orbital Paths */}
-      {orbits.map((orbit) => (
-        <ellipse
-          key={`orbit-ellipse-${orbit.index}`}
-          cx={CENTER}
-          cy={CENTER}
-          rx={orbit.rx}
-          ry={orbit.ry}
-          fill="none"
-          stroke={orbit.color.displayHex}
-          strokeWidth={round(1.5 + orbit.color.normalizedWeight * 4)}
-          strokeOpacity={round(0.28 + orbit.color.salience * 0.35)}
-          strokeDasharray={orbit.index % 2 === 1 ? '6 8' : undefined}
-        />
-      ))}
-
-      {/* Orbital Bodies and Particle Trails */}
-      {orbits.map((orbit) => {
-        const trail1 = polarPoint(orbit.rx, orbit.angle - 0.22, CENTER, CENTER);
-        const trail2 = polarPoint(orbit.rx, orbit.angle - 0.44, CENTER, CENTER);
-
-        return (
-          <g key={`body-${orbit.index}`}>
-            {/* Trail particles */}
-            <circle
-              cx={trail2.x}
-              cy={trail2.y}
-              r={round(orbit.bodyR * 0.35)}
-              fill={orbit.color.displayHex}
-              fillOpacity={0.25}
-            />
-            <circle
-              cx={trail1.x}
-              cy={trail1.y}
-              r={round(orbit.bodyR * 0.55)}
-              fill={orbit.color.displayHex}
-              fillOpacity={0.45}
-            />
-            {/* Planetary Body */}
-            <circle
-              cx={orbit.pos.x}
-              cy={orbit.pos.y}
-              r={orbit.bodyR}
-              fill={orbit.color.displayHex}
-              stroke={mixHexColors(orbit.color.displayHex, '#ffffff', 0.3)}
-              strokeWidth="2"
-            />
-          </g>
-        );
+    <g id="chord-loom" data-art-system="chord-loom" data-render-mode="material-2.5d">
+      <MaterialDefinitions system="loom" model={model} />
+      <Atmosphere system="loom" model={model} radius={400} />
+      <path d={pointsPath(plane.map((point) => ({ x: point.x + 14, y: point.y + 28 })))} fill="#010207" fillOpacity="0.48" data-art-layer="ground-shadow" />
+      <path d={pointsPath([plane[3], plane[2], { x: plane[2].x + 2, y: plane[2].y + 26 }, { x: plane[3].x + 2, y: plane[3].y + 26 }])} fill={mixHexColors(dominant.displayHex, '#010208', 0.8)} fillOpacity="0.88" data-art-layer="textile-edge" />
+      <path d={pointsPath(plane)} fill={mixHexColors(dominant.displayHex, '#05070d', 0.72)} fillOpacity="0.82" stroke={colorWithAlpha(dominant.displayHex, 0.42)} strokeWidth="2" data-art-layer="textile-plane" />
+      {Array.from({ length: verticalCount }, (_, index) => {
+        const color = weightedColor(colors, index, verticalCount);
+        const width = clamp(vStep * (0.42 + Math.sqrt(color.normalizedWeight) * 0.7), 0.055, 0.15);
+        const u = (index + 1) * vStep;
+        const quad = bandQuad(u - width / 2, u + width / 2, 0.025, 0.975, traits, 7);
+        const colorIndex = colors.indexOf(color);
+        return <g key={`loom-warp-${index}`} data-art-layer="rear-warp-band"><path d={pointsPath(quad.map((point) => ({ x: point.x + 7, y: point.y + 11 })))} fill="#010207" fillOpacity="0.4" /><path d={pointsPath(quad)} fill={`url(#${materialId('loom', seed, colorIndex)}-linear)`} fillOpacity="0.78" /></g>;
       })}
+      {Array.from({ length: horizontalCount }, (_, row) => {
+        const color = weightedColor(colors, row, horizontalCount);
+        const thickness = clamp(hStep * (0.46 + Math.sqrt(color.normalizedWeight) * 0.72), 0.045, 0.14);
+        const v = (row + 1) * hStep;
+        const quad = bandQuad(0.025, 0.975, v - thickness / 2, v + thickness / 2, traits, row % 2 === 0 ? 15 : 10);
+        const colorIndex = colors.indexOf(color);
+        return <g key={`loom-weft-${row}`} data-art-layer="foreground-weft-band"><path d={pointsPath(quad.map((point) => ({ x: point.x + 8, y: point.y + 13 })))} fill="#010207" fillOpacity="0.5" /><path d={pointsPath(quad)} fill={`url(#${materialId('loom', seed, colorIndex)}-linear)`} stroke={mixHexColors(color.displayHex, '#ffffff', 0.34)} strokeOpacity="0.35" strokeWidth="1.5" /></g>;
+      })}
+      {Array.from({ length: horizontalCount }, (_, row) => Array.from({ length: verticalCount }, (__, column) => {
+        if ((row + column) % 2 === 0) return null;
+        const color = weightedColor(colors, column, verticalCount);
+        const u = (column + 1) * vStep;
+        const v = (row + 1) * hStep;
+        const width = clamp(vStep * (0.42 + Math.sqrt(color.normalizedWeight) * 0.7), 0.055, 0.15);
+        const patch = bandQuad(u - width / 2, u + width / 2, v - hStep * 0.42, v + hStep * 0.42, traits, 23);
+        const colorIndex = colors.indexOf(color);
+        return <g key={`loom-crossing-${row}-${column}`} data-art-layer="over-under-crossing"><path d={pointsPath(patch.map((point) => ({ x: point.x + 6, y: point.y + 10 })))} fill="#010207" fillOpacity="0.54" /><path d={pointsPath(patch)} fill={`url(#${materialId('loom', seed, colorIndex)}-linear)`} /></g>;
+      }))}
     </g>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// MAIN CANVAS EXPORT
-// ─────────────────────────────────────────────────────────────
-export function PaletteArtCanvas({
-  colors,
-  artStyle,
-  seed,
-  size = CANVAS_SIZE,
-  visualFeatures,
-}: PaletteArtCanvasProps) {
+function terrainPoints(model: PaletteArtModel, progress: number, count: number): Point[] {
+  const { traits, seed } = model;
+  const centerX = CENTER + (traits.focalX - 0.5) * 116;
+  const centerY = CENTER + (traits.focalY - 0.5) * 74 - progress * 72;
+  const baseRx = 352 - progress * 238;
+  const baseRy = 244 - progress * 148;
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2;
+    const phase = seededUnit(seed, 500 + Math.round(progress * 203)) * Math.PI * 2;
+    const wave = Math.sin(angle * (3 + Math.round(traits.complexity * 3)) + phase) * (0.055 + traits.complexity * 0.075);
+    const radius = 1 + wave + Math.sin(angle * 2 - phase * 0.4) * 0.045;
+    return { x: centerX + Math.cos(angle) * baseRx * radius, y: centerY + Math.sin(angle) * baseRy * radius };
+  });
+}
+
+function TopographicRelief({ model }: { model: PaletteArtModel }) {
+  const { colors, dominant, seed, traits } = model;
+  const levels = 5 + Math.round(traits.segmentation * 4);
+  const pointCount = 12 + Math.round(traits.complexity * 6);
+  const extrusion = 16 + traits.depthRange * 28;
+  return (
+    <g id="cover-pulse" data-art-system="cover-pulse" data-render-mode="material-2.5d">
+      <MaterialDefinitions system="terrain" model={model} />
+      <Atmosphere system="terrain" model={model} radius={410} />
+      <ellipse cx={round(CENTER + 26)} cy="698" rx="338" ry="88" fill="#010207" fillOpacity="0.5" data-art-layer="ground-shadow" />
+      {Array.from({ length: levels }, (_, level) => {
+        const progress = level / Math.max(1, levels - 1);
+        const color = weightedColor(colors, levels - level - 1, levels);
+        const points = terrainPoints(model, progress, pointCount);
+        const sideDepth = extrusion * (0.74 + progress * 0.34);
+        const side = points.map((point) => ({ x: point.x + sideDepth * 0.34, y: point.y + sideDepth }));
+        const colorIndex = colors.indexOf(color);
+        return <g key={`terrain-level-${level}`} data-art-layer="extruded-terrain-plate" data-depth-level={level}><path d={smoothClosedPath(side)} fill={mixHexColors(color.displayHex, '#010208', 0.68)} fillOpacity="0.98" /><path d={smoothClosedPath(points)} fill={`url(#${materialId('terrain', seed, colorIndex)}-linear)`} stroke={mixHexColors(color.displayHex, '#ffffff', 0.36)} strokeOpacity="0.5" strokeWidth="2" /></g>;
+      })}
+      <ellipse cx={round(CENTER + (traits.focalX - 0.5) * 96 + 16)} cy={round(CENTER + (traits.focalY - 0.5) * 58 - 64)} rx={round(42 + traits.negativeSpace * 45)} ry={round(24 + traits.negativeSpace * 28)} fill={mixHexColors(dominant.displayHex, '#010208', 0.82)} fillOpacity="0.9" stroke={mixHexColors(dominant.displayHex, '#ffffff', 0.42)} strokeOpacity="0.42" strokeWidth="3" data-art-layer="relief-basin" />
+    </g>
+  );
+}
+
+function orbitBackPath(cx: number, cy: number, rx: number, ry: number): string { return `M ${round(cx - rx)} ${round(cy)} A ${round(rx)} ${round(ry)} 0 0 1 ${round(cx + rx)} ${round(cy)}`; }
+function orbitFrontPath(cx: number, cy: number, rx: number, ry: number): string { return `M ${round(cx + rx)} ${round(cy)} A ${round(rx)} ${round(ry)} 0 0 1 ${round(cx - rx)} ${round(cy)}`; }
+
+interface Planet { color: PaletteArtColor; colorIndex: number; cx: number; cy: number; radius: number; rx: number; ry: number; front: boolean }
+
+function SolarAtlas({ model }: { model: PaletteArtModel }) {
+  const { colors, seed, traits } = model;
+  const sun = colors.reduce((best, color) => color.normalizedWeight * 0.72 + color.chroma * 1.5 > best.normalizedWeight * 0.72 + best.chroma * 1.5 ? color : best, colors[0]);
+  const planets = colors.filter((color) => color !== sun);
+  const sunX = CENTER + (traits.focalX - 0.5) * 116;
+  const sunY = CENTER + (traits.focalY - 0.5) * 82;
+  const tilt = clamp(0.28 + traits.cameraTilt * 0.3, 0.3, 0.6);
+  const bodies: Planet[] = planets.map((color, index) => {
+    const orbit = 176 + index * (64 - traits.negativeSpace * 12) + color.lightness * 54;
+    const rx = orbit;
+    const ry = orbit * tilt * clamp(0.86 + color.chroma * 1.2, 0.88, 1.15);
+    const angle = (color.hue * Math.PI) / 180 + seededUnit(seed, 700 + index) * 1.2 + index * 0.56;
+    return { color, colorIndex: colors.indexOf(color), cx: sunX + Math.cos(angle) * rx, cy: sunY + Math.sin(angle) * ry, radius: 22 + Math.sqrt(color.normalizedWeight) * 74, rx, ry, front: Math.sin(angle) >= 0 };
+  });
+  const sunIndex = colors.indexOf(sun);
+  const sunRadius = 92 + Math.sqrt(sun.normalizedWeight) * 82;
+  const starCount = 12 + Math.round(traits.complexity * 24);
+  return (
+    <g id="record-atlas" data-art-system="record-atlas" data-render-mode="material-2.5d">
+      <MaterialDefinitions system="solar" model={model} />
+      <Atmosphere system="solar" model={model} radius={430} />
+      <defs><radialGradient id={`solar-corona-${seed}`} cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor={sun.displayHex} stopOpacity="0.52" /><stop offset="52%" stopColor={sun.displayHex} stopOpacity="0.18" /><stop offset="100%" stopColor={sun.displayHex} stopOpacity="0" /></radialGradient></defs>
+      {Array.from({ length: starCount }, (_, index) => <circle key={`atlas-dust-${index}`} cx={round(72 + seededUnit(seed, 760 + index * 2) * 756)} cy={round(82 + seededUnit(seed, 761 + index * 2) * 724)} r={round(1.2 + seededUnit(seed, 840 + index) * 3)} fill={colors[index % colors.length].displayHex} fillOpacity={round(0.16 + seededUnit(seed, 900 + index) * 0.34)} data-art-layer="stellar-dust" />)}
+      {bodies.map((body, index) => <path key={`orbit-back-${index}`} d={orbitBackPath(sunX, sunY, body.rx, body.ry)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.22)} strokeOpacity="0.34" strokeWidth={round(2.5 + body.color.normalizedWeight * 6)} data-art-layer="rear-orbit" />)}
+      {bodies.filter((body) => !body.front).map((body, index) => <g key={`rear-planet-${index}`} data-art-layer="rear-planet"><ellipse cx={round(body.cx + body.radius * 0.28)} cy={round(body.cy + body.radius * 0.7)} rx={round(body.radius * 0.86)} ry={round(body.radius * 0.28)} fill="#010207" fillOpacity="0.42" /><circle cx={round(body.cx)} cy={round(body.cy)} r={round(body.radius)} fill={`url(#${materialId('solar', seed, body.colorIndex)}-sphere)`} /></g>)}
+      <circle cx={round(sunX)} cy={round(sunY)} r={round(sunRadius * 1.75)} fill={`url(#solar-corona-${seed})`} data-art-layer="solar-corona" />
+      <ellipse cx={round(sunX + 18)} cy={round(sunY + sunRadius * 0.72)} rx={round(sunRadius * 0.82)} ry={round(sunRadius * 0.28)} fill="#010207" fillOpacity="0.42" />
+      <circle cx={round(sunX)} cy={round(sunY)} r={round(sunRadius)} fill={`url(#${materialId('solar', seed, sunIndex)}-sphere)`} stroke={mixHexColors(sun.displayHex, '#ffffff', 0.34)} strokeOpacity="0.52" strokeWidth="3" data-art-layer="volumetric-sun" />
+      {bodies.map((body, index) => <path key={`orbit-front-${index}`} d={orbitFrontPath(sunX, sunY, body.rx, body.ry)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.34)} strokeOpacity="0.62" strokeWidth={round(3 + body.color.normalizedWeight * 7)} data-art-layer="front-orbit" />)}
+      {bodies.filter((body) => body.front).map((body, index) => <g key={`front-planet-${index}`} data-art-layer="front-planet"><ellipse cx={round(body.cx + body.radius * 0.3)} cy={round(body.cy + body.radius * 0.78)} rx={round(body.radius * 0.92)} ry={round(body.radius * 0.3)} fill="#010207" fillOpacity="0.48" /><circle cx={round(body.cx)} cy={round(body.cy)} r={round(body.radius)} fill={`url(#${materialId('solar', seed, body.colorIndex)}-sphere)`} stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.48)} strokeOpacity="0.58" strokeWidth="2" />{body.color.salience > 0.68 && <ellipse cx={round(body.cx)} cy={round(body.cy)} rx={round(body.radius * 1.55)} ry={round(body.radius * 0.42)} fill="none" stroke={mixHexColors(body.color.displayHex, '#ffffff', 0.62)} strokeOpacity="0.72" strokeWidth={round(4 + body.radius * 0.05)} transform={`rotate(-12 ${round(body.cx)} ${round(body.cy)})`} data-art-layer="planet-ring" />}</g>)}
+    </g>
+  );
+}
+
+export function PaletteArtCanvas({ colors, artStyle, seed, size = CANVAS_SIZE, visualFeatures }: PaletteArtCanvasProps) {
   const model = buildPaletteArtModel(colors, seed, artStyle, visualFeatures);
-
+  const label = getPaletteArtStyleLabel(artStyle);
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}`}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {artStyle === 'chromatic-bloom' && <ChromaticBloom model={model} />}
-      {artStyle === 'palette-dna' && <PaletteDna model={model} />}
-      {artStyle === 'chord-map' && <ChordMap model={model} />}
-      {artStyle === 'spectrum-code' && <SpectrumCode model={model} />}
-      {artStyle === 'orbital-weave' && <OrbitalWeave model={model} />}
+    <svg width={size} height={size} viewBox={`0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}`} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={`${label}, generated from ${model.colors.length} album colors`}>
+      {artStyle === 'chromatic-bloom' && <SucculentSculpture model={model} />}
+      {artStyle === 'palette-dna' && <GenomeSculpture model={model} />}
+      {artStyle === 'chord-map' && <TextileLoom model={model} />}
+      {artStyle === 'spectrum-code' && <TopographicRelief model={model} />}
+      {artStyle === 'orbital-weave' && <SolarAtlas model={model} />}
     </svg>
   );
 }

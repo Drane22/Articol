@@ -16,21 +16,13 @@ interface ShareImageArtworkProps {
 }
 
 function truncate(value: string, limit: number): string {
-  return value.length > limit ? `${value.slice(0, limit - 3)}...` : value;
+  return value.length > limit ? `${value.slice(0, limit - 3).trimEnd()}...` : value;
 }
 
-function PaletteLegend({ colors, size = 30 }: { colors: string[]; size?: number }) {
-  const displayColors = colors.slice(0, MAX_DISPLAY_ART_COLORS);
+function PaletteLegend({ colors, size, gap }: { colors: string[]; size: number; gap: number }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexShrink: 0,
-        gap: 10,
-        alignItems: 'center',
-      }}
-    >
-      {displayColors.map((color, index) => (
+    <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap }}>
+      {colors.slice(0, MAX_DISPLAY_ART_COLORS).map((color, index) => (
         <div
           key={`legend-${color}-${index}`}
           style={{
@@ -40,8 +32,8 @@ function PaletteLegend({ colors, size = 30 }: { colors: string[]; size?: number 
             height: size,
             borderRadius: 999,
             backgroundColor: color,
-            border: '1.5px solid rgba(255, 255, 255, 0.45)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+            border: '2.5px solid rgba(255,255,255,0.56)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.46)',
           }}
         />
       ))}
@@ -49,16 +41,11 @@ function PaletteLegend({ colors, size = 30 }: { colors: string[]; size?: number 
   );
 }
 
-function ArtworkMedia({
-  album,
-  colors,
-  size,
-  radius = 24,
-}: {
+function CoverArtwork({ album, colors, size, radius }: {
   album: ShareAlbumData;
   colors: string[];
   size: number;
-  radius?: number;
+  radius: number;
 }) {
   return album.artworkUrl ? (
     <img
@@ -72,6 +59,8 @@ function ArtworkMedia({
         height: size,
         objectFit: 'cover',
         borderRadius: radius,
+        border: '1px solid rgba(255,255,255,0.18)',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.62)',
       }}
     />
   ) : (
@@ -83,11 +72,12 @@ function ArtworkMedia({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: radius,
-        backgroundImage: `linear-gradient(145deg, ${colors[1] || '#2a2b30'}, #121316 70%)`,
+        border: '1px solid rgba(255,255,255,0.16)',
+        backgroundImage: `linear-gradient(145deg, ${colors[1] || '#2a2b30'}, #111216 72%)`,
         color: '#d0c8bf',
-        fontSize: 32,
-        fontWeight: 600,
-        letterSpacing: 4,
+        fontSize: 30,
+        fontWeight: 650,
+        letterSpacing: 3.2,
         textTransform: 'uppercase',
       }}
     >
@@ -96,230 +86,36 @@ function ArtworkMedia({
   );
 }
 
-export function ShareImageArtwork({
+function PortraitPoster({
   album,
-  format,
-  variant = 'cover',
+  colors,
+  variant,
   paletteStyle,
   paletteArtworkUrl,
-}: ShareImageArtworkProps) {
-  const colors = normalizePaletteArtColors(album.palette);
+}: {
+  album: ShareAlbumData;
+  colors: string[];
+  variant: 'cover' | 'palette';
+  paletteStyle?: PaletteArtStyle;
+  paletteArtworkUrl?: string;
+}) {
   const primaryColor = colors[0] || '#1c1e24';
   const secondaryColor = colors[1] || '#0d0e12';
+  const isPaletteArtwork = variant === 'palette' && Boolean(paletteStyle);
+  const edition = isPaletteArtwork
+    ? `${getPaletteArtStyleLabel(paletteStyle!)} / palette edition`
+    : 'Original cover / archive edition';
 
-  if (format === 'portrait') {
-    const isPaletteArtwork = variant === 'palette' && Boolean(paletteStyle);
-    const styleLabel = isPaletteArtwork
-      ? getPaletteArtStyleLabel(paletteStyle!)
-      : 'Original Cover';
-    const editionSubtitle = isPaletteArtwork
-      ? `${styleLabel} / palette edition`
-      : 'Original cover / portrait edition';
-
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          width: 1080,
-          height: 1350,
-          padding: 44,
-          backgroundImage: `linear-gradient(165deg, ${primaryColor} 0%, ${secondaryColor} 28%, #0d0e12 60%, #08090c 100%)`,
-          color: '#f5f1ea',
-          fontFamily: 'sans-serif',
-          boxSizing: 'border-box',
-        }}
-      >
-        {/* Outer Card Enclosure */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            width: '100%',
-            height: '100%',
-            padding: 24,
-            borderRadius: 32,
-            backgroundColor: 'rgba(14, 15, 20, 0.95)',
-            border: '1px solid rgba(255, 255, 255, 0.14)',
-            boxShadow: '0 24px 56px rgba(0, 0, 0, 0.65)',
-            boxSizing: 'border-box',
-          }}
-        >
-          {/* Primary Artwork Canvas Area */}
-          <div
-            style={{
-              display: 'flex',
-              flexShrink: 0,
-              width: 944,
-              height: 944,
-              borderRadius: 20,
-              overflow: 'hidden',
-              backgroundColor: '#07080b',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              boxSizing: 'border-box',
-            }}
-          >
-            {isPaletteArtwork && paletteArtworkUrl ? (
-              <img
-                src={paletteArtworkUrl}
-                alt=""
-                width="944"
-                height="944"
-                style={{
-                  display: 'flex',
-                  width: 944,
-                  height: 944,
-                  objectFit: 'contain',
-                }}
-              />
-            ) : isPaletteArtwork ? (
-              <div
-                style={{
-                  display: 'flex',
-                  width: '100%',
-                  height: '100%',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#b0a9a0',
-                  fontSize: 26,
-                  fontWeight: 500,
-                }}
-              >
-                Generating generative art...
-              </div>
-            ) : (
-              <ArtworkMedia album={album} colors={colors} size={944} radius={20} />
-            )}
-          </div>
-
-          {/* Editorial Footer Section */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              height: 246,
-              padding: '16px 8px 4px',
-              boxSizing: 'border-box',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Header / Style Tag */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                color: '#dcd5cc',
-                fontSize: 18,
-                fontWeight: 700,
-                letterSpacing: 2.4,
-                textTransform: 'uppercase',
-              }}
-            >
-              <span style={{ display: 'flex' }}>{editionSubtitle}</span>
-              <span style={{ display: 'flex', color: '#b0a9a0', fontWeight: 600 }}>articol / visual discovery</span>
-            </div>
-
-            {/* Title & Palette Legend Row */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-end',
-                justifyContent: 'space-between',
-                width: '100%',
-                gap: 16,
-                boxSizing: 'border-box',
-              }}
-            >
-              {/* Left Text Container */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  flex: '1 1 auto',
-                  minWidth: 0,
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    color: '#ffffff',
-                    fontFamily: 'serif',
-                    fontSize: 48,
-                    fontWeight: 700,
-                    lineHeight: 1.08,
-                    letterSpacing: -0.8,
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    maxWidth: 640,
-                  }}
-                >
-                  {truncate(album.title, 36)}
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    marginTop: 6,
-                    color: '#ded7ce',
-                    fontSize: 26,
-                    fontWeight: 500,
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    maxWidth: 640,
-                  }}
-                >
-                  {truncate(album.artistName, 32)}
-                </div>
-                {album.releaseYear ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      marginTop: 8,
-                      color: '#aba49c',
-                      fontSize: 17,
-                      fontWeight: 600,
-                      letterSpacing: 1.8,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    Released {album.releaseYear}
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Palette Legend Swatches */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexShrink: 0,
-                  alignItems: 'center',
-                  marginBottom: 2,
-                }}
-              >
-                <PaletteLegend colors={colors} size={30} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Landscape Open Graph Layout (1200×630)
   return (
     <div
       style={{
         display: 'flex',
-        width: 1200,
-        height: 630,
-        padding: 36,
-        backgroundImage: `linear-gradient(145deg, ${primaryColor} 0%, ${secondaryColor} 30%, #0d0d0f 65%, #08090b 100%)`,
-        color: '#f5f1ea',
+        flexDirection: 'column',
+        width: 1080,
+        height: 1350,
+        padding: '38px 58px 42px',
+        backgroundImage: `linear-gradient(165deg, ${primaryColor} 0%, ${secondaryColor} 25%, #0d0e12 60%, #07080b 100%)`,
+        color: '#f6f2eb',
         fontFamily: 'sans-serif',
         boxSizing: 'border-box',
       }}
@@ -327,92 +123,187 @@ export function ShareImageArtwork({
       <div
         style={{
           display: 'flex',
+          flexShrink: 0,
           width: '100%',
-          height: '100%',
-          padding: 24,
-          borderRadius: 28,
-          backgroundColor: 'rgba(14, 15, 20, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.14)',
-          boxSizing: 'border-box',
-          overflow: 'hidden',
+          height: 70,
+          position: 'relative',
+          alignItems: 'center',
+          borderBottom: '1.5px solid rgba(255,255,255,0.14)',
+          color: '#ded8cf',
+          fontSize: 18,
+          fontWeight: 700,
+          letterSpacing: 2.2,
+          textTransform: 'uppercase',
         }}
       >
-        <ArtworkMedia album={album} colors={colors} size={510} radius={18} />
+        <div style={{ display: 'flex', position: 'absolute', left: 0, top: 0, height: 70, alignItems: 'center' }}>articol / visual discovery</div>
+        <div style={{ display: 'flex', position: 'absolute', right: 0, top: 0, height: 70, alignItems: 'center', justifyContent: 'flex-end', color: '#b8b0a7', textAlign: 'right' }}>{edition}</div>
+      </div>
 
+      <div
+        style={{
+          display: 'flex',
+          flexShrink: 0,
+          width: '100%',
+          height: 900,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {isPaletteArtwork && paletteArtworkUrl ? (
+          <img
+            src={paletteArtworkUrl}
+            alt=""
+            width="860"
+            height="860"
+            style={{ display: 'flex', width: 860, height: 860, objectFit: 'contain' }}
+          />
+        ) : isPaletteArtwork ? (
+          <div
+            style={{
+              display: 'flex',
+              width: 860,
+              height: 860,
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#b8b0a7',
+              fontSize: 24,
+              fontWeight: 600,
+              letterSpacing: 1.2,
+            }}
+          >
+            Generating artwork...
+          </div>
+        ) : (
+          <CoverArtwork album={album} colors={colors} size={860} radius={16} />
+        )}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          flex: 1,
+          minHeight: 0,
+          flexDirection: 'column',
+          justifyContent: 'flex-start',
+          borderTop: '1.5px solid rgba(255,255,255,0.14)',
+          paddingTop: 26,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            maxWidth: 900,
+            maxHeight: 124,
+            overflow: 'hidden',
+            color: '#ffffff',
+            fontFamily: 'sans-serif',
+            fontSize: 58,
+            fontWeight: 650,
+            lineHeight: 1.04,
+            letterSpacing: -1.2,
+          }}
+        >
+          {truncate(album.title, 66)}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            marginTop: 8,
+            maxWidth: 830,
+            overflow: 'hidden',
+            color: '#f0ebe4',
+            fontSize: 34,
+            fontWeight: 600,
+            lineHeight: 1.1,
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {truncate(album.artistName, 42)}
+        </div>
         <div
           style={{
             display: 'flex',
             flex: 1,
-            flexDirection: 'column',
-            justifyContent: 'center',
-            padding: '20px 28px 20px 38px',
-            minWidth: 0,
-            overflow: 'hidden',
+            minHeight: 0,
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            paddingBottom: 2,
           }}
         >
           <div
             style={{
               display: 'flex',
-              color: '#dcd5cc',
-              fontSize: 16,
+              color: '#b8b0a7',
+              fontSize: 20,
               fontWeight: 700,
-              letterSpacing: 2.8,
-              textTransform: 'uppercase',
-            }}
-          >
-            articol / visual album discovery
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              marginTop: 16,
-              color: '#ffffff',
-              fontFamily: 'serif',
-              fontSize: 48,
-              fontWeight: 700,
-              lineHeight: 1.06,
-              letterSpacing: -0.8,
-              maxWidth: 520,
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-            }}
-          >
-            {truncate(album.title, 40)}
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              marginTop: 8,
-              color: '#ded7ce',
-              fontSize: 26,
-              fontWeight: 500,
-              maxWidth: 520,
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-            }}
-          >
-            {truncate(album.artistName, 30)}
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              marginTop: 16,
-              color: '#aba49c',
-              fontSize: 17,
-              fontWeight: 600,
               letterSpacing: 2,
               textTransform: 'uppercase',
             }}
           >
-            {album.country}{album.releaseYear ? ` / ${album.releaseYear}` : ''}
+            {album.releaseYear ? `Released ${album.releaseYear}` : 'Archive edition'}
           </div>
-          <div style={{ display: 'flex', marginTop: 24, flexShrink: 0 }}>
-            <PaletteLegend colors={colors} size={28} />
-          </div>
+          <PaletteLegend colors={colors} size={44} gap={12} />
         </div>
       </div>
     </div>
   );
+}
+
+function LandscapePoster({ album, colors }: { album: ShareAlbumData; colors: string[] }) {
+  const primaryColor = colors[0] || '#1c1e24';
+  const secondaryColor = colors[1] || '#0d0e12';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        width: 1200,
+        height: 630,
+        padding: 44,
+        backgroundImage: `linear-gradient(145deg, ${primaryColor} 0%, ${secondaryColor} 30%, #0d0e12 67%, #07080b 100%)`,
+        color: '#f6f2eb',
+        fontFamily: 'sans-serif',
+        boxSizing: 'border-box',
+      }}
+    >
+      <CoverArtwork album={album} colors={colors} size={510} radius={16} />
+      <div
+        style={{
+          display: 'flex',
+          flex: 1,
+          minWidth: 0,
+          flexDirection: 'column',
+          justifyContent: 'center',
+          marginLeft: 48,
+          paddingLeft: 42,
+          borderLeft: '1.5px solid rgba(255,255,255,0.14)',
+        }}
+      >
+        <div style={{ display: 'flex', color: '#ded8cf', fontSize: 18, fontWeight: 700, letterSpacing: 2.4, textTransform: 'uppercase' }}>
+          articol / visual discovery
+        </div>
+        <div style={{ display: 'flex', maxWidth: 500, maxHeight: 116, marginTop: 24, overflow: 'hidden', color: '#ffffff', fontFamily: 'sans-serif', fontSize: 52, fontWeight: 650, lineHeight: 1.04, letterSpacing: -1 }}>
+          {truncate(album.title, 54)}
+        </div>
+        <div style={{ display: 'flex', maxWidth: 500, marginTop: 10, overflow: 'hidden', color: '#f0ebe4', fontSize: 28, fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+          {truncate(album.artistName, 34)}
+        </div>
+        <div style={{ display: 'flex', marginTop: 24, color: '#b8b0a7', fontSize: 18, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>
+          {album.country}{album.releaseYear ? ` / ${album.releaseYear}` : ''}
+        </div>
+        <div style={{ display: 'flex', marginTop: 30 }}>
+          <PaletteLegend colors={colors} size={38} gap={10} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ShareImageArtwork({ album, format, variant = 'cover', paletteStyle, paletteArtworkUrl }: ShareImageArtworkProps) {
+  const colors = normalizePaletteArtColors(album.palette);
+  if (format === 'portrait') {
+    return <PortraitPoster album={album} colors={colors} variant={variant} paletteStyle={paletteStyle} paletteArtworkUrl={paletteArtworkUrl} />;
+  }
+  return <LandscapePoster album={album} colors={colors} />;
 }

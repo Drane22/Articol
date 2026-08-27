@@ -2,14 +2,17 @@
 .articol-cache/
 tmp/
 temp/
+scratch/
 downloads/
 downloaded-images/
 data/artwork/
 data/covers/
 public/album-art/
 public/covers/
+public/sample-palette-art/
 scripts/tmp/
 scripts/cache/
+
 
 # Generated images in data folders
 data/**/*.jpg

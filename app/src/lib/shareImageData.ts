@@ -79,6 +79,61 @@ function artworkUrlFor(album?: Album | null): string {
   return (album?.artworkUrl || '').replace(/\d+x\d+(bb)?\.(jpe?g|png|webp)/i, '1000x1000bb.$2');
 }
 
+function paletteFromAlbum(album?: Album | null): PaletteArtInputColor[] {
+  return (album?.dominantPalette || [])
+    .filter((c) => c && typeof c.hex === 'string' && /^#[0-9a-f]{6}$/i.test(c.hex))
+    .slice(0, 10)
+    .map((c) => ({
+      hex: c.hex.toLowerCase(),
+      weight: Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 0.1,
+      lab: Array.isArray(c.lab) && c.lab.length === 3 ? c.lab : undefined,
+    }));
+}
+
+function shareDataFromAlbum(album: Album, country: string): ShareAlbumData {
+  const palette = paletteFromAlbum(album);
+  return {
+    title: album.title || 'Album artwork',
+    artistName: album.artistName || 'Visual album discovery',
+    artworkUrl: artworkUrlFor(album),
+    releaseYear: album.releaseYear || '',
+    country: normalizeStorefront(album.country || country),
+    palette: palette.length > 0 ? palette : FALLBACK_SHARE_PALETTE,
+    visualFeatures: album.visualFeatures,
+  };
+}
+
+export async function resolvePaletteShareAlbumData(
+  id: string,
+  country: string,
+  supplied: ShareAlbumData | null,
+): Promise<ShareAlbumData> {
+  const collectionId = Number.parseInt(id, 10);
+  let storedAlbum: Album | null = null;
+  try {
+    if (Number.isFinite(collectionId)) storedAlbum = await getAlbumFromDb(collectionId);
+  } catch {
+    // Supplied palette context remains a deterministic offline fallback.
+  }
+
+  if (storedAlbum) {
+    const stored = shareDataFromAlbum(storedAlbum, country);
+    return {
+      ...stored,
+      title: supplied?.title || stored.title,
+      artistName: supplied?.artistName || stored.artistName,
+      releaseYear: supplied?.releaseYear || stored.releaseYear,
+      country: supplied?.country || stored.country,
+      // Stored palette coverage and visual features are the authoritative art signature.
+      palette: paletteFromAlbum(storedAlbum).length > 0 ? stored.palette : supplied?.palette || stored.palette,
+      visualFeatures: storedAlbum.visualFeatures,
+    };
+  }
+
+  if (supplied) return supplied;
+  return getShareAlbumData(id, country);
+}
+
 export async function getShareAlbumData(id: string, country: string): Promise<ShareAlbumData> {
   const collectionId = Number.parseInt(id, 10);
   let storedAlbum: Album | null = null;
@@ -88,6 +143,12 @@ export async function getShareAlbumData(id: string, country: string): Promise<Sh
     if (Number.isFinite(collectionId)) storedAlbum = await getAlbumFromDb(collectionId);
   } catch {
     // The public share route remains useful when storage is unavailable.
+  }
+
+  // A complete catalog row already contains the metadata, palette, and visual
+  // signature needed by both cover and generated-art shares.
+  if (storedAlbum?.dominantPalette?.length) {
+    return shareDataFromAlbum(storedAlbum, country);
   }
 
   try {
@@ -100,15 +161,7 @@ export async function getShareAlbumData(id: string, country: string): Promise<Sh
   }
 
   const album = storedAlbum || liveAlbum;
-  const rawDominant = album?.dominantPalette || [];
-  const palette: PaletteArtInputColor[] = rawDominant
-    .filter((c) => c && typeof c.hex === 'string' && /^#[0-9a-f]{6}$/i.test(c.hex))
-    .slice(0, 10)
-    .map((c) => ({
-      hex: c.hex.toLowerCase(),
-      weight: Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 0.1,
-      lab: Array.isArray(c.lab) && c.lab.length === 3 ? c.lab : undefined,
-    }));
+  const palette = paletteFromAlbum(album);
 
   return {
     title: album?.title || 'Album artwork',

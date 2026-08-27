@@ -62,13 +62,15 @@ interface RequestedAsset {
   style: PaletteArtStyle;
 }
 
-const GENERATION_MESSAGES = [
-  'Teaching these colors to cooperate.',
-  'Measuring coverage and chroma across the palette.',
-  'Calibrating perceptual lightness and contrast.',
-  'Synthesizing generative geometry from cover data.',
-  'Rendering full-resolution 1080x1350 artwork.',
-];
+const GENERATION_MESSAGES: Record<PaletteArtStyle, string[]> = {
+  'chromatic-bloom': ['Growing dimensional leaves.', 'Lighting the album rosette.', 'Rendering the succulent sculpture.'],
+  'palette-dna': ['Reading the stored cover signature.', 'Twisting front and rear genome ribbons.', 'Lighting the genome sculpture.'],
+  'chord-map': ['Mapping the textile perspective.', 'Weaving album colors over and under.', 'Rendering the dimensional loom.'],
+  'spectrum-code': ['Shaping the cover terrain.', 'Building elevation and sidewalls.', 'Lighting the topographic relief.'],
+  'orbital-weave': ['Calculating the orbital plane.', 'Building planetary depth.', 'Lighting the album solar system.'],
+};
+
+const COVER_GENERATION_MESSAGES = ['Preparing the original cover.', 'Building the editorial poster.', 'Rendering full-resolution artwork.'];
 
 function selectionKey(variant: PortraitVariant, style: PaletteArtStyle): string {
   return variant === 'palette' ? `palette:${style}` : 'cover';
@@ -134,6 +136,9 @@ export function ShareCardModal({
   }, [albumColors, album.id, requestedStyle, album.visualFeatures]);
 
   const requestedSelectionKey = selectionKey(requestedVariant, requestedStyle);
+  const generationMessages = requestedVariant === 'palette'
+    ? GENERATION_MESSAGES[requestedStyle]
+    : COVER_GENERATION_MESSAGES;
   const requestedAssetUrl = requestedVariant === 'palette'
     ? getAlbumPortraitShareImagePath(album.id, album.country, {
       variant: 'palette',
@@ -220,10 +225,10 @@ export function ShareCardModal({
   useEffect(() => {
     if (!isAssetPending) return undefined;
     const interval = window.setInterval(() => {
-      setMessageIndex((current) => (current + 1) % GENERATION_MESSAGES.length);
+      setMessageIndex((current) => (current + 1) % generationMessages.length);
     }, 2800);
     return () => window.clearInterval(interval);
-  }, [isAssetPending]);
+  }, [generationMessages.length, isAssetPending]);
 
   useEffect(() => () => {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
@@ -349,7 +354,7 @@ export function ShareCardModal({
                           ))}
                         </div>
                       </div>
-                      <p>{GENERATION_MESSAGES[messageIndex]}</p>
+                      <p>{generationMessages[messageIndex]}</p>
                     </div>
                   )}
 
@@ -382,7 +387,7 @@ export function ShareCardModal({
                             ))}
                             <i />
                           </div>
-                          <p>{GENERATION_MESSAGES[messageIndex]}</p>
+                          <p>{generationMessages[messageIndex]}</p>
                         </div>
                       )}
                     </>
