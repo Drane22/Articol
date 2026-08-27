@@ -1176,19 +1176,95 @@
 }
 
 .share-artwork-styles {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
   gap: 0.45rem;
+  padding-bottom: 0.35rem;
+  scrollbar-width: none;
+}
+
+.share-artwork-styles::-webkit-scrollbar {
+  display: none;
 }
 
 .share-artwork-style {
-  display: grid;
-  grid-template-columns: 2.2rem minmax(0, 1fr);
+  flex: 0 0 auto;
+  min-width: 5.2rem;
+  max-width: 6rem;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.48rem;
-  border-radius: 0.9rem;
-  text-align: left;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.35rem;
+  border-radius: 0.85rem;
+  text-align: center;
+  scroll-snap-align: start;
+}
+
+.share-artwork-style .share-artwork-style__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.share-artwork-style .share-artwork-style__copy strong {
+  font-size: 0.62rem;
+  font-weight: 650;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.share-artwork-style__desc {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .share-artwork-styles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+    padding-bottom: 0;
+  }
+
+  .share-artwork-style {
+    flex: initial;
+    min-width: 0;
+    max-width: none;
+    display: grid;
+    grid-template-columns: 2.2rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.48rem;
+    border-radius: 0.9rem;
+    text-align: left;
+  }
+
+  .share-artwork-style .share-artwork-style__copy {
+    display: grid;
+    align-items: flex-start;
+  }
+
+  .share-artwork-style .share-artwork-style__copy strong {
+    text-align: left;
+    font-size: 0.67rem;
+  }
+
+  .share-artwork-style__desc {
+    display: block;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.57rem;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .share-artwork-style__preview {
@@ -1196,6 +1272,7 @@
   display: flex;
   width: 2.2rem;
   height: 2.2rem;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   overflow: hidden;

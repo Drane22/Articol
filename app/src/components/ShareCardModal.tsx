@@ -492,7 +492,7 @@ export function ShareCardModal({
                             </span>
                             <span className="share-artwork-style__copy">
                               <strong>{option.label}</strong>
-                              <small>{option.description}</small>
+                              <small className="share-artwork-style__desc">{option.description}</small>
                             </span>
                           </button>
                         );

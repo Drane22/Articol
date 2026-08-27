@@ -119,8 +119,8 @@ function PortraitPoster({
   const isLightTop = isLightColor(primaryColor);
   const isPaletteArtwork = variant === 'palette' && Boolean(paletteStyle);
   const edition = isPaletteArtwork
-    ? `${getPaletteArtStyleLabel(paletteStyle!)} / palette edition`
-    : 'Original cover / archive edition';
+    ? getPaletteArtStyleLabel(paletteStyle!)
+    : 'Original cover';
 
   // Adaptive contrast for top header
   const headerBrandColor = isLightTop ? 'rgba(18, 20, 26, 0.95)' : '#ffffff';
@@ -134,7 +134,7 @@ function PortraitPoster({
         flexDirection: 'column',
         width: 1080,
         height: 1350,
-        padding: '36px 58px 40px',
+        padding: '32px 54px 36px',
         backgroundImage: `linear-gradient(165deg, ${primaryColor} 0%, ${secondaryColor} 26%, #0d0e12 58%, #07080b 100%)`,
         color: '#f6f2eb',
         fontFamily: 'sans-serif',
@@ -147,7 +147,7 @@ function PortraitPoster({
           display: 'flex',
           flexShrink: 0,
           width: '100%',
-          height: 68,
+          height: 64,
           position: 'relative',
           alignItems: 'center',
           borderBottom: `1.5px solid ${headerBorderColor}`,
@@ -163,7 +163,7 @@ function PortraitPoster({
             position: 'absolute',
             left: 0,
             top: 0,
-            height: 68,
+            height: 64,
             alignItems: 'center',
             color: headerBrandColor,
             fontWeight: 800,
@@ -177,7 +177,7 @@ function PortraitPoster({
             position: 'absolute',
             right: 0,
             top: 0,
-            height: 68,
+            height: 64,
             alignItems: 'center',
             justifyContent: 'flex-end',
             color: headerEditionColor,
@@ -189,13 +189,13 @@ function PortraitPoster({
         </div>
       </div>
 
-      {/* Main Artwork Frame */}
+      {/* Main Artwork Frame - Hero Expanded */}
       <div
         style={{
           display: 'flex',
           flexShrink: 0,
           width: '100%',
-          height: 840,
+          height: 920,
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -204,16 +204,16 @@ function PortraitPoster({
           <img
             src={paletteArtworkUrl}
             alt=""
-            width="820"
-            height="820"
-            style={{ display: 'flex', width: 820, height: 820, objectFit: 'contain' }}
+            width="890"
+            height="890"
+            style={{ display: 'flex', width: 890, height: 890, objectFit: 'contain' }}
           />
         ) : isPaletteArtwork ? (
           <div
             style={{
               display: 'flex',
-              width: 820,
-              height: 820,
+              width: 890,
+              height: 890,
               alignItems: 'center',
               justifyContent: 'center',
               color: '#b8b0a7',
@@ -225,11 +225,11 @@ function PortraitPoster({
             Generating artwork...
           </div>
         ) : (
-          <CoverArtwork album={album} colors={colors} size={820} radius={18} />
+          <CoverArtwork album={album} colors={colors} size={890} radius={20} />
         )}
       </div>
 
-      {/* Bottom Metadata Section */}
+      {/* Bottom Metadata Section - Tight & Balanced */}
       <div
         style={{
           display: 'flex',
@@ -238,8 +238,8 @@ function PortraitPoster({
           flexDirection: 'column',
           justifyContent: 'space-between',
           borderTop: '1.5px solid rgba(255,255,255,0.16)',
-          paddingTop: 28,
-          paddingBottom: 4,
+          paddingTop: 20,
+          paddingBottom: 2,
         }}
       >
         {/* Title & Artist */}
@@ -248,14 +248,14 @@ function PortraitPoster({
             style={{
               display: 'flex',
               maxWidth: 960,
-              maxHeight: 140,
+              maxHeight: 130,
               overflow: 'hidden',
               color: '#ffffff',
               fontFamily: 'sans-serif',
-              fontSize: 62,
+              fontSize: 58,
               fontWeight: 700,
               lineHeight: 1.08,
-              letterSpacing: -1.4,
+              letterSpacing: -1.3,
             }}
           >
             {truncate(album.title, 66)}
@@ -263,11 +263,11 @@ function PortraitPoster({
           <div
             style={{
               display: 'flex',
-              marginTop: 10,
+              marginTop: 8,
               maxWidth: 920,
               overflow: 'hidden',
               color: '#f0ebe4',
-              fontSize: 38,
+              fontSize: 36,
               fontWeight: 600,
               lineHeight: 1.25,
               paddingBottom: 4,
@@ -285,7 +285,7 @@ function PortraitPoster({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingTop: 8,
+            paddingTop: 6,
           }}
         >
           <div
@@ -298,7 +298,7 @@ function PortraitPoster({
               textTransform: 'uppercase',
             }}
           >
-            {album.releaseYear ? `Released ${album.releaseYear}` : 'Archive edition'}
+            {album.releaseYear ? `Released ${album.releaseYear}` : 'Archive'}
           </div>
           <PaletteLegend colors={colors} size={48} gap={14} />
         </div>
