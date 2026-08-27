@@ -1,4 +1,4 @@
-import { searchItunesAlbums } from './itunes';
+import { searchItunesAlbums, searchItunesArtistAlbums } from './itunes';
 import type { Album, SearchScope } from './types';
 
 const PROVIDER_FETCH_LIMIT = 50;
@@ -64,6 +64,13 @@ function normalizeLimit(limit: number): number {
   return Math.max(1, Math.min(Number.isFinite(limit) ? Math.floor(limit) : 50, 50));
 }
 
+function matchesAllQueryTokens(album: Album, query: string): boolean {
+  const fieldTokens = tokenize(`${album.artistName} ${album.title}`);
+  return tokenize(query).every((queryToken) =>
+    fieldTokens.some((fieldToken) => fieldToken === queryToken || fieldToken.startsWith(queryToken)),
+  );
+}
+
 /**
  * Search is the domain seam for both the homepage and the global header.
  * Provider attributes improve recall, while local scope validation guarantees
@@ -78,25 +85,35 @@ export async function searchAlbums(request: AlbumSearchRequest): Promise<Album[]
 
   const sourceAlbums = request.scope === 'all'
     ? await Promise.all([
+      searchItunesArtistAlbums(query, request.country),
       searchItunesAlbums(query, request.country, providerLimit, false, true),
       searchItunesAlbums(query, request.country, providerLimit),
-    ]).then(([artistAlbums, broadAlbums]) => [...artistAlbums, ...broadAlbums])
-    : await searchItunesAlbums(
-      query,
-      request.country,
-      providerLimit,
-      request.scope === 'title',
-      request.scope === 'artist',
-    );
+    ]).then(([discographyAlbums, artistAlbums, broadAlbums]) => [
+      ...discographyAlbums.filter((album) => matchesAllQueryTokens(album, query)),
+      ...artistAlbums,
+      ...broadAlbums,
+    ])
+    : request.scope === 'artist'
+      ? await searchItunesArtistAlbums(query, request.country)
+      : await searchItunesAlbums(query, request.country, providerLimit, true);
 
-  const scopedAlbums = deduplicateAlbums(sourceAlbums).filter((album) =>
-    matchesSearchScope(album, query, request.scope),
+  const deduplicatedSource = deduplicateAlbums(sourceAlbums);
+  const scopedAlbums = deduplicatedSource.filter((album) =>
+    request.scope === 'all'
+      ? matchesAllQueryTokens(album, query)
+      : matchesSearchScope(album, query, request.scope),
   );
+
+  // Preserve iTunes' fuzzy-search fallback for misspellings, but do not let
+  // loosely related provider results displace genuine artist/title matches.
+  if (request.scope === 'all') {
+    return (scopedAlbums.length ? scopedAlbums : deduplicatedSource).slice(0, limit);
+  }
 
   // A provider-scoped query can still omit valid records from its first page.
   // Fill the remainder from the broad query, but apply the same strict local
   // matcher before anything reaches the client.
-  if (request.scope !== 'all' && scopedAlbums.length < limit) {
+  if (scopedAlbums.length < limit) {
     const broadAlbums = await searchItunesAlbums(query, request.country, providerLimit);
     return deduplicateAlbums([...scopedAlbums, ...broadAlbums.filter((album) =>
       matchesSearchScope(album, query, request.scope),
