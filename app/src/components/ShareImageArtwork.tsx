@@ -19,14 +19,14 @@ function truncate(value: string, limit: number): string {
   return value.length > limit ? `${value.slice(0, limit - 3)}...` : value;
 }
 
-function PaletteLegend({ colors, size = 26 }: { colors: string[]; size?: number }) {
+function PaletteLegend({ colors, size = 30 }: { colors: string[]; size?: number }) {
   const displayColors = colors.slice(0, MAX_DISPLAY_ART_COLORS);
   return (
     <div
       style={{
         display: 'flex',
         flexShrink: 0,
-        gap: Math.round(size * 0.28),
+        gap: 10,
         alignItems: 'center',
       }}
     >
@@ -40,8 +40,8 @@ function PaletteLegend({ colors, size = 26 }: { colors: string[]; size?: number 
             height: size,
             borderRadius: 999,
             backgroundColor: color,
-            border: '1.5px solid rgba(255, 255, 255, 0.35)',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+            border: '1.5px solid rgba(255, 255, 255, 0.45)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
           }}
         />
       ))}
@@ -84,9 +84,10 @@ function ArtworkMedia({
         justifyContent: 'center',
         borderRadius: radius,
         backgroundImage: `linear-gradient(145deg, ${colors[1] || '#2a2b30'}, #121316 70%)`,
-        color: '#b6afa8',
-        fontSize: 28,
-        letterSpacing: 3,
+        color: '#d0c8bf',
+        fontSize: 32,
+        fontWeight: 600,
+        letterSpacing: 4,
         textTransform: 'uppercase',
       }}
     >
@@ -140,7 +141,7 @@ export function ShareImageArtwork({
             padding: 24,
             borderRadius: 32,
             backgroundColor: 'rgba(14, 15, 20, 0.95)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            border: '1px solid rgba(255, 255, 255, 0.14)',
             boxShadow: '0 24px 56px rgba(0, 0, 0, 0.65)',
             boxSizing: 'border-box',
           }}
@@ -180,8 +181,9 @@ export function ShareImageArtwork({
                   height: '100%',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#9e9891',
-                  fontSize: 24,
+                  color: '#b0a9a0',
+                  fontSize: 26,
+                  fontWeight: 500,
                 }}
               >
                 Generating generative art...
@@ -191,7 +193,7 @@ export function ShareImageArtwork({
             )}
           </div>
 
-          {/* Editorial Footer Section (Guaranteed fixed height to prevent out-of-bounds overflow) */}
+          {/* Editorial Footer Section */}
           <div
             style={{
               display: 'flex',
@@ -209,15 +211,15 @@ export function ShareImageArtwork({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                color: '#9d9790',
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: 2.5,
+                color: '#dcd5cc',
+                fontSize: 18,
+                fontWeight: 700,
+                letterSpacing: 2.4,
                 textTransform: 'uppercase',
               }}
             >
               <span style={{ display: 'flex' }}>{editionSubtitle}</span>
-              <span style={{ display: 'flex', color: '#7e7872' }}>articol / visual discovery</span>
+              <span style={{ display: 'flex', color: '#b0a9a0', fontWeight: 600 }}>articol / visual discovery</span>
             </div>
 
             {/* Title & Palette Legend Row */}
@@ -231,7 +233,7 @@ export function ShareImageArtwork({
                 boxSizing: 'border-box',
               }}
             >
-              {/* Left Text Container (flex shrinkable & line-clamped) */}
+              {/* Left Text Container */}
               <div
                 style={{
                   display: 'flex',
@@ -244,42 +246,43 @@ export function ShareImageArtwork({
                 <div
                   style={{
                     display: 'flex',
-                    color: '#fbf8f3',
+                    color: '#ffffff',
                     fontFamily: 'serif',
-                    fontSize: 42,
-                    fontWeight: 600,
+                    fontSize: 48,
+                    fontWeight: 700,
                     lineHeight: 1.08,
-                    letterSpacing: -1,
+                    letterSpacing: -0.8,
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     maxWidth: 640,
                   }}
                 >
-                  {truncate(album.title, 38)}
+                  {truncate(album.title, 36)}
                 </div>
                 <div
                   style={{
                     display: 'flex',
-                    marginTop: 4,
-                    color: '#c8c2ba',
-                    fontSize: 22,
-                    fontWeight: 450,
+                    marginTop: 6,
+                    color: '#ded7ce',
+                    fontSize: 26,
+                    fontWeight: 500,
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     maxWidth: 640,
                   }}
                 >
-                  {truncate(album.artistName, 34)}
+                  {truncate(album.artistName, 32)}
                 </div>
                 {album.releaseYear ? (
                   <div
                     style={{
                       display: 'flex',
-                      marginTop: 6,
-                      color: '#8c857f',
-                      fontSize: 14,
+                      marginTop: 8,
+                      color: '#aba49c',
+                      fontSize: 17,
+                      fontWeight: 600,
                       letterSpacing: 1.8,
                       textTransform: 'uppercase',
                     }}
@@ -289,7 +292,7 @@ export function ShareImageArtwork({
                 ) : null}
               </div>
 
-              {/* Palette Legend Swatches (Locked with flexShrink: 0 so it NEVER goes out of bounds) */}
+              {/* Palette Legend Swatches */}
               <div
                 style={{
                   display: 'flex',
@@ -298,7 +301,7 @@ export function ShareImageArtwork({
                   marginBottom: 2,
                 }}
               >
-                <PaletteLegend colors={colors} size={28} />
+                <PaletteLegend colors={colors} size={30} />
               </div>
             </div>
           </div>
@@ -329,7 +332,7 @@ export function ShareImageArtwork({
           padding: 24,
           borderRadius: 28,
           backgroundColor: 'rgba(14, 15, 20, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          border: '1px solid rgba(255, 255, 255, 0.14)',
           boxSizing: 'border-box',
           overflow: 'hidden',
         }}
@@ -350,8 +353,9 @@ export function ShareImageArtwork({
           <div
             style={{
               display: 'flex',
-              color: '#9d9790',
-              fontSize: 13,
+              color: '#dcd5cc',
+              fontSize: 16,
+              fontWeight: 700,
               letterSpacing: 2.8,
               textTransform: 'uppercase',
             }}
@@ -362,39 +366,42 @@ export function ShareImageArtwork({
             style={{
               display: 'flex',
               marginTop: 16,
-              color: '#fbf8f3',
+              color: '#ffffff',
               fontFamily: 'serif',
-              fontSize: 44,
-              lineHeight: 1.08,
-              letterSpacing: -1,
+              fontSize: 48,
+              fontWeight: 700,
+              lineHeight: 1.06,
+              letterSpacing: -0.8,
               maxWidth: 520,
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
             }}
           >
-            {truncate(album.title, 42)}
+            {truncate(album.title, 40)}
           </div>
           <div
             style={{
               display: 'flex',
               marginTop: 8,
-              color: '#c2bbb4',
-              fontSize: 23,
+              color: '#ded7ce',
+              fontSize: 26,
+              fontWeight: 500,
               maxWidth: 520,
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
             }}
           >
-            {truncate(album.artistName, 32)}
+            {truncate(album.artistName, 30)}
           </div>
           <div
             style={{
               display: 'flex',
               marginTop: 16,
-              color: '#8f8984',
-              fontSize: 15,
+              color: '#aba49c',
+              fontSize: 17,
+              fontWeight: 600,
               letterSpacing: 2,
               textTransform: 'uppercase',
             }}
@@ -402,7 +409,7 @@ export function ShareImageArtwork({
             {album.country}{album.releaseYear ? ` / ${album.releaseYear}` : ''}
           </div>
           <div style={{ display: 'flex', marginTop: 24, flexShrink: 0 }}>
-            <PaletteLegend colors={colors} size={26} />
+            <PaletteLegend colors={colors} size={28} />
           </div>
         </div>
       </div>
