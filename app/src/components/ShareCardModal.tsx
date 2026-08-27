@@ -106,6 +106,50 @@ function downloadFile(file: File) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
+function SharePreviewLoadingWaves({
+  colors,
+  indicatorText,
+}: {
+  colors: { hex: string }[];
+  indicatorText: string;
+}) {
+  const activeColors = colors.length > 0 ? colors.slice(0, MAX_DISPLAY_ART_COLORS) : [{ hex: '#6366f1' }];
+  return (
+    <>
+      <div className="share-preview-waves" aria-hidden="true">
+        {activeColors.map((color, index) => {
+          const widthPct = 75 + ((index * 37) % 35);
+          const heightPct = 75 + (((index + 2) * 43) % 35);
+          const leftPct = -15 + ((index * 47) % 50);
+          const topPct = -15 + (((index + 1) * 53) % 50);
+          const duration = 8 + ((index * 3) % 7);
+          const delayCoalesce = index * 200;
+          const delayOrbit = -index * 1500;
+
+          return (
+            <div
+              key={`${color.hex}-${index}`}
+              className="share-preview-wave"
+              style={{
+                backgroundColor: color.hex,
+                width: `${widthPct}%`,
+                height: `${heightPct}%`,
+                left: `${leftPct}%`,
+                top: `${topPct}%`,
+                animationDelay: `${delayCoalesce}ms, ${delayOrbit}ms`,
+                animationDuration: `3.5s, ${duration}s`,
+              }}
+            />
+          );
+        })}
+      </div>
+      <p className="share-preview-indicator">
+        {indicatorText}
+      </p>
+    </>
+  );
+}
+
 export function ShareCardModal({
   album,
   shareUrl,
@@ -328,25 +372,10 @@ export function ShareCardModal({
                 <div className="share-preview-shell share-preview-shell--portrait">
                   {!displayedAsset && assetState === 'initial-loading' && (
                     <div className="share-preview-loading" role="status" aria-live="polite">
-                      <div className="share-preview-loading__art" aria-hidden="true">
-                        {albumColors.slice(0, 3).map((color, index) => (
-                          <div
-                            key={`${color.hex}-${index}`}
-                            className="share-preview-loading__wave"
-                            style={{
-                              backgroundColor: color.hex,
-                              width: `${110 + index * 20}%`,
-                              height: `${110 + index * 20}%`,
-                              left: `${-5 + (index * 10)}%`,
-                              top: `${-5 + (index * 10)}%`,
-                              animationDelay: `${index * 800}ms`,
-                            }}
-                          />
-                        ))}
-                      </div>
-                      <p className="share-preview-loading__indicator">
-                        {generationMessages[messageIndex]}
-                      </p>
+                      <SharePreviewLoadingWaves
+                        colors={albumColors}
+                        indicatorText={generationMessages[messageIndex]}
+                      />
                     </div>
                   )}
 
@@ -373,13 +402,10 @@ export function ShareCardModal({
                       />
                       {assetState === 'regenerating' && (
                         <div className="share-preview-regenerating" role="status" aria-live="polite">
-                          <div className="share-preview-regenerating__veil" aria-hidden="true">
-                            {albumColors.slice(0, MAX_DISPLAY_ART_COLORS).map((color, index) => (
-                              <span key={`${color.hex}-${index}`} style={{ backgroundColor: color.hex }} />
-                            ))}
-                            <i />
-                          </div>
-                          <p>{generationMessages[messageIndex]}</p>
+                          <SharePreviewLoadingWaves
+                            colors={albumColors}
+                            indicatorText={generationMessages[messageIndex]}
+                          />
                         </div>
                       )}
                     </>
