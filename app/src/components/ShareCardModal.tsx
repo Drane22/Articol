@@ -7,6 +7,7 @@ import {
   Download,
   ExternalLink,
   Image as ImageIcon,
+  Info,
   LoaderCircle,
   RefreshCw,
   Share2,
@@ -167,6 +168,7 @@ export function ShareCardModal({
   const [requestedStyle, setRequestedStyle] = useState<PaletteArtStyle>(DEFAULT_PALETTE_ART_STYLE);
   const [retryNonce, setRetryNonce] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
+  const [showExplanation, setShowExplanation] = useState(false);
   const activeRequestId = useRef(0);
   const previewUrlRef = useRef<string | null>(null);
   const displayedAssetRef = useRef<DisplayedAsset | null>(null);
@@ -423,12 +425,7 @@ export function ShareCardModal({
             </section>
 
             <aside className="share-studio__tools" aria-label="Sharing formats and actions">
-              <section className="share-artwork-mode" aria-labelledby="share-artwork-mode-title">
-                <div className="share-artwork-mode__heading">
-                  <p id="share-artwork-mode-title" className="eyebrow-label">Portrait artwork</p>
-                  <span>Choose the image, not the link.</span>
-                </div>
-
+              <section className="share-artwork-mode" aria-label="Artwork format selection">
                 <div className="share-artwork-mode__options" role="radiogroup" aria-label="Portrait artwork source">
                   <button
                     type="button"
@@ -465,7 +462,20 @@ export function ShareCardModal({
                 </div>
 
                 {requestedVariant === 'palette' && (
-                  <>
+                  <div className="share-artwork-styles-wrapper">
+                    <div className="share-artwork-styles-header">
+                      <span className="eyebrow-label">Art Style</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowExplanation((prev) => !prev)}
+                        className={`share-artwork-info-btn${showExplanation ? ' is-active' : ''}`}
+                        aria-label="Why it looks this way"
+                        title="Why it looks this way"
+                      >
+                        <Info className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </button>
+                    </div>
+
                     <div className="share-artwork-styles" role="radiogroup" aria-label="Palette art style">
                       {PALETTE_ART_STYLES.map((option) => {
                         const styleIsBusy = requestedStyle === option.id && isAssetPending;
@@ -499,14 +509,14 @@ export function ShareCardModal({
                       })}
                     </div>
 
-                    {/* Data-to-form Explanation disclosure */}
-                    <div className="share-artwork-explanation">
-                      <p className="eyebrow-label">Why it looks this way</p>
-                      <p className="share-artwork-explanation__text">
-                        {activeModel.explanation.dominantSummary} {activeModel.explanation.accentSummary}
-                      </p>
-                    </div>
-                  </>
+                    {showExplanation && (
+                      <div className="share-artwork-explanation" role="region" aria-label="Style explanation">
+                        <p className="share-artwork-explanation__text">
+                          {activeModel.explanation.dominantSummary} {activeModel.explanation.accentSummary}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 )}
               </section>
 
