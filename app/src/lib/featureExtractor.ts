@@ -393,7 +393,7 @@ async function extractFromBuffer(
     for (const swatch of candidateSwatches) {
       let merged = false;
       for (const existing of rawPalette) {
-        if (rgbToLab && swatch.lab) {
+        if (existing.lab && swatch.lab) {
           // Lab Euclidean / CIEDE2000 approximation for fast extraction clustering
           const dL = existing.lab[0] - swatch.lab[0];
           const da = existing.lab[1] - swatch.lab[1];

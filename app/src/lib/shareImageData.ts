@@ -45,11 +45,11 @@ export function parseSuppliedPaletteParam(raw: string): PaletteArtInputColor[] {
 
   if (parsed.length === 0) return [];
   const capped = parsed.slice(0, 10);
-  const total = capped.reduce((sum, item) => sum + item.weight, 0);
+  const total = capped.reduce((sum, item) => sum + (item.weight ?? 1), 0);
 
   return capped.map((item) => ({
     hex: item.hex,
-    weight: total > 0 ? item.weight / total : 1 / capped.length,
+    weight: total > 0 ? (item.weight ?? 1) / total : 1 / capped.length,
   }));
 }
 
