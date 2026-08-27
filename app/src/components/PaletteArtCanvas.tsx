@@ -38,6 +38,90 @@ function polarPoint(radius: number, angleRad: number, cx = CENTER, cy = CENTER):
 }
 
 // ─────────────────────────────────────────────────────────────
+// SHARED GENERATIVE TECHNICAL BACKDROP (n-gen aesthetic)
+// ─────────────────────────────────────────────────────────────
+function GenerativeBackdrop({
+  gradientId,
+  model,
+  haloColor,
+  haloRadius = 380,
+  haloCx = CENTER,
+  haloCy = CENTER,
+}: {
+  gradientId: string;
+  model: PaletteArtModel;
+  haloColor: string;
+  haloRadius?: number;
+  haloCx?: number;
+  haloCy?: number;
+}) {
+  const cornerPad = 36;
+  const frameSize = CANVAS_SIZE - cornerPad * 2; // 828
+
+  return (
+    <g id={`backdrop-${gradientId}`}>
+      <defs>
+        <radialGradient
+          id={gradientId}
+          cx={`${round((haloCx / CANVAS_SIZE) * 100)}%`}
+          cy={`${round((haloCy / CANVAS_SIZE) * 100)}%`}
+          r={`${round((haloRadius / CANVAS_SIZE) * 100)}%`}
+        >
+          <stop offset="0%" stopColor={haloColor} stopOpacity={0.24} />
+          <stop offset="55%" stopColor={haloColor} stopOpacity={0.07} />
+          <stop offset="100%" stopColor={model.background} stopOpacity={0} />
+        </radialGradient>
+      </defs>
+
+      {/* Solid Deep Base */}
+      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+
+      {/* Ambient Gradient Glow */}
+      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={`url(#${gradientId})`} />
+
+      {/* Technical Outer Guide Frame */}
+      <rect
+        x={cornerPad}
+        y={cornerPad}
+        width={frameSize}
+        height={frameSize}
+        fill="none"
+        stroke="rgba(255, 255, 255, 0.08)"
+        strokeWidth="1"
+      />
+
+      {/* 4 Corner Registration Crosshairs */}
+      <path
+        d={`M ${cornerPad - 8} ${cornerPad} L ${cornerPad + 8} ${cornerPad} M ${cornerPad} ${cornerPad - 8} L ${cornerPad} ${cornerPad + 8}`}
+        stroke="rgba(255, 255, 255, 0.22)"
+        strokeWidth="1"
+      />
+      <path
+        d={`M ${CANVAS_SIZE - cornerPad - 8} ${cornerPad} L ${CANVAS_SIZE - cornerPad + 8} ${cornerPad} M ${CANVAS_SIZE - cornerPad} ${cornerPad - 8} L ${CANVAS_SIZE - cornerPad} ${cornerPad + 8}`}
+        stroke="rgba(255, 255, 255, 0.22)"
+        strokeWidth="1"
+      />
+      <path
+        d={`M ${cornerPad - 8} ${CANVAS_SIZE - cornerPad} L ${cornerPad + 8} ${CANVAS_SIZE - cornerPad} M ${cornerPad} ${CANVAS_SIZE - cornerPad - 8} L ${cornerPad} ${CANVAS_SIZE - cornerPad + 8}`}
+        stroke="rgba(255, 255, 255, 0.22)"
+        strokeWidth="1"
+      />
+      <path
+        d={`M ${CANVAS_SIZE - cornerPad - 8} ${CANVAS_SIZE - cornerPad} L ${CANVAS_SIZE - cornerPad + 8} ${CANVAS_SIZE - cornerPad} M ${CANVAS_SIZE - cornerPad} ${CANVAS_SIZE - cornerPad - 8} L ${CANVAS_SIZE - cornerPad} ${CANVAS_SIZE - cornerPad + 8}`}
+        stroke="rgba(255, 255, 255, 0.22)"
+        strokeWidth="1"
+      />
+
+      {/* Axis Calibration Ticks */}
+      <line x1={CENTER} y1={cornerPad} x2={CENTER} y2={cornerPad + 8} stroke="rgba(255, 255, 255, 0.16)" strokeWidth="1" />
+      <line x1={CENTER} y1={CANVAS_SIZE - cornerPad - 8} x2={CENTER} y2={CANVAS_SIZE - cornerPad} stroke="rgba(255, 255, 255, 0.16)" strokeWidth="1" />
+      <line x1={cornerPad} y1={CENTER} x2={cornerPad + 8} y2={CENTER} stroke="rgba(255, 255, 255, 0.16)" strokeWidth="1" />
+      <line x1={CANVAS_SIZE - cornerPad - 8} y1={CENTER} x2={CANVAS_SIZE - cornerPad} y2={CENTER} stroke="rgba(255, 255, 255, 0.16)" strokeWidth="1" />
+    </g>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // 1. CHROMATIC BLOOM
 // ─────────────────────────────────────────────────────────────
 function ChromaticBloom({ model }: { model: PaletteArtModel }) {
@@ -80,25 +164,33 @@ function ChromaticBloom({ model }: { model: PaletteArtModel }) {
       petals.push({
         d,
         fill: color.displayHex,
-        fillOpacity: round(0.42 + color.salience * 0.45),
+        fillOpacity: round(0.44 + color.salience * 0.45),
         stroke: mixHexColors(color.displayHex, '#ffffff', 0.25),
         strokeWidth: round(1.5 + color.normalizedWeight * 3),
-        strokeOpacity: 0.7,
+        strokeOpacity: 0.75,
       });
     }
   });
 
   return (
     <g id="chromatic-bloom">
-      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+      <GenerativeBackdrop
+        gradientId={`bloom-halo-${seed}`}
+        model={model}
+        haloColor={dominant.displayHex}
+        haloRadius={360}
+      />
 
-      {/* Atmospheric radial halo */}
+      {/* Subtle Circular Harmonic Halo Rings */}
       <circle
         cx={CENTER}
         cy={CENTER}
         r={round(260 + dominant.salience * 80)}
-        fill={dominant.displayHex}
-        fillOpacity={0.12}
+        fill="none"
+        stroke={dominant.displayHex}
+        strokeOpacity={0.16}
+        strokeWidth="1"
+        strokeDasharray="6 8"
       />
 
       {/* Organic Petal Array */}
@@ -223,7 +315,32 @@ function PaletteDna({ model }: { model: PaletteArtModel }) {
 
   return (
     <g id="palette-dna">
-      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+      <GenerativeBackdrop
+        gradientId={`dna-glow-${seed}`}
+        model={model}
+        haloColor={dominant.displayHex}
+        haloRadius={420}
+      />
+
+      {/* Vertical Calibration Rails */}
+      <line
+        x1={round(CENTER - amplitude * 0.9)}
+        y1="90"
+        x2={round(CENTER - amplitude * 0.9)}
+        y2="810"
+        stroke="rgba(255, 255, 255, 0.06)"
+        strokeWidth="1"
+        strokeDasharray="4 8"
+      />
+      <line
+        x1={round(CENTER + amplitude * 0.9)}
+        y1="90"
+        x2={round(CENTER + amplitude * 0.9)}
+        y2="810"
+        stroke="rgba(255, 255, 255, 0.06)"
+        strokeWidth="1"
+        strokeDasharray="4 8"
+      />
 
       {/* Woven Harmonic Rungs */}
       {rungs.map((rung, idx) => (
@@ -235,7 +352,7 @@ function PaletteDna({ model }: { model: PaletteArtModel }) {
             y2={rung.y}
             stroke={rung.color}
             strokeWidth={round(3 + rung.weight * 10)}
-            strokeOpacity={round(0.45 + rung.salience * 0.45)}
+            strokeOpacity={round(0.48 + rung.salience * 0.45)}
             strokeLinecap="round"
           />
           <circle
@@ -325,7 +442,7 @@ function ChordMap({ model }: { model: PaletteArtModel }) {
           y2: n2.y,
           color: n1.color.displayHex,
           width: round(2 + (n1.color.normalizedWeight + n2.color.normalizedWeight) * 5),
-          opacity: round(0.28 + (n1.color.salience + n2.color.salience) * 0.28),
+          opacity: round(0.32 + (n1.color.salience + n2.color.salience) * 0.28),
         });
       }
     }
@@ -333,7 +450,12 @@ function ChordMap({ model }: { model: PaletteArtModel }) {
 
   return (
     <g id="chord-map">
-      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+      <GenerativeBackdrop
+        gradientId={`chord-glow-${seed}`}
+        model={model}
+        haloColor={dominant.displayHex}
+        haloRadius={390}
+      />
 
       {/* Harmonic Polar Grids */}
       {[140, 220, 310].map((ringR, idx) => (
@@ -390,7 +512,7 @@ function ChordMap({ model }: { model: PaletteArtModel }) {
             cy={node.y}
             r={round(node.nodeR + node.color.salience * 14)}
             fill={node.color.displayHex}
-            fillOpacity={0.22}
+            fillOpacity={0.24}
           />
           {/* Main Node Body */}
           <circle
@@ -417,7 +539,12 @@ function SpectrumCode({ model }: { model: PaletteArtModel }) {
 
   return (
     <g id="spectrum-code">
-      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+      <GenerativeBackdrop
+        gradientId={`spectrum-glow-${seed}`}
+        model={model}
+        haloColor={dominant.displayHex}
+        haloRadius={440}
+      />
 
       {colors.map((color, index) => {
         const baseY = round(160 + index * spacing + color.lightness * 28);
@@ -454,7 +581,7 @@ function SpectrumCode({ model }: { model: PaletteArtModel }) {
               x2="830"
               y2={baseY}
               stroke={color.displayHex}
-              strokeOpacity={0.15}
+              strokeOpacity={0.2}
               strokeWidth="1"
             />
 
@@ -462,7 +589,7 @@ function SpectrumCode({ model }: { model: PaletteArtModel }) {
             <path
               d={ribbonPath}
               fill={color.displayHex}
-              fillOpacity={round(0.72 + color.salience * 0.25)}
+              fillOpacity={round(0.76 + color.salience * 0.22)}
             />
 
             {/* Terminal Signal Nodes */}
@@ -512,7 +639,12 @@ function OrbitalWeave({ model }: { model: PaletteArtModel }) {
 
   return (
     <g id="orbital-weave">
-      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill={model.background} />
+      <GenerativeBackdrop
+        gradientId={`orbital-corona-${seed}`}
+        model={model}
+        haloColor={dominant.displayHex}
+        haloRadius={410}
+      />
 
       {/* Central Sun Mass */}
       <circle
@@ -530,7 +662,7 @@ function OrbitalWeave({ model }: { model: PaletteArtModel }) {
         cy={CENTER}
         r={round(80 + dominant.salience * 50)}
         fill={dominant.displayHex}
-        fillOpacity={0.14}
+        fillOpacity={0.16}
       />
 
       {/* Elliptical Orbital Paths */}
@@ -544,7 +676,7 @@ function OrbitalWeave({ model }: { model: PaletteArtModel }) {
           fill="none"
           stroke={orbit.color.displayHex}
           strokeWidth={round(1.5 + orbit.color.normalizedWeight * 4)}
-          strokeOpacity={round(0.24 + orbit.color.salience * 0.35)}
+          strokeOpacity={round(0.28 + orbit.color.salience * 0.35)}
           strokeDasharray={orbit.index % 2 === 1 ? '6 8' : undefined}
         />
       ))}

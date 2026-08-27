@@ -916,6 +916,9 @@
 
 .share-preview-shell--portrait {
   aspect-ratio: 4 / 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @media (min-width: 768px) {
@@ -929,7 +932,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .share-preview-loading {
@@ -1480,14 +1483,19 @@
   }
 
   .share-studio__preview-column {
-    width: min(100%, 24rem);
+    width: min(100%, 22rem);
     margin-inline: auto;
+    min-height: 0;
   }
 
   .share-studio__preview-bezel {
     width: 100%;
     height: auto;
     aspect-ratio: 4 / 5;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .share-studio__tools {

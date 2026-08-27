@@ -19,6 +19,10 @@ const SVG_ATTRIBUTE_NAMES: Record<string, string> = {
   strokeLinejoin: 'stroke-linejoin',
   strokeOpacity: 'stroke-opacity',
   strokeWidth: 'stroke-width',
+  strokeDasharray: 'stroke-dasharray',
+  stopColor: 'stop-color',
+  stopOpacity: 'stop-opacity',
+  clipPath: 'clip-path',
 };
 
 function escapeXml(value: unknown): string {
@@ -30,7 +34,16 @@ function escapeXml(value: unknown): string {
 }
 
 function svgAttributeName(name: string): string {
-  if (name === 'viewBox' || name.startsWith('aria-') || name.startsWith('data-')) return name;
+  if (
+    name === 'viewBox' ||
+    name.startsWith('aria-') ||
+    name.startsWith('data-') ||
+    name === 'gradientUnits' ||
+    name === 'gradientTransform' ||
+    name === 'spreadMethod'
+  ) {
+    return name;
+  }
   return SVG_ATTRIBUTE_NAMES[name] || name.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);
 }
 
