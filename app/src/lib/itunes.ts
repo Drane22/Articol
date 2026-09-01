@@ -23,6 +23,11 @@ interface ArtworkAnalysis {
   analyzed: boolean;
 }
 
+interface ItunesArtistResult {
+  artistId: number;
+  artistName: string;
+}
+
 // Helper to upgrade iTunes low-res artwork URL to high-resolution
 export function getHighResArtworkUrl(url: string, size: number = 600): string {
   if (!url) return '';
@@ -277,6 +282,91 @@ export async function searchItunesAlbums(
     console.error('iTunes Search API failed:', error);
     return [];
   }
+}
+
+function normalizeArtistSearchText(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function artistMatchesQuery(artistName: string, query: string): boolean {
+  const artist = normalizeArtistSearchText(artistName);
+  const normalizedQuery = normalizeArtistSearchText(query);
+  if (!artist || !normalizedQuery) return false;
+  if (artist === normalizedQuery || artist.startsWith(`${normalizedQuery} `)) return true;
+
+  // For a combined artist + album query, only accept a meaningful multi-word
+  // artist phrase. This avoids treating a result such as "All" as the artist
+  // for "All Time Low Don't Panic".
+  return artist.split(' ').length >= 2 &&
+    (` ${normalizedQuery} `).includes(` ${artist} `);
+}
+
+/**
+ * Resolve an artist first, then use iTunes Lookup to retrieve the artist's
+ * actual discography. The regular Search endpoint is relevance-limited and
+ * routinely omits older albums even when the artist and title are supplied.
+ */
+export async function searchItunesArtistAlbums(
+  query: string,
+  country: string = 'PH',
+  limit: number = 200,
+): Promise<Album[]> {
+  if (!query.trim()) return [];
+
+  const storefront = normalizeStorefront(country);
+  const normalizedLimit = Math.max(1, Math.min(Math.floor(limit) || 200, 200));
+  const cacheKey = `artist-discography-${query.trim().toLowerCase()}-${storefront}-${normalizedLimit}`;
+  const cached = apiCache.get(cacheKey);
+  if (cached) return cached;
+
+  return apiRequests.run(cacheKey, async () => {
+    try {
+      const artistUrl = `${ITUNES_BASE_URL}/search?term=${encodeURIComponent(query.trim())}&media=music&entity=musicArtist&attribute=artistTerm&country=${storefront}&limit=10`;
+      const artistResponse = await fetch(artistUrl, {
+        headers: { 'User-Agent': 'Articol/1.0' },
+        next: { revalidate: 300 },
+      });
+      if (!artistResponse.ok) throw new Error(`iTunes artist search error: ${artistResponse.status}`);
+
+      const artistData = await artistResponse.json();
+      const artists = (artistData.results || [])
+        .filter((artist: ItunesArtistResult) => artist.artistId && artistMatchesQuery(artist.artistName, query))
+        .sort((a: ItunesArtistResult, b: ItunesArtistResult) => {
+          const normalizedQuery = normalizeArtistSearchText(query);
+          const aExact = normalizeArtistSearchText(a.artistName) === normalizedQuery ? 1 : 0;
+          const bExact = normalizeArtistSearchText(b.artistName) === normalizedQuery ? 1 : 0;
+          return bExact - aExact || b.artistName.length - a.artistName.length;
+        })
+        .slice(0, 3);
+
+      const discographies = await Promise.all(artists.map(async (artist: ItunesArtistResult) => {
+        const lookupUrl = `${ITUNES_BASE_URL}/lookup?id=${artist.artistId}&entity=album&country=${storefront}&limit=200`;
+        const lookupResponse = await fetch(lookupUrl, {
+          headers: { 'User-Agent': 'Articol/1.0' },
+          next: { revalidate: 300 },
+        });
+        if (!lookupResponse.ok) return [];
+        const lookupData = await lookupResponse.json();
+        return Promise.all((lookupData.results || [])
+          .filter((item: any) => item.wrapperType === 'collection' && item.collectionId && item.collectionName)
+          .map((item: any) => normalizeItunesAlbum(item, storefront, false)));
+      }));
+
+      const albums = Array.from(new Map(
+        discographies.flat().map((album) => [album.itunesCollectionId, album]),
+      ).values()).slice(0, normalizedLimit);
+      apiCache.set(cacheKey, albums);
+      return albums;
+    } catch (error) {
+      console.error('iTunes artist discography lookup failed:', error);
+      return [];
+    }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────
