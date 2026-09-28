@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllCatalogAlbums, saveAlbumsToDb } from '@/lib/db';
+import { getAllCatalogAlbums } from '@/lib/db';
 import { matchesColorFilter } from '@/lib/colorUtils';
-import { enrichAlbumWithArtwork } from '@/lib/itunes';
 import { Album } from '@/lib/types';
 import { isReliableVisualAnalysis } from '@/lib/visualValidation';
 import { getCuratedVisualCollection, rankCuratedVisualAlbums } from '@/lib/curatedCollections';
+
+const CACHE_HEADERS = { 'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600' };
+
+function displayAlbum(album: Album): Album {
+  const { embedding, perceptualHash, visualAnalysisError, artworkChecksum, ...display } = album;
+  return display;
+}
+
+function pageInteger(value: string | null, fallback: number, max: number): number {
+  if (value === null || !/^\d+$/.test(value)) return fallback;
+  return Math.min(Number(value), max);
+}
 
 async function getFeaturedSpotlightAlbums(): Promise<Album[]> {
   const catalogAlbums = await getAllCatalogAlbums();
@@ -35,10 +46,9 @@ export async function GET(request: NextRequest) {
 
   if (featured) {
     const albums = await getFeaturedSpotlightAlbums();
-    await saveAlbumsToDb(albums);
     return NextResponse.json(
-      { count: albums.length, albums, partial: albums.length < 6 },
-      { headers: { 'Cache-Control': 'private, no-store' } }
+      { count: albums.length, albums: albums.map(displayAlbum), partial: albums.length < 6 },
+      { headers: CACHE_HEADERS }
     );
   }
 
@@ -53,20 +63,6 @@ export async function GET(request: NextRequest) {
 
   // 2. Color spectrum filter
   if (colorHex) {
-    const candidatesToAnalyze = albums
-      .filter((album) => !isReliableVisualAnalysis(album))
-      .slice(0, 48);
-    if (candidatesToAnalyze.length > 0) {
-      const analyzedCandidates = await Promise.all(
-        candidatesToAnalyze.map((album) => enrichAlbumWithArtwork(album))
-      );
-      const analyzedById = new Map(
-        analyzedCandidates.map((album) => [album.itunesCollectionId, album])
-      );
-      albums = albums.map((album) => analyzedById.get(album.itunesCollectionId) || album);
-      await saveAlbumsToDb(analyzedCandidates);
-    }
-
     // Do not make color claims from deterministic fallback palettes. They are
     // metadata-generated and do not describe the actual cover image.
     albums = albums.filter(isReliableVisualAnalysis);
@@ -115,12 +111,14 @@ export async function GET(request: NextRequest) {
     albums = albums.filter(a => a.genre.toLowerCase().includes(genre.toLowerCase()));
   }
 
-  // Discovery is an interaction with the catalog: persist the visible rows so
-  // an initially empty Supabase project grows beyond the bundled fallback.
-  await saveAlbumsToDb(albums.slice(0, 100));
+  // Browsing is read-only. Indexing/population owns artwork analysis and writes.
+  const limit = Math.max(1, pageInteger(searchParams.get('limit'), 48, 96));
+  const offset = pageInteger(searchParams.get('offset'), 0, Number.MAX_SAFE_INTEGER);
+  const page = albums.slice(offset, offset + limit);
+  const nextOffset = offset + page.length < albums.length ? offset + page.length : null;
 
   return NextResponse.json(
-    { count: albums.length, albums },
-    { headers: { 'Cache-Control': 'private, no-store' } }
+    { count: albums.length, albums: page.map(displayAlbum), nextOffset },
+    { headers: CACHE_HEADERS }
   );
 }

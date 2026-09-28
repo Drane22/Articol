@@ -10,11 +10,22 @@ import { VERIFIED_VISUAL_ANALYSIS_VERSION } from './visualValidation';
 const memoryStore = new Map<number, Album>();
 let seedLoadPromise: Promise<void> | null = null;
 
-const catalogCache = new BoundedTtlCache<Album[]>({ maxEntries: 1, ttlMs: 1000 * 30 });
+const catalogCache = new BoundedTtlCache<Album[]>({ maxEntries: 1, ttlMs: 1000 * 60 * 5 });
 const catalogRequests = new InflightRequests<Album[]>();
 const albumLookupCache = new BoundedTtlCache<Album>({ maxEntries: 512, ttlMs: 1000 * 60 * 5 });
 const albumLookupRequests = new InflightRequests<Album | null>();
 const supabaseClients = new Map<string, Promise<any>>();
+
+// Cached rankings need descriptive evidence, not the 512-dimensional vector.
+const DISPLAY_ALBUM_COLUMNS = [
+  'id', 'itunes_collection_id', 'itunes_artist_id', 'title', 'normalized_title',
+  'artist_name', 'normalized_artist_name', 'genre', 'styles', 'label',
+  'release_date', 'release_year', 'country', 'track_count', 'explicitness',
+  'price', 'currency', 'artwork_url', 'artwork_source', 'store_url',
+  'dominant_palette', 'visual_features', 'embedding_model', 'embedding_version',
+  'feature_extraction_version', 'scoring_version', 'visual_analysis_status',
+  'created_at', 'updated_at',
+].join(',');
 
 async function ensureSeedsLoaded(): Promise<void> {
   if (!seedLoadPromise) {
@@ -608,7 +619,7 @@ export async function getSimilarityResultsFromCache(
 
     const { data: albumRows, error: albumError } = await supabase
       .from('albums')
-      .select('*')
+      .select(DISPLAY_ALBUM_COLUMNS)
       .in('itunes_collection_id', candidateIds);
     if (albumError) throw albumError;
 

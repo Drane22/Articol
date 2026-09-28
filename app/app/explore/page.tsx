@@ -19,34 +19,54 @@ export default function ExplorePage() {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [activeColor, setActiveColor] = useState<string | null>(null);
   const [activeDecade, setActiveDecade] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const filterKey = JSON.stringify([country, activeCollection, activeFilter, activeColor, activeDecade]);
+  const [page, setPage] = useState({ filterKey: '', offset: 0 });
+  const offset = page.filterKey === filterKey ? page.offset : 0;
 
   useEffect(() => {
     if (!ready) return;
     const controller = new AbortController();
     let isCurrentRequest = true;
     setIsLoading(true);
+    setError(null);
+    if (offset === 0) {
+      setPage({ filterKey, offset: 0 });
+      setAlbums([]);
+      setTotal(0);
+      setNextOffset(null);
+    }
 
     const params = new URLSearchParams();
     params.set('country', country);
+    params.set('offset', String(offset));
+    params.set('limit', '48');
     if (activeCollection) params.set('collection', activeCollection);
     if (activeFilter) params.set('filter', activeFilter);
     if (activeColor) params.set('color', activeColor);
     if (activeDecade) params.set('decade', activeDecade);
 
-    fetch(`/api/discover?${params.toString()}`, { signal: controller.signal, cache: 'no-store' })
+    fetch(`/api/discover?${params.toString()}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`Explore request failed: ${res.status}`);
         return res.json();
       })
       .then((data) => {
         if (!isCurrentRequest) return;
-        setAlbums(data.albums || []);
+        setAlbums(current => offset === 0 ? data.albums || [] : Array.from(
+          new Map<number, Album>([...current, ...(data.albums || [])].map(album => [album.itunesCollectionId, album])).values(),
+        ));
+        setTotal(data.count || 0);
+        setNextOffset(data.nextOffset ?? null);
         setIsLoading(false);
       })
       .catch((err) => {
         if (err.name === 'AbortError' || !isCurrentRequest) return;
         console.error('Explore discover error:', err);
-        setAlbums([]);
+        setError('Covers could not be loaded. Please try again.');
         setIsLoading(false);
       });
 
@@ -54,7 +74,7 @@ export default function ExplorePage() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [activeCollection, activeFilter, activeColor, activeDecade, country, ready]);
+  }, [activeCollection, activeFilter, activeColor, activeDecade, country, ready, offset, retry]);
 
   const handleResetFilters = () => {
     setActiveCollection(null);
@@ -174,17 +194,17 @@ export default function ExplorePage() {
       {/* Album Grid */}
       <section className="space-y-4">
         <div className="flex justify-between items-center text-xs font-mono text-[var(--text-muted)]">
-          <span>Displaying {albums.length} catalog covers</span>
+          <span>Displaying {albums.length} of {total} catalog covers</span>
           {activeCollection && <span className="font-semibold theme-warning">Collection: {CURATED_VISUAL_COLLECTIONS.find((collection) => collection.id === activeCollection)?.label}</span>}
         </div>
 
-        {isLoading ? (
+        {isLoading && albums.length === 0 ? (
           <div className="recommendation-grid">
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i} className="aspect-square bg-[var(--accent-soft)] rounded-lg animate-pulse" />
             ))}
           </div>
-        ) : albums.length === 0 ? (
+        ) : albums.length === 0 && !error ? (
           <div className="text-center py-20 border border-dashed border-[var(--border-color)] rounded-xl space-y-2">
             <p className="text-sm text-[var(--text-muted)]">No covers match your specific filter criteria.</p>
             <button
@@ -199,6 +219,24 @@ export default function ExplorePage() {
             {albums.map((alb) => (
               <AlbumCard key={alb.itunesCollectionId} album={alb} />
             ))}
+          </div>
+        )}
+        {error && (
+          <div className="flex items-center justify-center gap-3 py-4 text-sm" role="alert">
+            <span>{error}</span>
+            <button type="button" className="min-h-11 px-3 underline" onClick={() => setRetry(value => value + 1)}>Try again</button>
+          </div>
+        )}
+        {nextOffset !== null && !error && (
+          <div className="flex justify-center pt-4">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => setPage({ filterKey, offset: nextOffset })}
+              className="premium-button premium-button--secondary min-h-11"
+            >
+              {isLoading ? 'Loading covers…' : 'Load more covers'}
+            </button>
           </div>
         )}
       </section>

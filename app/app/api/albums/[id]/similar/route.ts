@@ -158,6 +158,13 @@ export async function GET(
   const forceRebuild = request.nextUrl.searchParams.get('rebuild') === '1';
   const country = normalizeStorefront(request.nextUrl.searchParams.get('country'));
 
+  if (forceRebuild && (!process.env.INDEXING_SECRET ||
+    request.headers.get('authorization') !== `Bearer ${process.env.INDEXING_SECRET}`)) {
+    return NextResponse.json({ error: 'Unauthorized rebuild request' }, {
+      status: 401, headers: { 'Cache-Control': 'private, no-store' },
+    });
+  }
+
   if (!Number.isFinite(collectionId)) {
     return NextResponse.json({ error: 'Invalid collection ID' }, { status: 400 });
   }
@@ -189,7 +196,7 @@ export async function GET(
       },
       {
         headers: {
-          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+          'Cache-Control': forceRebuild ? 'private, no-store' : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
           'X-Articol-Cache': cacheStatus,
         },
       }
