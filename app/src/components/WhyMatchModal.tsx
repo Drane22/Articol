@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { X, Sparkles, Palette, ArrowRight, Waves } from 'lucide-react';
 import { SimilarityResult, Album, SearchMode } from '../lib/types';
 import { CoverArtwork } from './CoverArtwork';
@@ -119,6 +120,9 @@ export const WhyMatchModal: React.FC<WhyMatchModalProps> = ({
             <div className="why-match-comparison__meta">
               <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{candidate.title}</p>
               <p className="text-xs truncate text-[var(--text-muted)]">{candidate.artistName}</p>
+              <Link href={`/album/${candidate.itunesCollectionId}`} onClick={requestClose} className="why-match-comparison__link">
+                Open this album <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
             </div>
           </article>
         </section>

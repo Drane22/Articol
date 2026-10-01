@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ImageOff, RotateCw } from 'lucide-react';
+import { getArtworkSources } from '@/lib/artworkSources';
 
 interface CoverArtworkProps {
   src: string;
@@ -11,7 +12,7 @@ interface CoverArtworkProps {
   className?: string;
 }
 
-export function CoverArtwork({ src, alt, priority = false, className = '' }: CoverArtworkProps) {
+export function CoverArtwork({ src, alt, sizes, priority = false, className = '' }: CoverArtworkProps) {
   const [mode, setMode] = useState<'direct' | 'proxy' | 'failed'>('proxy');
   const [attempt, setAttempt] = useState(0);
 
@@ -47,14 +48,17 @@ export function CoverArtwork({ src, alt, priority = false, className = '' }: Cov
     );
   }
 
-  const currentSrc = mode === 'proxy' ? `/api/proxy-image?url=${encodeURIComponent(src)}` : src;
+  const sources = getArtworkSources(src, mode === 'proxy');
 
   return (
     <img
       key={`${src}-${attempt}-${mode}`}
-      src={currentSrc}
+      src={sources.src}
+      srcSet={sources.srcSet}
+      sizes={sources.srcSet ? sizes : undefined}
       alt={alt}
       loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : 'auto'}
       decoding="async"
       referrerPolicy="no-referrer"
       onError={handleError}

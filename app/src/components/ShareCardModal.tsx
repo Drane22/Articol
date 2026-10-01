@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { DialogFrame } from '@/components/DialogFrame';
 import { PaletteArtCanvas } from '@/components/PaletteArtCanvas';
+import { fetchPosterFile } from '@/lib/posterAssets';
 import {
   getAlbumPortraitShareImagePath,
   getAlbumShareFilename,
@@ -81,18 +82,6 @@ function artworkLabel(variant: PortraitVariant, style?: PaletteArtStyle): string
   return variant === 'palette' && style
     ? `${getPaletteArtStyleLabel(style)} palette artwork`
     : 'portrait card';
-}
-
-async function fetchPortraitFile(url: string, filename: string, signal?: AbortSignal): Promise<File> {
-  const response = await fetch(url, { cache: 'no-store', signal });
-  if (!response.ok) throw new Error(`Portrait card request failed (${response.status})`);
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.toLowerCase().startsWith('image/')) {
-    throw new Error(`Portrait card returned ${contentType || 'an unknown file type'}`);
-  }
-  const blob = await response.blob();
-  if (blob.size === 0) throw new Error('Portrait card returned an empty image');
-  return new File([blob], filename, { type: blob.type || 'image/png' });
 }
 
 function downloadFile(file: File) {
@@ -181,7 +170,6 @@ export function ShareCardModal({
     return buildPaletteArtModel(albumColors, album.id || 'seed', requestedStyle, album.visualFeatures);
   }, [albumColors, album.id, requestedStyle, album.visualFeatures]);
 
-  const requestedSelectionKey = selectionKey(requestedVariant, requestedStyle);
   const generationMessages = requestedVariant === 'palette'
     ? GENERATION_MESSAGES[requestedStyle]
     : COVER_GENERATION_MESSAGES;
@@ -202,6 +190,9 @@ export function ShareCardModal({
     album.artistName,
     requestedVariant === 'palette' ? `palette-${requestedStyle}` : undefined,
   );
+  const requestedSelectionKey = JSON.stringify([
+    selectionKey(requestedVariant, requestedStyle), requestedAssetUrl, requestedFilename,
+  ]);
   const requestedLabel = artworkLabel(requestedVariant, requestedStyle);
   const displayedLabel = displayedAsset
     ? artworkLabel(displayedAsset.variant, displayedAsset.style)
@@ -227,9 +218,9 @@ export function ShareCardModal({
     setStatus(null);
     setFailedAsset(null);
 
-    fetchPortraitFile(requestedAssetUrl, requestedFilename, controller.signal)
+    fetchPosterFile(requestedAssetUrl, requestedFilename, controller.signal)
       .then((file) => {
-        if (activeRequestId.current !== requestId) return;
+        if (controller.signal.aborted || activeRequestId.current !== requestId) return;
         const previewUrl = URL.createObjectURL(file);
         const previousPreviewUrl = previewUrlRef.current;
         previewUrlRef.current = previewUrl;
@@ -345,6 +336,7 @@ export function ShareCardModal({
       ariaLabelledBy="share-card-title"
       onClose={onClose}
       panelClassName="share-studio"
+      scrollContent={false}
     >
       {({ closeButtonRef, requestClose }) => (
         <>
@@ -470,6 +462,7 @@ export function ShareCardModal({
                         onClick={() => setShowExplanation((prev) => !prev)}
                         className={`share-artwork-info-btn${showExplanation ? ' is-active' : ''}`}
                         aria-label="Why it looks this way"
+                        aria-expanded={showExplanation}
                         title="Why it looks this way"
                       >
                         <Info className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -538,49 +531,51 @@ export function ShareCardModal({
                 ) : null}
               </div>
 
-              <div className="share-studio__actions">
-                <button
-                  type="button"
-                  onClick={() => void handleSharePortrait()}
-                  disabled={imageActionsDisabled}
-                  className="premium-button premium-button--primary share-studio__primary-action"
-                >
-                  <span>{isAssetPending ? 'Generating image...' : action === 'sharing' ? 'Opening share sheet...' : displayedIsPalette ? 'Share palette artwork' : 'Share portrait card'}</span>
-                  <span className="premium-button__island" aria-hidden="true">
-                    {isAssetPending ? <LoaderCircle className="share-artwork-busy" /> : <Share2 className="h-4 w-4" strokeWidth={1.5} />}
-                  </span>
-                </button>
-                <div className="share-studio__secondary-actions">
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    disabled={imageActionsDisabled}
-                    className="premium-button premium-button--secondary"
-                  >
-                    <Download className="h-4 w-4" strokeWidth={1.5} />
-                    <span>{displayedIsPalette ? 'Download palette art' : 'Download image'}</span>
-                  </button>
-                  <button type="button" onClick={() => void handleCopyLink()} className="premium-button premium-button--secondary">
-                    {copied ? <Check className="h-4 w-4 theme-success" strokeWidth={1.5} /> : <Copy className="h-4 w-4" strokeWidth={1.5} />}
-                    <span>{copied ? 'Link copied' : 'Copy album link'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {status && (
-                <div className={`share-studio__status share-studio__status--${status.tone}`} role={status.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
-                  <span>{status.message}</span>
-                  {status.tone === 'error' && failedAsset && (
-                    <button type="button" onClick={retryGeneration}>Retry</button>
-                  )}
-                </div>
-              )}
-
               <a href={shareUrl} className="share-studio__open-link" target="_blank" rel="noopener noreferrer">
                 Open shared album page <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
               </a>
             </aside>
           </div>
+
+          <footer className="share-studio__footer" aria-label="Export artwork">
+            <div className="share-studio__actions">
+              <button
+                type="button"
+                onClick={() => void handleSharePortrait()}
+                disabled={imageActionsDisabled}
+                className="premium-button premium-button--primary share-studio__primary-action"
+              >
+                <span>{isAssetPending ? 'Generating…' : action === 'sharing' ? 'Sharing…' : 'Share artwork'}</span>
+                <span className="premium-button__island" aria-hidden="true">
+                  {isAssetPending ? <LoaderCircle className="share-artwork-busy" /> : <Share2 className="h-4 w-4" strokeWidth={1.5} />}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={imageActionsDisabled}
+                className="premium-button premium-button--secondary"
+              >
+                <Download className="h-4 w-4" strokeWidth={1.5} />
+                <span>Download</span>
+              </button>
+            </div>
+            <div className="share-studio__footer-note">
+              <span>{isAssetPending ? 'Preparing full-resolution artwork' : '1080 × 1350 · PNG'}</span>
+              <button type="button" onClick={() => void handleCopyLink()} className="share-studio__copy-link">
+                {copied ? <Check className="h-4 w-4 theme-success" strokeWidth={1.5} /> : <Copy className="h-4 w-4" strokeWidth={1.5} />}
+                <span>{copied ? 'Link copied' : 'Copy album link'}</span>
+              </button>
+            </div>
+            {status && (
+              <div className={`share-studio__status share-studio__status--${status.tone}`} role={status.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
+                <span>{status.message}</span>
+                {status.tone === 'error' && failedAsset && (
+                  <button type="button" onClick={retryGeneration}>Retry</button>
+                )}
+              </div>
+            )}
+          </footer>
         </>
       )}
     </DialogFrame>

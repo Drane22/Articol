@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Info, ArrowRight, Bookmark, Check, Copy } from 'lucide-react';
-import { Album, SearchMode, SimilarityResult } from '../lib/types';
+import { SearchMode, SimilarityResult } from '../lib/types';
+import { SavedAlbum, toggleSavedAlbum, useSavedAlbums } from '../lib/savedAlbums';
 import { CoverArtwork } from './CoverArtwork';
 
 interface AlbumCardProps {
-  album: Album;
+  album: SavedAlbum;
   similarity?: SimilarityResult;
   mode?: SearchMode;
   onWhyMatchClick?: (result: SimilarityResult) => void;
@@ -23,34 +24,17 @@ export const AlbumCard: React.FC<AlbumCardProps> = ({
   showExploreButton = true,
 }) => {
   const router = useRouter();
-  const [isSaved, setIsSaved] = useState(false);
+  const savedAlbums = useSavedAlbums();
+  const isSaved = savedAlbums.some((item) => item.itunesCollectionId === album.itunesCollectionId);
   const [copiedPalette, setCopiedPalette] = useState(false);
   const matchPercentage = similarity ? Math.round(similarity.finalScore * 100) : null;
   const confidencePercentage = similarity ? Math.round(similarity.finalConfidence * 100) : null;
   const scoreLabel = mode === 'music_relation' ? 'music relation' : 'visual match';
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('articol_saved_albums') || '[]');
-      setIsSaved(saved.some((item: Album) => item.itunesCollectionId === album.itunesCollectionId));
-    } catch (error) {
-      console.warn('Saved album state could not be restored:', error);
-    }
-  }, [album.itunesCollectionId]);
-
   const toggleSave = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    try {
-      const saved = JSON.parse(localStorage.getItem('articol_saved_albums') || '[]');
-      const next = isSaved
-        ? saved.filter((item: Album) => item.itunesCollectionId !== album.itunesCollectionId)
-        : [...saved, album];
-      localStorage.setItem('articol_saved_albums', JSON.stringify(next));
-      setIsSaved(!isSaved);
-    } catch (error) {
-      console.warn('LocalStorage save failed:', error);
-    }
+    toggleSavedAlbum(album);
   };
 
   const handleExplore = (event: React.MouseEvent) => {

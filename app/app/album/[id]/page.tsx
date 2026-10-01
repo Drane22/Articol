@@ -2,28 +2,32 @@
 
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { 
   ExternalLink, Bookmark, Share2,
-  ArrowLeft, Check, Copy, Music, ShieldAlert, Info
+  ArrowLeft, Check, Copy, Music, ShieldAlert, Info, Expand
 } from 'lucide-react';
 import { Album, RecommendationTiers, SearchMode, SimilarityResult } from '@/lib/types';
 import { AlbumCard } from '@/components/AlbumCard';
-import { WhyMatchModal } from '@/components/WhyMatchModal';
 import { CoverArtwork } from '@/components/CoverArtwork';
 import { RecommendationLoading } from '@/components/RecommendationLoading';
-import { ShareCardModal } from '@/components/ShareCardModal';
 import { PaletteDepth } from '@/components/PaletteDepth';
 import { useCountry } from '@/components/CountryProvider';
 import { getStorefront } from '@/lib/storefronts';
 import { getAbsoluteUrl, getAlbumPortraitShareImagePath, getAlbumSharePath } from '@/lib/share';
 import { DEFAULT_PALETTE_DISPLAY_LIMIT, limitPalette, type PaletteDisplayLimit } from '@/lib/palette';
+import { toggleSavedAlbum, useSavedAlbums } from '@/lib/savedAlbums';
 
 const EMPTY_TIERS: RecommendationTiers = {
   art_style: [],
   balanced: [],
   music_relation: [],
 };
+
+const ShareCardModal = dynamic(() => import('@/components/ShareCardModal').then(module => module.ShareCardModal));
+const WhyMatchModal = dynamic(() => import('@/components/WhyMatchModal').then(module => module.WhyMatchModal));
+const ArtworkFocusModal = dynamic(() => import('@/components/ArtworkFocusModal').then(module => module.ArtworkFocusModal));
 
 interface RelatedAlbumItem {
   album: Album;
@@ -48,7 +52,9 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationRetry, setRecommendationRetry] = useState(0);
   const [selectedWhyMatch, setSelectedWhyMatch] = useState<SimilarityResult | null>(null);
-  const [isSaved, setIsSaved] = useState(false);
+  const savedAlbums = useSavedAlbums();
+  const isSaved = savedAlbums.some((saved) => saved.itunesCollectionId === album?.itunesCollectionId);
+  const [isArtworkFocused, setIsArtworkFocused] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [shareOrigin, setShareOrigin] = useState('');
   const [copiedShare, setCopiedShare] = useState(false);
@@ -62,6 +68,7 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => {
     setPaletteDisplayLimit(DEFAULT_PALETTE_DISPLAY_LIMIT);
+    setIsArtworkFocused(false);
   }, [id]);
 
   // Fetch selected album detail
@@ -80,7 +87,6 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
       .then((data) => {
         if (data.album) {
           setAlbum(data.album);
-          checkIsSaved(data.album.itunesCollectionId);
         }
         setIsLoadingAlbum(false);
       })
@@ -168,27 +174,9 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
       ? 'Albums connected by a verified visual relationship and music context.'
       : 'Albums connected by artist, genre/style, and release-era evidence. Artwork is shown for context.';
 
-  const checkIsSaved = (colId: number) => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('articol_saved_albums') || '[]');
-      setIsSaved(saved.some((a: any) => a.itunesCollectionId === colId));
-    } catch (e) {}
-  };
-
   const toggleSave = () => {
     if (!album) return;
-    try {
-      const saved = JSON.parse(localStorage.getItem('articol_saved_albums') || '[]');
-      if (isSaved) {
-        const next = saved.filter((a: any) => a.itunesCollectionId !== album.itunesCollectionId);
-        localStorage.setItem('articol_saved_albums', JSON.stringify(next));
-        setIsSaved(false);
-      } else {
-        saved.push(album);
-        localStorage.setItem('articol_saved_albums', JSON.stringify(saved));
-        setIsSaved(true);
-      }
-    } catch (e) {}
+    toggleSavedAlbum(album);
   };
 
   const sharePath = getAlbumSharePath(id, country);
@@ -310,6 +298,16 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
           {/* Prominent Square Artwork Display */}
           <div className="md:col-span-5 lg:col-span-5 relative aspect-square rounded-xl overflow-hidden shadow-2xl border border-[var(--border-color)] bg-[var(--bg-card)] group">
             <CoverArtwork src={album.artworkUrl} alt={`Cover artwork for ${album.title} by ${album.artistName}`} priority sizes="(max-width: 768px) calc(100vw - 2rem), 42vw" className="transition-transform duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.02]" />
+            {album.artworkUrl && <button
+              type="button"
+              onClick={() => setIsArtworkFocused(true)}
+              className="artwork-focus-trigger"
+              aria-haspopup="dialog"
+              aria-label={`View full cover artwork for ${album.title}`}
+            >
+              <Expand className="h-4 w-4" aria-hidden="true" />
+              <span>View artwork</span>
+            </button>}
           </div>
 
           {/* Archival Catalog Entry Details */}
@@ -579,6 +577,10 @@ export default function AlbumDetailPage({ params }: { params: Promise<{ id: stri
             mode={mode}
             onClose={() => setSelectedWhyMatch(null)}
           />
+        )}
+
+        {isArtworkFocused && album && (
+          <ArtworkFocusModal album={album} onClose={() => setIsArtworkFocused(false)} />
         )}
 
         {isShareOpen && album && (

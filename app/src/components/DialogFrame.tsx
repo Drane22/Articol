@@ -22,6 +22,7 @@ interface DialogFrameProps {
   ariaLabelledBy: string;
   ariaDescribedBy?: string;
   panelClassName?: string;
+  scrollContent?: boolean;
   onClose: () => void;
   children: (controls: DialogFrameControls) => React.ReactNode;
 }
@@ -30,6 +31,7 @@ export function DialogFrame({
   ariaLabelledBy,
   ariaDescribedBy,
   panelClassName = '',
+  scrollContent = true,
   onClose,
   children,
 }: DialogFrameProps) {
@@ -109,7 +111,7 @@ export function DialogFrame({
         ref={panelRef}
         className={`share-dialog-panel ${panelClassName}${isClosing ? ' is-closing' : ''}`.trim()}
       >
-        <div className="dialog-frame__scroll">
+        <div className={scrollContent ? 'dialog-frame__scroll' : 'dialog-frame__content'}>
           {children({ closeButtonRef, isClosing, requestClose })}
         </div>
       </div>

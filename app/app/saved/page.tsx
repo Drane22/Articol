@@ -1,28 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Bookmark, Trash2, ArrowLeft, Disc } from 'lucide-react';
 import { AlbumCard } from '@/components/AlbumCard';
-import { Album } from '@/lib/types';
+import { clearSavedAlbums, useSavedAlbums } from '@/lib/savedAlbums';
 
 export default function SavedPage() {
-  const [savedAlbums, setSavedAlbums] = useState<Album[]>([]);
-  const [activeTab, setActiveTab] = useState<'all' | 'favorites' | 'inspiration'>('all');
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('articol_saved_albums') || '[]');
-      setSavedAlbums(saved);
-    } catch (e) {
-      setSavedAlbums([]);
-    }
-  }, []);
+  const savedAlbums = useSavedAlbums();
 
   const handleClearAll = () => {
     if (confirm('Clear all saved album covers?')) {
-      localStorage.removeItem('articol_saved_albums');
-      setSavedAlbums([]);
+      clearSavedAlbums();
     }
   };
 
