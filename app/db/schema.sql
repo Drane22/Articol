@@ -68,7 +68,7 @@ FOR EACH ROW
 EXECUTE FUNCTION set_album_updated_at();
 
 -- Indexes for fast query lookup
-CREATE INDEX IF NOT EXISTS idx_albums_itunes_collection_id ON albums(itunes_collection_id);
+-- itunes_collection_id's UNIQUE constraint already provides its lookup index.
 CREATE INDEX IF NOT EXISTS idx_albums_itunes_artist_id ON albums(itunes_artist_id);
 CREATE INDEX IF NOT EXISTS idx_albums_release_year ON albums(release_year);
 CREATE INDEX IF NOT EXISTS idx_albums_genre ON albums(genre);
